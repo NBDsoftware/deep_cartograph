@@ -1,0 +1,12 @@
+  python
+  pip
+  numpy
+  pandas
+  pytorch
+  pydantic<2
+  lightning
+  matplotlib
+  scikit-learn
+  scipy<1.11
+  KDEpy
+  nbmake
