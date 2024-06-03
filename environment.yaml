@@ -3,25 +3,24 @@ channels:
 
   - conda-forge
   - pytorch
-
   - defaults
+
 dependencies:
     # Base depends
-  - python
+  - python >=3.8,<=3.10
   - pip
 
     # Package dependencies
   - numpy
   - pandas
   - pytorch
-  - pydantic<2
+  - pydantic<2        # workaround to avoid clashes with lightning
   - lightning
   - matplotlib
   - scikit-learn
-  - scipy<1.11
+  - scipy
    
     # Pip-only installs
   - pip:
-    - KDEpy
-    - nbmake
+    - mlcolvar
 
