@@ -2,9 +2,11 @@ import os
 import sys
 import yaml
 import torch
+import shutil
 import logging
 import numpy as np
 import pandas as pd
+from pathlib import PurePath
 import matplotlib.pyplot as plt
 
 from mlcolvar.utils.fes import compute_fes
@@ -13,30 +15,6 @@ from mlcolvar.data import DictDataset
 # Set logger
 logger = logging.getLogger(__name__)
 
-# Related to logging
-def set_logger(verbose: bool):
-    """
-    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
-    If verbose is False, it sets the logging level to INFO.
-
-    Inputs
-    ------
-
-        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
-    """
-
-    info_config_path = "/home/pnavarro/repos/CV_learning/mlcolvar_utils/mlcolvar_utils/configurations/info_configuration.ini"
-    debug_config_path = "/home/pnavarro/repos/CV_learning/mlcolvar_utils/mlcolvar_utils/configurations/debug_configuration.ini"
-
-    if verbose:
-        logging.config.fileConfig(debug_config_path)
-    else:
-        logging.config.fileConfig(info_config_path)
-
-    logger = logging.getLogger("mlcolvar_utils")
-
-    logger.info("MLCOLVAR Utils: Tool to extract CVs from simulations data")
-    logger.info("========================================================= \n")
 
 # Related to FES
 def create_fes_plot(X, temperature, num_bins, bandwidth, labels, max_fes, file_path):
@@ -264,6 +242,38 @@ def files_exist(*file_path):
     
     return global_parameters
 
+def get_global_parameters(configuration_path: str, output_folder: str = None) -> dict:
+    """
+    Function to read global parameters from configuration file. Exits if configuration file is not found.
+    It also copies a backup of the configuration file to the output folder.
+
+    Inputs
+    ------
+
+        configuration_path (str): Path to configuration file
+        output_folder      (str): Path to output folder
+
+    Outputs
+    -------
+        
+        global_parameters (dict): Dictionary with global parameters
+    """
+    
+    # Read global parameters from configuration file
+    if files_exist(configuration_path):
+        with open(configuration_path) as config_file:
+            global_parameters = yaml.load(config_file, Loader = yaml.FullLoader)
+    else:
+        logger.error("Configuration file not found")
+        sys.exit(1)
+    
+    # Copy configuration file to output folder
+    if output_folder is not None:
+        bck_configuration_path = get_unique_path(os.path.join(output_folder, "input_bck.yml"))
+        shutil.copyfile(configuration_path, bck_configuration_path)
+    
+    return global_parameters
+
 
 # Features utils
 def get_filter_dict(features_path: str, feat_regex: str):
@@ -274,7 +284,7 @@ def get_filter_dict(features_path: str, feat_regex: str):
     Parameters
     ----------
     features_path : str
-        Path to the file containing the list of features
+        Path to the file containing a list of features
     feat_regex : str
         Regular expression to select the features
     
@@ -297,9 +307,9 @@ def get_filter_dict(features_path: str, feat_regex: str):
             logger.info(f' Using regex to select features: {feat_regex}')
             filter_dict = dict(regex=feat_regex)
         else:
-            # No features path or regex is given, use all features
-            logger.info(' Using all features')
-            filter_dict = dict(regex='.*')
+            # No features path or regex is given, use default filter
+            logger.info(' Using all features except time and *.bias columns')
+            filter_dict = dict(regex='^(?!.*time)^(?!.*bias)')
     
     return filter_dict
 
@@ -361,3 +371,71 @@ def save_list(list_to_save: list, path_to_save: str) -> None:
             file_to_save.write(f'{element}\n')
 
     return
+
+def get_unique_path(path: str):
+    """
+    Returns a unique path. 
+    If it exists, it creates a new path with a suffix number.
+    If it does not exist, it returns the original path.
+    If the path is a file, it returns the path to the file with a suffix number, respecting the extension.
+
+    Inputs
+    ----------
+
+        path           (str): original path
+    
+    Returns
+    -------
+        
+        unique_path    (str): unique path
+    """
+
+    # Convert to PurePath object
+    pure_path = PurePath(path)
+
+    # If path exists
+    if os.path.exists(path):
+
+        # Get parent path
+        parent_path = pure_path.parent
+
+        # If path is a file
+        if os.path.isfile(path):
+
+            # Find the suffix and the stem
+            stem = pure_path.stem
+            suffix = pure_path.suffix
+            
+            # While the path exists
+            i = 1
+            while os.path.exists(path):
+
+                # Create new path
+                path = os.path.join(parent_path, stem + "_" + str(i) + suffix)
+                i += 1
+            
+            # Return unique path
+            return path
+        
+        # If path is a folder
+        elif os.path.isdir(path):
+
+            # Find the name
+            name = pure_path.name
+
+            # While the path exists
+            i = 1
+            while os.path.exists(path):
+
+                # Create new path
+                path = os.path.join(parent_path, name + "_" + str(i))
+                i += 1
+            
+            # Return unique path
+            return path
+    
+    # If path does not exist
+    else:
+
+        # Return original path
+        return path
