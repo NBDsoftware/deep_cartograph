@@ -95,7 +95,7 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
         print("Computing PCA")
         compute_pca(features_dataframe = features_dataframe, 
                     cv_dimension = global_parameters['cv']['dimension'], 
-                    fes_settings = global_parameters['fes'], 
+                    figures_settings = global_parameters['figures'], 
                     output_folder = output_folder)
 
     ###################
@@ -106,7 +106,7 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
         print("Computing AE")
         compute_ae(features_dataset = features_dataset, 
                    cv_dimension = global_parameters['cv']['dimension'],
-                   fes_settings = global_parameters['fes'], 
+                   figures_settings = global_parameters['figures'], 
                    training_settings = global_parameters['cv']['trainings'],
                    output_folder = output_folder)
 
@@ -118,7 +118,7 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
         print("Computing TICA")
         compute_tica(features_dataframe = features_dataframe,
                      cv_dimension = global_parameters['cv']['dimension'],
-                     fes_settings = global_parameters['fes'],
+                     figures_settings = global_parameters['figures'],
                      output_folder = output_folder)
     
     #################
@@ -129,7 +129,7 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
         print("Computing DTICA")
         compute_deep_tica(features_dataframe = features_dataframe,
                           cv_dimension = global_parameters['cv']['dimension'],
-                          fes_settings = global_parameters['fes'],
+                          figures_settings = global_parameters['figures'],
                           training_settings = global_parameters['cv']['trainings'],
                           output_folder = output_folder)
 
