@@ -1,0 +1,46 @@
+# fes:                Settings for the Free Energy Surface
+#   plot_fes:         Plot the Free Energy Surface
+#   temperature:      Temperature in Kelvin
+#   bandwidth:        Bandwidth for the Kernel Density Estimation of the Free Energy Surface
+#   num_bins:         Number of bins for the Kernel Density Estimation of the Free Energy Surface
+#   max:              Maximum value for the Free Energy Surface
+
+fes:
+  plot_fes: True  
+  temperature: 300
+  bandwidth: 0.01
+  num_bins: 100
+  max: 40
+
+# cv:                           Settings for the Collective Variables calculations
+#   type:                       Type of Collective Variable to calculate (PCA, AE, TICA, DTICA, ALL)
+#   dimension:                  Number of dimensions to calculate
+#   features_regex:             Regular expression to select the features to use
+#   trainings:                  Settings for the training of the Collective Variables (when applicable)
+#     seed:                     Seed for the PyTorch random number generator
+#     batch_size:               Batch size for the training
+#     max_epochs:               Maximum number of epochs for the training
+#     shuffle:                  Shuffle the data before training
+#     patience:                 Patience for the early stopping
+#     lengths:                  Lengths of the training and validation sets (in fractions)
+#     min_delta:                Minimum change in the loss function to consider an improvement
+#     dropout:                  Dropout rate for the training
+#     hidden_layers:            Fully connected hidden layers between the input and latent space
+#     check_val_every_n_epoch:  Check the validation loss every n epochs
+
+cv:
+  type: ALL
+  dimension: 2
+  features_regex: null
+  trainings: 
+    seed: 42
+    batch_size: 32
+    max_epochs: 1000
+    shuffle: True
+    patience: 10
+    lengths: [0.8, 0.2]
+    min_delta: 1e-5
+    dropout: 0.1
+    hidden_layers: [15, 15]
+    check_val_every_n_epoch: 1
+    max_tries: 10
