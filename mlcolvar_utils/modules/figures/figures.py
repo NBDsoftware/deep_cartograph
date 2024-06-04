@@ -12,17 +12,18 @@ from mlcolvar.utils.fes import compute_fes
 # Set logger
 logger = logging.getLogger(__name__)
 
-def plot_fes(X: np.ndarray, labels: List[str], settings: Dict, file_path: str):
+def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict, file_path: str):
     """
     Creates a figure of the free energy surface and saves it to a file.
 
     Parameters
     ----------
 
-    X:           data with time series of the variables along which the FES is computed (1D or 2D)
-    settings:    dictionary with the settings of the FES plot
-    labels:      labels of the variables along which the FES is computed
-    file_path:   file path where the figure is saved
+        X:           data with time series of the variables along which the FES is computed (1D or 2D)
+        X_ref:       data with the reference values of the variables along which the FES is computed
+        settings:    dictionary with the settings of the FES plot
+        labels:      labels of the variables along which the FES is computed
+        file_path:   file path where the figure is saved
     """
 
     if settings.get('plot', True):
@@ -41,11 +42,31 @@ def plot_fes(X: np.ndarray, labels: List[str], settings: Dict, file_path: str):
         # Create figure
         fig, ax = plt.subplots()
 
+        x_limits, y_limits = find_limits(X, X_ref, num_variables, max_fes)
+
         # Compute the FES along the given variables
         fes, grid, bounds, error = compute_fes(X, temp=temperature, ax=ax, plot=True, 
                                             plot_max_fes = max_fes, backend="KDEpy",
                                             num_samples=num_bins, bandwidth=bandwidth,
-                                            eps=1e-10)
+                                            eps=1e-10, bounds=[x_limits, y_limits])
+
+        # If there is reference data
+        if X_ref is not None:
+
+            print(f"Reference data: {X_ref}")
+
+            # If the reference data is 2D
+            if X_ref.shape[1] == 2:
+                
+                # Add as a scatter plot
+                ax.scatter(X_ref[:,0], X_ref[:,1], c='black', s=5, label='Reference data')
+
+            # If the reference data is 1D
+            elif X_ref.shape[1] == 1:
+
+                # Add as a histogram
+                ax.hist(X_ref, bins=num_bins, color='red', alpha=0.5, density=True, label='Reference data')
+            
 
         # Set axis labels
         ax.set_xlabel(labels[0])
@@ -53,13 +74,11 @@ def plot_fes(X: np.ndarray, labels: List[str], settings: Dict, file_path: str):
         if len(labels) > 1:
             ax.set_ylabel(labels[1]) 
 
-        # Set axis limits
-        if num_variables == 1:
-            ax.set_ylim(0, max_fes)
-            ax.set_xlim(bounds[0], bounds[1])
-        elif num_variables == 2:
-            ax.set_ylim(bounds[1][0], bounds[1][1])
-            ax.set_xlim(bounds[0][0], bounds[0][1])
+        # Set limits
+        ax.set_xlim(x_limits)
+        ax.set_ylim(y_limits)
+
+        ax.legend()
 
         # Save figure
         fig.savefig(file_path, dpi=300)
@@ -153,10 +172,10 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
 
     return
 
-def plot_projected_trajectory(data: np.ndarray, labels: List[str], settings: Dict, file_path: str) -> None:
+def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cmap_label: str, settings: Dict, file_path: str) -> None:
     """
     Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
-    The color of the markers is given by the order of the data points.
+    The color of the markers is given by the value of cmap_label
     Adds the histograms of the data along each axis and save the figure to a file.
 
     Inputs
@@ -172,37 +191,73 @@ def plot_projected_trajectory(data: np.ndarray, labels: List[str], settings: Dic
 
         logger.info(f'Creating projected trajectory plot...')
 
+        marker_size = settings.get('marker_size', 10)
         alpha = settings.get('alpha', 0.5)
         num_bins = settings.get('num_bins', 50)
         bw_adjust = settings.get('bandwidth', 0.5)
         cmap = settings.get('cmap', 'viridis')
-
-        # Create a pandas DataFrame from the data and the labels
-        data_df = pd.DataFrame(data, columns=labels)
-
-        # Add a column with the order of the data points
-        data_df['order'] = np.arange(data_df.shape[0])
+        use_legend = settings.get('use_legend', False)
+        if use_legend:
+            legend = 'full' # Show all the labels, otherwise it will show only some representative labels
+        else:
+            legend = False
 
         # Create a JointGrid object with a colormap
-        ax = sns.JointGrid(data=data_df, x=labels[0], y=labels[1])
+        ax = sns.JointGrid(data=data_df, x=axis_labels[0], y=axis_labels[1])
 
-        # Create a scatter plot of the data, color-coded by the order of the data points
+        # Create a scatter plot of the data, color-coded by the order of the data points, modify the markers size
         scatter = ax.plot_joint(
             sns.scatterplot, 
             data=data_df,
-            hue='order', 
+            hue=cmap_label, 
             palette=cmap, 
             alpha=alpha, 
             edgecolor=".2", 
             linewidth=.5,
-            legend=False)
+            legend=legend,
+            s=marker_size)
         
-        scatter.set_axis_labels(labels[0], labels[1])
+        scatter.set_axis_labels(axis_labels[0], axis_labels[1])
 
         # Marginal histograms
         ax.plot_marginals(sns.histplot, kde=True, bins=num_bins, kde_kws = {'bw_adjust': bw_adjust})
-        
+
         plt.tight_layout()
 
         # Save the figure
         plt.savefig(file_path, dpi=300)
+
+def find_limits(X: np.ndarray, X_ref: np.ndarray, num_variables: int, max_fes: float):
+    """
+    Find the limits of the axis for the FES plot.
+
+    Inputs
+    ------
+
+        X:             data with the time series of the variables along which the FES is computed
+        X_ref:         data with the reference values of the variables along which the FES is computed
+        num_variables: number of variables
+        max_fes:       maximum value of the FES
+
+    Returns
+    -------
+
+        List with the limits of the axis for the FES plot
+    """
+
+    # Set axis limits
+    delta = 0.1
+    if num_variables == 1:
+        min_x = min(np.min(X), np.min(X_ref))
+        max_x = max(np.max(X), np.max(X_ref))
+        x_lim = [min_x-delta, max_x+delta]
+        y_lim = [0, max_fes]
+    elif num_variables == 2:
+        min_x = min(np.min(X[:, 0]), np.min(X_ref[:, 0]))
+        max_x = max(np.max(X[:, 0]), np.max(X_ref[:, 0]))
+        min_y = min(np.min(X[:, 1]), np.min(X_ref[:, 1]))
+        max_y = max(np.max(X[:, 1]), np.max(X_ref[:, 1]))
+        x_lim = [min_x-delta, max_x+delta]
+        y_lim = [min_y-delta, max_y+delta]
+
+    return x_lim, y_lim
