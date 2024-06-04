@@ -26,7 +26,7 @@ from mlcolvar_utils.tools.train_colvars.utils import compute_pca, compute_ae, co
 # MAIN #
 ########
 
-def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv_dimension: int, cv_type: str, output_folder: str):
+def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str, features_path: str, cv_dimension: int, cv_type: str, output_folder: str):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -43,11 +43,12 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
     ------
 
         configuration_path: path to the configuration file
-        colvars_path:  path to the colvars file with the input data
-        features_path: path to a file containing a list of features that should be used (if no path is given, all features are used)
-        cv_dimension:  dimension of the CVs to train
-        cv_type:       type of CV to train (PCA, AE, TICA, DTICA, ALL)
-        output_path:   path where the output files are saved
+        colvars_path:       path to the colvars file with the input data
+        ref_colvars_path:   path to the colvars file with the reference data
+        features_path:      path to a file containing a list of features that should be used (if no path is given, all features are used)
+        cv_dimension:       dimension of the CVs to train
+        cv_type:            type of CV to train (PCA, AE, TICA, DTICA, ALL)
+        output_path:        path where the output files are saved
     """
 
     # Title
@@ -78,10 +79,23 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
     filter_dict = common.get_filter_dict(features_path, global_parameters['cv']['features_regex'])
 
     # Build dataset from colvars file with the selected features
-    features_dataset, colvars_dataframe = create_dataset_from_files(file_names=[colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)         
+    features_dataset, colvars_dataframe = create_dataset_from_files(file_names=[colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)  
+
+    # If reference data is given, build dataset from colvars file with the selected features
+    if ref_colvars_path:
+        ref_features_dataset, ref_colvars_dataframe = create_dataset_from_files(file_names=[ref_colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)     
+    else:
+        ref_features_dataset = None
+        ref_colvars_dataframe = None  
 
     # Filter dataframe to keep just the selected features
     features_dataframe = colvars_dataframe.filter(**filter_dict)
+
+    # If reference data is given, filter dataframe to keep just the selected features
+    if ref_colvars_path:
+        ref_features_dataframe = ref_colvars_dataframe.filter(**filter_dict)
+    else:
+        ref_features_dataframe = None
 
     # Log number of features and samples
     logger.info(f' Number of samples: {features_dataframe.shape[0]}')
@@ -94,8 +108,10 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
     if global_parameters['cv']['type'] in ('PCA', 'ALL'):
         print("Computing PCA")
         compute_pca(features_dataframe = features_dataframe, 
+                    ref_features_dataframe = ref_features_dataframe,
                     cv_dimension = global_parameters['cv']['dimension'], 
                     figures_settings = global_parameters['figures'], 
+                    clustering_settings = global_parameters['clustering'],
                     output_folder = output_folder)
 
     ###################
@@ -105,9 +121,11 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
     if global_parameters['cv']['type'] in ('AE', 'ALL'):
         print("Computing AE")
         compute_ae(features_dataset = features_dataset, 
+                   ref_features_dataset = ref_features_dataset,
                    cv_dimension = global_parameters['cv']['dimension'],
-                   figures_settings = global_parameters['figures'], 
+                   figures_settings = global_parameters['figures'],
                    training_settings = global_parameters['cv']['trainings'],
+                   clustering_settings = global_parameters['clustering'],
                    output_folder = output_folder)
 
     ############
@@ -117,8 +135,10 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
     if global_parameters['cv']['type'] in ('TICA', 'ALL'):
         print("Computing TICA")
         compute_tica(features_dataframe = features_dataframe,
+                     ref_features_dataframe = ref_features_dataframe,
                      cv_dimension = global_parameters['cv']['dimension'],
                      figures_settings = global_parameters['figures'],
+                     clustering_settings = global_parameters['clustering'],
                      output_folder = output_folder)
     
     #################
@@ -128,9 +148,11 @@ def train_cvs(configuration_path: str, colvars_path: str, features_path: str, cv
     if global_parameters['cv']['type'] in ('DTICA', 'ALL'):
         print("Computing DTICA")
         compute_deep_tica(features_dataframe = features_dataframe,
+                          ref_features_dataframe = ref_features_dataframe,
                           cv_dimension = global_parameters['cv']['dimension'],
                           figures_settings = global_parameters['figures'],
                           training_settings = global_parameters['cv']['trainings'],
+                          clustering_settings = global_parameters['clustering'],
                           output_folder = output_folder)
 
     # End timer
@@ -179,6 +201,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the colvars file", required=True)
+    parser.add_argument("-ref_colvars", dest='ref_colvars_path', type=str, help="Path to the colvars file with the reference data", required=False)
     parser.add_argument("-features", dest='features_path', type=str, help="Path to a file containing the features that should be used (these are used if the path is given)", required=False)
     parser.add_argument("-cv_dimension", type=int, help="Dimension of the CVs", required=False)
     parser.add_argument("-cv_type", type=str, help="Type of CV to train (PCA, AE, TICA, DTICA, ALL)", required=False)
@@ -191,4 +214,4 @@ if __name__ == "__main__":
     logger = logging.getLogger("mlcolvar_utils")
 
     # Run tool
-    train_cvs(args.configuration_path, args.colvars_path, args.features_path, args.cv_dimension, args.cv_type, args.output_folder)
+    train_cvs(args.configuration_path, args.colvars_path, args.ref_colvars_path, args.features_path, args.cv_dimension, args.cv_type, args.output_folder)
