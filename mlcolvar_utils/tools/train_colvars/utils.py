@@ -28,30 +28,29 @@ from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 # Local imports
 from mlcolvar_utils.modules.common import common
+from mlcolvar_utils.modules.figures import figures
+from mlcolvar_utils.modules.statistics import statistics
 
 # Set logger
 logger = logging.getLogger(__name__)
 
 
-def compute_pca(features_dataframe: pd.DataFrame, cv_dimension: int, fes_settings: Dict, output_folder: str):
+def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
     Compute Principal Component Analysis (PCA) on the input features. Also, compute the Free Energy Surface (FES) along the PCA CVs.
 
     Inputs
     ------
 
-        features_dataframe: DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
-        cv_dimension:       Number of PCA components to consider for the CVs.
-        fes_settings:       Dictionary containing the settings for the FES plot.
-        output_folder:      Path to the output folder where the PCA results will be saved.
+        features_dataframe:     DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
+        ref_features_dataframe: DataFrame containing the time series of the reference features. Each column is a feature and each row is a time step.
+        cv_dimension:           Number of PCA components to consider for the CVs.
+        figures_settings:       Dictionary containing the settings for figures.
+        clustering_settings:    Dictionary containing the settings for clustering the projected features.
+        output_folder:          Path to the output folder where the PCA results will be saved.
     """
     # NOTE: Normalization included or needed?
-
-    # FES settings
-    temperature = fes_settings.get('temperature', 300)
-    num_bins = fes_settings.get('num_bins', 100)
-    bandwidth = fes_settings.get('bandwidth', 0.01)
-    max_fes = fes_settings.get('max', 30)
+    # NOTE: Increase resolution in try/except blocks
 
     # Create output directory
     pca_output_path = common.create_output_folder(output_folder, 'pca')
@@ -81,36 +80,46 @@ def compute_pca(features_dataframe: pd.DataFrame, cv_dimension: int, fes_setting
         features_array = features_dataframe.to_numpy(dtype=np.float32)
 
         # Evaluate the CV on the colvars data
-        projected_features_pca = np.matmul(features_array, pca_cv)
+        projected_features = np.matmul(features_array, pca_cv)
+
+        # If reference data is provided, project it as well
+        if ref_features_dataframe is not None:
+            ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
+            projected_ref_features = np.matmul(ref_features_array, pca_cv)
+        else:
+            projected_ref_features = None
 
         # Create CV labels 
         cv_labels = [f'PC {i+1}' for i in range(cv_dimension)]
 
         # Create FES along the CV
-        fes_pca, grid_pca, bounds_pca = common.create_fes_plot(X = projected_features_pca,
-                                                        temperature = temperature,
-                                                        num_bins = num_bins,
-                                                        bandwidth = bandwidth,
-                                                        labels = cv_labels,
-                                                        max_fes = max_fes,
-                                                        file_path = os.path.join(pca_output_path,'fes.png'))
-        
+        figures.plot_fes(
+            X=projected_features, 
+            X_ref=projected_ref_features,
+            labels=cv_labels,
+            settings=figures_settings.get('fes', {}), 
+            file_path=os.path.join(pca_output_path,'fes.png'))
+
+        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, pca_output_path)
+
     except Exception as e:
         logger.info(f'ERROR: PCA could not be computed. Error message: {e}')
         logger.info('Skipping PCA...')
 
-def compute_ae(features_dataset: DictDataset, cv_dimension: int, fes_settings: Dict, training_settings: Dict, output_folder: str):
+def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_dimension: int, figures_settings: Dict, training_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
     Train Autoencoder on the input features. The CV is the latent space of the Autoencoder. Also, compute the Free Energy Surface (FES) along the Autoencoder CVs.
 
     Inputs
     ------
 
-        features_dataset:   Dataset containing the input features.
-        cv_dimension:       Dimension of the Autoencoder latent space (= dimension of the CVs).
-        fes_settings:       Dictionary containing the settings for the FES plot.
-        training_settings:  Dictionary containing the settings for training the Autoencoder.
-        output_folder:      Path to the output folder where the Autoencoder results will be saved.
+        features_dataset:      Dataset containing the input features.
+        ref_features_dataset:  Dataset containing the reference input features.
+        cv_dimension:          Dimension of the Autoencoder latent space (= dimension of the CVs).
+        figures_settings:      Dictionary containing the settings for the figures.
+        training_settings:     Dictionary containing the settings for training the Autoencoder.
+        clustering_settings:   Dictionary containing the settings for clustering the projected features.
+        output_folder:         Path to the output folder where the Autoencoder results will be saved.
     """
 
     # Training settings
@@ -125,12 +134,6 @@ def compute_ae(features_dataset: DictDataset, cv_dimension: int, fes_settings: D
     hidden_layers = training_settings.get('hidden_layers', [15, 15])
     check_val_every_n_epoch = int(training_settings.get('check_val_every_n_epoch', 1))
     max_tries = int(training_settings.get('max_tries', 10))
-
-    # FES settings
-    temperature = float(fes_settings.get('temperature', 300))
-    num_bins = int(fes_settings.get('num_bins', 100))
-    bandwidth = float(fes_settings.get('bandwidth', 0.01))
-    max_fes = float(fes_settings.get('max', 30))
 
     # Get the number of features and samples
     num_features = features_dataset["data"].shape[1]
@@ -243,6 +246,13 @@ def compute_ae(features_dataset: DictDataset, cv_dimension: int, fes_settings: D
             # Data projected onto normalized latent space
             with torch.no_grad():
                 projected_features = best_ae_model(torch.Tensor(features_dataset[:]["data"])).numpy()
+            
+            # If reference data is provided, project it as well
+            if ref_features_dataset is not None:
+                with torch.no_grad():
+                    projected_ref_features = best_ae_model(torch.Tensor(ref_features_dataset[:]["data"])).numpy()
+            else:
+                projected_ref_features = None
 
             # Save the best model with the latent space normalized
             best_ae_model.to_torchscript(file_path = os.path.join(ae_output_path, 'weights.ptc'), method='trace')
@@ -251,39 +261,37 @@ def compute_ae(features_dataset: DictDataset, cv_dimension: int, fes_settings: D
             cv_labels = [f'AE {i+1}' for i in range(cv_dimension)]
 
             # Create FES along the CV
-            fes_ae, grid_ae, bounds_ae = common.create_fes_plot(X = projected_features,
-                                                        temperature=temperature,
-                                                        num_bins=num_bins,
-                                                        bandwidth=bandwidth,
-                                                        labels=cv_labels,
-                                                        max_fes=max_fes,
-                                                        file_path=os.path.join(ae_output_path, 'fes.png'))
-        
+            figures.plot_fes(
+                X=projected_features, 
+                X_ref=projected_ref_features,
+                labels=cv_labels, 
+                settings=figures_settings.get('fes', {}), 
+                file_path=os.path.join(ae_output_path, 'fes.png'))
+
+            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, ae_output_path)
+
         except Exception as e:
             logger.error(f'ERROR: Failed to save/evaluate the best autoencoder model. Error message: {e}')
     else:
         logger.warning('WARNING: Autoencoder training did not find a good solution after maximum tries.')
 
-def compute_tica(features_dataframe: pd.DataFrame, cv_dimension: int, fes_settings: Dict, output_folder: str):
+def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
     Compute Time-lagged Independent Component Analysis (TICA) on the input features. Also, compute the Free Energy Surface (FES) along the TICA CVs.
 
     Inputs
     ------
 
-        features_dataframe: DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
-        cv_dimension:       Number of TICA components to consider for the CVs.
-        fes_settings:       Dictionary containing the settings for the FES plot.
-        output_folder:      Path to the output folder where the PCA results will be saved.
+        features_dataframe:     DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
+        ref_features_dataframe: DataFrame containing the time series of the reference features. Each column is a feature and each row is a time step. 
+        cv_dimension:           Number of TICA components to consider for the CVs.
+        figures_settings:       Dictionary containing the settings for figures.
+        clustering_settings:    Dictionary containing the settings for clustering the projected features.
+        output_folder:          Path to the output folder where the PCA results will be saved.
     """
     
     # NOTE: Normalization included or needed?
-
-    # FES settings
-    temperature = fes_settings.get('temperature', 300)
-    num_bins = fes_settings.get('num_bins', 100)
-    bandwidth = fes_settings.get('bandwidth', 0.01)
-    max_fes = fes_settings.get('max', 30)
+    # NOTE: Increase resolution in try/except blocks
 
     # Create output directory
     tica_output_path = common.create_output_folder(output_folder, 'tica')
@@ -316,36 +324,45 @@ def compute_tica(features_dataframe: pd.DataFrame, cv_dimension: int, fes_settin
         np.savetxt(os.path.join(tica_output_path,'weights.txt'), tica_cv)
 
         # Evaluate the CV on the colvars data
-        projected_features_tica = np.matmul(features_array, tica_cv)
+        projected_features = np.matmul(features_array, tica_cv)
+
+        # If reference data is provided, project it as well
+        if ref_features_dataframe is not None:
+            ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
+            projected_ref_features = np.matmul(ref_features_array, tica_cv)
+        else:
+            projected_ref_features = None
 
         # Create CV labels
         cv_labels = [f'TIC {i+1}' for i in range(cv_dimension)]
 
         # Create FES along the CV
-        fes_tica, grid_tica, bounds_tica = common.create_fes_plot(X = projected_features_tica,
-                                                        temperature = temperature,
-                                                        num_bins = num_bins,
-                                                        bandwidth = bandwidth,
-                                                        labels = cv_labels,
-                                                        max_fes =  max_fes,
-                                                        file_path = os.path.join(tica_output_path,'fes.png'))
+        figures.plot_fes(
+            X=projected_features, 
+            X_ref=projected_ref_features,
+            labels=cv_labels,
+            settings=figures_settings.get('fes', {}), 
+            file_path=os.path.join(tica_output_path,'fes.png'))
+    
+        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, tica_output_path)
     
     except Exception as e:
         logger.info(f'ERROR: TICA could not be computed. Error message: {e}')
         logger.info('Skipping TICA...')
 
-def compute_deep_tica(features_dataframe: pd.DataFrame, cv_dimension: int, fes_settings: Dict, training_settings: Dict, output_folder: str):
+def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, training_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
     Train DeepTICA on the input features. The CV is the latent space of the DeepTICA model. Also, compute the Free Energy Surface (FES) along the DeepTICA CVs.
 
     Inputs
     ------
 
-        features_dataframe:   Dataset containing the input features.
-        cv_dimension:         Dimension of the DeepTICA latent space (= dimension of the CVs).
-        fes_settings:         Dictionary containing the settings for the FES plot.
-        training_settings:    Dictionary containing the settings for training the DeepTICA model.
-        output_folder:        Path to the output folder where the DeepTICA results will be saved.
+        features_dataframe:     Dataset containing the input features.
+        ref_features_dataframe: Dataset containing the reference input features.
+        cv_dimension:           Dimension of the DeepTICA latent space (= dimension of the CVs).
+        figures_settings:       Dictionary containing the settings for the figures.
+        training_settings:      Dictionary containing the settings for training the DeepTICA model.
+        output_folder:          Path to the output folder where the DeepTICA results will be saved.
     """
 
     # Training settings
@@ -360,12 +377,6 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, cv_dimension: int, fes_s
     hidden_layers = training_settings.get('hidden_layers', [15, 15])
     check_val_every_n_epoch = training_settings.get('check_val_every_n_epoch', 1)
     max_tries = training_settings.get('max_tries', 10)
-
-    # FES settings
-    temperature = fes_settings.get('temperature', 300)
-    num_bins = fes_settings.get('num_bins', 100)
-    bandwidth = fes_settings.get('bandwidth', 0.01)
-    max_fes = fes_settings.get('max', 30)
 
     # Build time-lagged dataset (composed by pairs of configs at time t, t+lag)
     timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=10)
@@ -456,70 +467,72 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, cv_dimension: int, fes_s
             logger.info('Retrying Deep TICA training...')
 
     if converged:
-        #try:
-        # Load best model from checkpoint
-        best_dtica_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
+        try:
+            # Load best model from checkpoint
+            best_dtica_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
 
-        # Put model in evaluation mode
-        best_dtica_model.eval()
+            # Put model in evaluation mode
+            best_dtica_model.eval()
 
-        print(metrics.metrics.keys())
+            # Plot eigenvalues
+            ax = plot_metrics(metrics.metrics,
+                                labels=[f'Eigenvalue {i+1}' for i in range(cv_dimension)], 
+                                keys=[f'valid_eigval_{i+1}' for i in range(cv_dimension)],
+                                yscale='log')
 
-        # Print all metrics
-        for key in metrics.metrics.keys():
-            print(f"{key}: {metrics.metrics[key]} \n")
+            # Save figure
+            ax.figure.savefig(os.path.join(dtica_output_path, f'eigenvalues.png'), dpi=300)
+            ax.figure.clf()
 
-        # Plot eigenvalues
-        ax = plot_metrics(metrics.metrics,
-                            labels=[f'Eigenvalue {i+1}' for i in range(cv_dimension)], 
-                            keys=[f'valid_eigval_{i+1}' for i in range(cv_dimension)],
-                            yscale='log')
+            # Plot loss: squared sum of the eigenvalues
+            ax = plot_metrics(metrics.metrics,
+                                labels=['Training', 'Validation'], 
+                                keys=['train_loss_epoch', 'valid_loss'], 
+                                linestyles=['--','-'], colors=['fessa1','fessa5'], 
+                                yscale='log')
+            
+            # Save figure
+            ax.figure.savefig(os.path.join(dtica_output_path, f'loss.png'), dpi=300)
+            ax.figure.clf()
 
-        # Save figure
-        ax.figure.savefig(os.path.join(dtica_output_path, f'eigenvalues.png'), dpi=300)
-        ax.figure.clf()
+            # Data projected onto original latent space of the best model
+            with torch.no_grad():
+                projected_features = best_dtica_model(torch.Tensor(timelagged_dataset[:]["data"]))
 
-        # Plot loss: squared sum of the eigenvalues
-        ax = plot_metrics(metrics.metrics,
-                            labels=['Training', 'Validation'], 
-                            keys=['train_loss_epoch', 'valid_loss'], 
-                            linestyles=['--','-'], colors=['fessa1','fessa5'], 
-                            yscale='log')
-        
-        # Save figure
-        ax.figure.savefig(os.path.join(dtica_output_path, f'loss.png'), dpi=300)
-        ax.figure.clf()
+            # Normalize the latent space
+            norm =  Normalization(cv_dimension, mode='min_max', stats = Statistics(projected_features) )
+            best_dtica_model.postprocessing = norm
+            
+            # Data projected onto normalized latent space
+            with torch.no_grad():
+                projected_features = best_dtica_model(torch.Tensor(timelagged_dataset[:]["data"])).numpy()
 
-        # Data projected onto original latent space of the best model
-        with torch.no_grad():
-            projected_features = best_dtica_model(torch.Tensor(timelagged_dataset[:]["data"]))
+            # If reference data is provided, project it as well
+            if ref_features_dataframe is not None:
+                with torch.no_grad():
+                    projected_ref_features = best_dtica_model(torch.Tensor(ref_features_dataframe.to_numpy(dtype=np.float32))).numpy()
+            else:
+                projected_ref_features = None
 
-        # Normalize the latent space
-        norm =  Normalization(cv_dimension, mode='min_max', stats = Statistics(projected_features) )
-        best_dtica_model.postprocessing = norm
-        
-        # Data projected onto normalized latent space
-        with torch.no_grad():
-            projected_features = best_dtica_model(torch.Tensor(timelagged_dataset[:]["data"])).numpy()
+            # Save model
+            best_dtica_model.to_torchscript(os.path.join(dtica_output_path,'model.ptc'), method='trace')
 
-        # Save model
-        best_dtica_model.to_torchscript(os.path.join(dtica_output_path,'model.ptc'), method='trace')
+            # Create CV labels
+            cv_labels = [f'DeepTIC {i+1}' for i in range(cv_dimension)]
 
-        # Create CV labels
-        cv_labels = [f'DeepTIC {i+1}' for i in range(cv_dimension)]
+            # Create FES along the CV
+            figures.plot_fes(
+                X=projected_features, 
+                X_ref=projected_ref_features,
+                labels=cv_labels, 
+                settings=figures_settings.get('fes', {}), 
+                file_path=os.path.join(dtica_output_path,'fes.png')) 
 
-        # Create FES along the CV
-        fes_dtica, grid_dtica, bounds_dtica = common.create_fes_plot(X = projected_features,
-                                                            temperature=temperature,
-                                                            num_bins=num_bins,
-                                                            bandwidth=bandwidth,
-                                                            labels=cv_labels,
-                                                            max_fes=max_fes,
-                                                            file_path=os.path.join(dtica_output_path,'fes.png'))
+            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, dtica_output_path)
 
-        #except Exception as e:
-        #    logger.info(f'ERROR: DeepTICA could not be computed. Error message: {e}')
-        #    logger.info('Skipping DeepTICA...')
+        except Exception as e:
+            logger.info(f'ERROR: DeepTICA could not be computed. Error message: {e}')
+            logger.info('Skipping DeepTICA...')
 
 def model_has_converged(validation_loss: List, training_loss: list, patience: int, check_val_every_n_epoch: int, val_train_ratio: float = 2.0):
     """
@@ -559,3 +572,54 @@ def model_has_converged(validation_loss: List, training_loss: list, patience: in
         return False
 
     return True
+
+def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_settings: Dict, clustering_settings: Dict, output_path: str):
+    """
+    Plot the trajectory projection onto the CV space and cluster the projected features if requested.
+
+    Inputs
+    ------
+
+        projected_features:  Array containing the projected features.
+        cv_labels:           List of labels for the CVs.
+        figures_settings:    Dictionary containing the settings for figures.
+        clustering_settings: Dictionary containing the settings for clustering the projected features.
+        output_path:         Path to the output folder where the projected trajectory will be saved.   
+    """
+
+    # Create a pandas DataFrame from the data and the labels
+    projected_traj_df = pd.DataFrame(projected_features, columns=cv_labels)
+
+    # Add a column with the order of the data points
+    projected_traj_df['order'] = np.arange(projected_traj_df.shape[0])
+
+    if len(cv_labels) == 2:
+
+        # Create a 2D plot of the projected trajectory
+        figures.plot_projected_trajectory(
+            projected_traj_df, 
+            axis_labels = cv_labels, 
+            cmap_label = 'order',
+            settings = figures_settings.get('projected_trajectory', {}), 
+            file_path = os.path.join(output_path,'trajectory.png'))
+
+    if clustering_settings.get('run', False):
+    
+        # Cluster the projected features
+        cluster_labels, centroids = statistics.optimize_clustering(projected_features, clustering_settings)
+
+        # Add cluster labels to the projected trajectory DataFrame
+        projected_traj_df['cluster'] = cluster_labels
+
+        if len(cv_labels) == 2:
+
+            # Create a 2D plot of the projected trajectory
+            figures.plot_projected_trajectory(
+                projected_traj_df, 
+                axis_labels = cv_labels,
+                cmap_label = 'cluster', 
+                settings =  figures_settings.get('projected_clustered_trajectory', {}), 
+                file_path = os.path.join(output_path,'trajectory_clustered.png'))
+            
+    # Save the projected trajectory DataFrame
+    projected_traj_df.to_csv(os.path.join(output_path,'projected_trajectory.csv'), index=False)
