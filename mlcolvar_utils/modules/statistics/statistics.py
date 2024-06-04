@@ -2,6 +2,7 @@
 import os
 import logging
 import numpy as np
+from typing import List, Dict
 from sklearn.decomposition import PCA
 # from hdbscan import HDBSCAN - pip install hdbscan
 from sklearn.cluster import HDBSCAN
@@ -13,7 +14,7 @@ from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bo
 logger = logging.getLogger(__name__)
 
 # Define functions
-def optimize_clustering(features, settings):
+def optimize_clustering(features: np.ndarray, settings: Dict):
     """
     Optimize the hyper-parameters of the clustering algorithm. For kmeans and hierarchical, the optimization 
     is done computing a combined score* for each number of clusters and selecting the best scoring number of clusters.
@@ -40,15 +41,14 @@ def optimize_clustering(features, settings):
     Inputs
     ------
 
-        features (numpy array): matrix with the features of each sample
-        settings (dict): dictionary with the settings for the clustering
-        initial_centroids (numpy array): array with the initial centroids for the k-means algorithm (supersedes num_clusters)
+        features:          matrix with the features of each sample
+        settings:          dictionary with the settings for the clustering
     
     Outputs
     -------
 
-        cluster_labels (numpy array): array with the cluster assignment for each sample
-        centroids (numpy array): array with the centroids of the clusters
+        cluster_labels: array with the cluster assignment for each sample
+        centroids:      array with the centroids of the clusters
     """
 
     if settings['algorithm'] == 'kmeans' or settings['algorithm'] == 'hierarchical':
@@ -106,29 +106,29 @@ def optimize_clustering(features, settings):
     
     return cluster_labels, centroids
 
-def cluster_data(features, settings, initial_centroids = None):
+def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.ndarray = None) -> np.ndarray:
     """
     Cluster the data in features using the clustering settings provided in the settings dictionary.
 
     Inputs
     ------
 
-        features (numpy array): matrix with the features of each sample
-        settings (dict): dictionary with the settings for the clustering
-        initial_centroids (numpy array): array with the initial centroids for the k-means algorithm (supersedes num_clusters)
+        features:          matrix with the features of each sample
+        settings:          dictionary with the settings for the clustering
+        initial_centroids: array with the initial centroids for the k-means algorithm (supersedes num_clusters)
     
     Outputs
     -------
 
-        cluster_labels (numpy array): array with the cluster assignment for each sample
-        centroids (numpy array): array with the centroids of the clusters
+        cluster_labels:  array with the cluster assignment for each sample
+        centroids:       array with the centroids of the clusters
     """
 
     # Set default values for clustering settings
     settings['algorithm'] = settings.get('algorithm', 'kmeans')
     settings['num_clusters'] = settings.get('num_clusters', 10)
     settings['n_init'] = settings.get('n_init', 10)
-    settings['min_cluster_size'] = settings.get('min_cluster_size', int(0.1 * features.shape[0])) # 10% of the number of samples
+    settings['min_cluster_size'] = settings.get('min_cluster_size', int(0.1 * features.shape[0]))  # 10% of the number of samples
     settings['min_samples'] = settings.get('min_samples',  max(int(0.001 * features.shape[0]), 1)) # 0.1% of the number of samples, at least 1
     settings['cluster_selection_epsilon'] = settings.get('cluster_selection_epsilon', 0)
     settings['linkage'] = settings.get('linkage', 'complete')
@@ -147,7 +147,7 @@ def cluster_data(features, settings, initial_centroids = None):
 
     return cluster_labels, centroids
 
-def kmeans_clustering(feature_matrix, num_clusters, n_init, initial_centroids = None):
+def kmeans_clustering(feature_matrix: np.ndarray, num_clusters: int, n_init: int, initial_centroids: np.ndarray = None) -> np.ndarray:
 
     """
     Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
@@ -156,16 +156,16 @@ def kmeans_clustering(feature_matrix, num_clusters, n_init, initial_centroids = 
     Inputs
     ------
 
-        feature_matrix    (numpy array): matrix with the features of each frame of the simulation
-        num_clusters              (int): number of clusters to be used in the k-means algorithm
-        n_init                    (int): number of times the k-means algorithm will be run with different centroid seeds, the best result will be kept
-        initial_centroids (numpy array): array with the initial centroids for the k-means algorithm (supersedes num_clusters)
+        feature_matrix:    matrix with the features of each frame of the simulation
+        num_clusters:      number of clusters to be used in the k-means algorithm
+        n_init:            number of times the k-means algorithm will be run with different centroid seeds, the best result will be kept
+        initial_centroids: array with the initial centroids for the k-means algorithm (supersedes num_clusters)
     
     Outputs
     -------
 
-        clusters (numpy array): array with the cluster assignment for each frame of the simulation
-        centroids (numpy array): array with the centroids of the clusters
+        clusters:    array with the cluster assignment for each frame of the simulation
+        centroids:   array with the centroids of the clusters
     """
 
     # Log
