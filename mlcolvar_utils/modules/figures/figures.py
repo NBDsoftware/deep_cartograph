@@ -1,18 +1,19 @@
 # Import modules
+import os
 import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from typing import List, Dict
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.colors import ListedColormap, rgb2hex
 
 from mlcolvar.utils.fes import compute_fes
 
 # Set logger
 logger = logging.getLogger(__name__)
 
-def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict, file_path: str):
+def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict, output_path: str):
     """
     Creates a figure of the free energy surface and saves it to a file.
 
@@ -23,10 +24,20 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
         X_ref:       data with the reference values of the variables along which the FES is computed
         settings:    dictionary with the settings of the FES plot
         labels:      labels of the variables along which the FES is computed
-        file_path:   file path where the figure is saved
+        output_path: path where the outputs are saved
     """
 
-    if settings.get('plot', True):
+    if settings.get('compute', True):
+
+        # Create fes folder inside the output path
+        output_path = os.path.join(output_path, 'fes')
+        os.makedirs(output_path, exist_ok=True)
+
+        cv_dimension = X.shape[1]
+
+        if cv_dimension > 2:
+            logger.warning('The FES can only be plotted for 1D or 2D CVs.')
+            return
 
         logger.info(f'Computing FES(' + ','.join(labels) + ')...')
 
@@ -34,26 +45,40 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
         temperature = settings.get('temperature', 300)
         max_fes = settings.get('max_fes', 10)
         num_bins = settings.get('num_bins', 100)
+        num_blocks = settings.get('num_blocks', 10)
         bandwidth = settings.get('bandwidth', 0.1)
+        min_block_size = 20
 
-        # Dimensions of the input data
-        num_variables = X.shape[1]
+        # Number of samples for the FES
+        num_samples = X.shape[0]
+
+        # Find block size
+        block_size = int(num_samples/num_blocks)
+
+        # If the block size is too small, reduce the number of blocks and issue a warning
+        if block_size < min_block_size:
+            num_blocks = int(num_samples/min_block_size)
+            block_size = min_block_size
+            logger.warning(f"Block size too small. Reducing the number of blocks to {num_blocks}")
         
         # Create figure
         fig, ax = plt.subplots()
 
-        x_limits, y_limits = find_limits(X, X_ref, num_variables, max_fes)
-
         # Compute the FES along the given variables
-        fes, grid, bounds, error = compute_fes(X, temp=temperature, ax=ax, plot=True, 
-                                            plot_max_fes = max_fes, backend="KDEpy",
-                                            num_samples=num_bins, bandwidth=bandwidth,
-                                            eps=1e-10, bounds=[x_limits, y_limits])
+        fes, grid, bounds, error = compute_fes(X, temp = temperature, ax = ax, plot = True, 
+                                            plot_max_fes = max_fes, backend = "KDEpy",
+                                            num_samples = num_bins, bandwidth = bandwidth,
+                                            blocks = num_blocks, eps = 1e-10, bounds = find_limits(X, X_ref))
+        
+        # Save the FE values, the grid, the bounds and the error
+        if settings.get('save', False):
+            np.save(os.path.join(output_path, 'fes.npy'), fes)
+            np.save(os.path.join(output_path, 'grid.npy'), grid)
+            np.save(os.path.join(output_path, 'bounds.npy'), bounds)
+            np.save(os.path.join(output_path, 'error.npy'), error)
 
-        # If there is reference data
+        # Add reference data to the FES plot
         if X_ref is not None:
-
-            print(f"Reference data: {X_ref}")
 
             # If the reference data is 2D
             if X_ref.shape[1] == 2:
@@ -66,7 +91,6 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
 
                 # Add as a histogram
                 ax.hist(X_ref, bins=num_bins, color='red', alpha=0.5, density=True, label='Reference data')
-            
 
         # Set axis labels
         ax.set_xlabel(labels[0])
@@ -74,14 +98,21 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
         if len(labels) > 1:
             ax.set_ylabel(labels[1]) 
 
-        # Set limits
-        ax.set_xlim(x_limits)
-        ax.set_ylim(y_limits)
+        # Enforce FES limit if needed (max_fes defined and 1D FES)
+        if max_fes and cv_dimension == 1:
+            ax.set_ylim(0, max_fes)
+
+        # Enforce CV limits
+        if cv_dimension == 1:
+            ax.set_xlim(bounds)
+        elif cv_dimension == 2:
+            ax.set_xlim(bounds[0])
+            ax.set_ylim(bounds[1])
 
         ax.legend()
 
         # Save figure
-        fig.savefig(file_path, dpi=300)
+        fig.savefig(os.path.join(output_path, 'fes.png'), dpi=300)
 
     return
 
@@ -227,7 +258,7 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
         # Save the figure
         plt.savefig(file_path, dpi=300)
 
-def find_limits(X: np.ndarray, X_ref: np.ndarray, num_variables: int, max_fes: float):
+def find_limits(X: np.ndarray, X_ref: np.ndarray) -> List:
     """
     Find the limits of the axis for the FES plot.
 
@@ -236,28 +267,29 @@ def find_limits(X: np.ndarray, X_ref: np.ndarray, num_variables: int, max_fes: f
 
         X:             data with the time series of the variables along which the FES is computed
         X_ref:         data with the reference values of the variables along which the FES is computed
-        num_variables: number of variables
-        max_fes:       maximum value of the FES
 
     Returns
     -------
 
-        List with the limits of the axis for the FES plot
+        limits:        List with the limits of the axis for the FES plot
     """
 
-    # Set axis limits
-    delta = 0.1
-    if num_variables == 1:
-        min_x = min(np.min(X), np.min(X_ref))
-        max_x = max(np.max(X), np.max(X_ref))
-        x_lim = [min_x-delta, max_x+delta]
-        y_lim = [0, max_fes]
-    elif num_variables == 2:
-        min_x = min(np.min(X[:, 0]), np.min(X_ref[:, 0]))
-        max_x = max(np.max(X[:, 0]), np.max(X_ref[:, 0]))
-        min_y = min(np.min(X[:, 1]), np.min(X_ref[:, 1]))
-        max_y = max(np.max(X[:, 1]), np.max(X_ref[:, 1]))
-        x_lim = [min_x-delta, max_x+delta]
-        y_lim = [min_y-delta, max_y+delta]
+    # Dimensions of the input data
+    fes_dimension = X.shape[1]
+    
+    # If there is no reference data, set X_ref to X
+    if X_ref is None:
+        X_ref = X
 
-    return x_lim, y_lim
+    # Find the limits of the axis
+    offset = 1e-3
+    if fes_dimension == 1:
+        limits = (min(np.min(X), np.min(X_ref))-offset, max(np.max(X), np.max(X_ref))+offset)
+    else:
+        limits = []
+        for i in range(fes_dimension):
+            min_x = min(np.min(X[:, i]), np.min(X_ref[:, i]))
+            max_x = max(np.max(X[:, i]), np.max(X_ref[:, i]))
+            limits.append((min_x-offset, max_x+offset))
+
+    return limits
