@@ -1,46 +1,113 @@
-# fes:                Settings for the Free Energy Surface
-#   plot_fes:         Plot the Free Energy Surface
-#   temperature:      Temperature in Kelvin
-#   bandwidth:        Bandwidth for the Kernel Density Estimation of the Free Energy Surface
-#   num_bins:         Number of bins for the Kernel Density Estimation of the Free Energy Surface
-#   max:              Maximum value for the Free Energy Surface
-
-fes:
-  plot_fes: True  
-  temperature: 300
-  bandwidth: 0.01
-  num_bins: 100
-  max: 40
-
 # cv:                           Settings for the Collective Variables calculations
-#   type:                       Type of Collective Variable to calculate (PCA, AE, TICA, DTICA, ALL)
-#   dimension:                  Number of dimensions to calculate
-#   features_regex:             Regular expression to select the features to use
-#   trainings:                  Settings for the training of the Collective Variables (when applicable)
-#     seed:                     Seed for the PyTorch random number generator
-#     batch_size:               Batch size for the training
-#     max_epochs:               Maximum number of epochs for the training
-#     shuffle:                  Shuffle the data before training
-#     patience:                 Patience for the early stopping
-#     lengths:                  Lengths of the training and validation sets (in fractions)
-#     min_delta:                Minimum change in the loss function to consider an improvement
-#     dropout:                  Dropout rate for the training
-#     hidden_layers:            Fully connected hidden layers between the input and latent space
-#     check_val_every_n_epoch:  Check the validation loss every n epochs
+#   type:                         (str: PCA, AE, TICA, DTICA, ALL) Type of Collective Variable to calculate
+#   dimension:                    (int) Number of dimensions to calculate
+#   features_regex:               (str or null) Regular expression to select the features to use
+#   trainings:                    Settings for the training of the Collective Variables (when applicable)
+#     max_tries:                    (int) Maximum number of tries for the training
+#     seed:                         (int) Seed for the PyTorch random number generator
+#     lengths:                      (list) Lengths of the training and validation sets, e.g. [0.8, 0.2]
+#     batch_size:                   (int) Batch size for the training
+#     max_epochs:                   (int) Maximum number of epochs for the training
+#     hidden_layers:                (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
+#     dropout:                      (float) Dropout rate for the training
+#     shuffle:                      (bool) Shuffle the data before training 
+#     patience:                     (int) Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
+#     check_val_every_n_epoch:      (int) Do a validation check every n epochs
+#     min_delta:                    (float) Minimum change in the loss function to consider it an improvement
+#     save_check_every_n_epoch:     (int) Save the model every n epochs
+#     save_loss:                    (bool) Wether to save the training and validation losses after training 
+#     plot_loss:                    (bool) Wether to plot the loss after training
 
 cv:
   type: ALL
   dimension: 2
   features_regex: null
   trainings: 
+    max_tries: 10
     seed: 42
+    lengths: [0.8, 0.2]
     batch_size: 32
     max_epochs: 1000
-    shuffle: True
-    patience: 10
-    lengths: [0.8, 0.2]
-    min_delta: 1e-5
-    dropout: 0.1
     hidden_layers: [15, 15]
-    check_val_every_n_epoch: 1
-    max_tries: 10
+    dropout: 0.1
+    shuffle: True
+    patience: 2
+    check_val_every_n_epoch: 10
+    min_delta: 0.00001
+    save_check_every_n_epoch: 10
+    save_loss: True
+    plot_loss: True
+
+# figures:                          Settings for additional figures
+#   fes:                              Settings for the Free Energy Surface calculation
+#     compute:                          (bool) Calculate the Free Energy Surface
+#     save:                             (bool) Save the calculated Free Energy Surface in .npy files (otherwise it just plots 1D or 2D FES)
+#     temperature:                      (int) Temperature in Kelvin
+#     bandwidth:                        (float) Bandwidth for the Kernel Density Estimation of the Free Energy Surface
+#     num_bins:                         (int) Number of bins for the Kernel Density Estimation of the Free Energy Surface
+#     num_blocks:                       (int) Number of blocks for the standard error calculation of the Free Energy Surface
+#     max_fes:                          (float) Maximum value for the Free Energy Surface (above which the value is set to NaN)
+#   projected_trajectory:              Settings for the Projected Trajectory
+#     plot:                             (bool) Plot the Projected Trajectory
+#     num_bins:                         (int) Number of bins for the Kernel Density Estimation of the Projected Trajectory
+#     bandwidth:                        (float) Bandwidth for the Kernel Density Estimation of the Projected Trajectory
+#     alpha:                            (float) Transparency of the points in the Projected Trajectory
+#     cmap:                             (str) Colormap for the Projected Trajectory
+#   projected_clustered_trajectory:   Settings for the Projected Clustered Trajectory
+#    plot:                              (bool) Plot the Projected Clustered Trajectory
+#    num_bins:                          (int) Number of bins for the Kernel Density Estimation of the Projected Clustered Trajectory
+#    bandwidth:                         (float) Bandwidth for the Kernel Density Estimation of the Projected Clustered Trajectory
+#    alpha:                             (float) Transparency of the points in the Projected Clustered Trajectory
+#    cmap:                              (str) Colormap for the Projected Clustered Trajectory
+#    use_legend:                        (bool) Use a legend in the Projected Clustered Trajectory plot
+
+figures:
+  fes:
+    compute: True  
+    save: True
+    temperature: 300
+    bandwidth: 0.01
+    num_bins: 100
+    num_blocks: 1
+    max_fes: 40
+  projected_trajectory:
+    plot: True
+    num_bins: 100
+    bandwidth: 0.25
+    alpha: 0.6
+    cmap: turbo
+  projected_clustered_trajectory:
+    plot: True
+    num_bins: 100
+    bandwidth: 0.25
+    alpha: 0.8
+    cmap: turbo
+    use_legend: True
+
+# clustering:                        Settings for the clustering
+#   run:                              (bool) Whether to run the clustering or not
+#   algorithm:                        (str: kmeans, hdbscan, hierarchical) Clustering algorithm to use
+#   opt_num_clusters:                 (bool) Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)
+#   search_interval:                  (list) Range of number of clusters to search for the optimal number of clusters (only for hierarchical and kmeans)
+#   num_clusters:                     (int) Number of clusters to use (only for hierarchical and kmeans and if opt_num_clusters is false)
+#   linkage:                          (str) Linkage criterion to use ('ward', 'single', 'average', 'complete') (only for hierarchical)
+#   n_init:                           (int) Number of times the k-means algorithm is run with different centroid seeds (only for kmeans)
+#   min_cluster_size:                 (int) Minimum number of samples in a group for that group to be considered a cluster; groupings smaller than this size will be left as noise (only for hdbscan)
+#   min_samples:                      (int) Number of samples in a neighborhood for a point to be considered as a core point (only for hdbscan)
+#   cluster_selection_epsilon:        (float) A distance threshold. Clusters below this value will be merged (only for hdbscan)
+
+#   Note that:
+#     min_cluster_size should be set to the smallest size grouping that you wish to consider a cluster.
+#     the larger the value of min_samples you provide, the more conservative the clustering (more points will be declared as noise) and clusters will be restricted to progressively more dense areas
+
+clustering:                       
+  run: True                        
+  algorithm: hdbscan               
+  opt_num_clusters: True           
+  search_interval: [3, 8]         
+  num_clusters: 3                  
+  linkage: complete                
+  n_init: 20                    
+  min_cluster_size: 5              
+  min_samples: 3                  
+  cluster_selection_epsilon: 0     
