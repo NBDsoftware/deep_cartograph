@@ -1,11 +1,12 @@
+# Import modules
 import os
 import time
 import argparse
 import logging.config
 from pathlib import Path
+from mlcolvar.utils.io import  create_dataset_from_files  
 
-from lightning.pytorch.loggers import CSVLogger
-
+# from lightning.pytorch.loggers import CSVLogger
 #logger = CSVLogger(save_dir="experiments",   # directory where to save file
 #                    name='myCV',             # name of experiment
 #                    version=None             # version number (if None it will be automatically assigned)
@@ -14,16 +15,14 @@ from lightning.pytorch.loggers import CSVLogger
 # assign callback to trainer
 #trainer = lightning.Trainer(callbacks=[logger])
 
-# Import mlcolvars 
-from mlcolvar.utils.io import  create_dataset_from_files    
-
 # Import local modules
 from mlcolvar_utils.modules.common import common
+
+# Import local utils
 from mlcolvar_utils.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
 
-
 ########
-# MAIN #
+# TOOL #
 ########
 
 def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str, features_path: str, cv_dimension: int, cv_type: str, output_folder: str):
@@ -106,7 +105,6 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     ###########
 
     if global_parameters['cv']['type'] in ('PCA', 'ALL'):
-        print("Computing PCA")
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
                     cv_dimension = global_parameters['cv']['dimension'], 
@@ -119,7 +117,6 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     ###################
 
     if global_parameters['cv']['type'] in ('AE', 'ALL'):
-        print("Computing AE")
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
                    cv_dimension = global_parameters['cv']['dimension'],
@@ -133,7 +130,6 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     ############
 
     if global_parameters['cv']['type'] in ('TICA', 'ALL'):
-        print("Computing TICA")
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
                      cv_dimension = global_parameters['cv']['dimension'],
@@ -146,7 +142,6 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     #################
 
     if global_parameters['cv']['type'] in ('DTICA', 'ALL'):
-        print("Computing DTICA")
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
                           cv_dimension = global_parameters['cv']['dimension'],
@@ -192,8 +187,12 @@ def set_logger(verbose: bool):
 
     logger = logging.getLogger("mlcolvar_utils")
 
-    logger.info("MLCOLVAR Utils: Tool to extract CVs from simulations data")
+    logger.info("MLColvar Utils: Tool to extract CVs from simulations data")
     logger.info("========================================================= \n")
+
+########
+# MAIN #
+########
 
 if __name__ == "__main__":
 
@@ -210,7 +209,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set logger
-    set_logger(verbose=True)
+    set_logger(verbose=False)
     logger = logging.getLogger("mlcolvar_utils")
 
     # Run tool
