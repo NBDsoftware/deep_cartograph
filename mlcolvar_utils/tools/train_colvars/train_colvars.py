@@ -1,19 +1,11 @@
 # Import modules
 import os
 import time
+import shutil
 import argparse
 import logging.config
 from pathlib import Path
 from mlcolvar.utils.io import  create_dataset_from_files  
-
-# from lightning.pytorch.loggers import CSVLogger
-#logger = CSVLogger(save_dir="experiments",   # directory where to save file
-#                    name='myCV',             # name of experiment
-#                    version=None             # version number (if None it will be automatically assigned)
-#                    )
-
-# assign callback to trainer
-#trainer = lightning.Trainer(callbacks=[logger])
 
 # Import local modules
 from mlcolvar_utils.modules.common import common
@@ -150,6 +142,9 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
                           clustering_settings = global_parameters['clustering'],
                           output_folder = output_folder)
 
+    # Move log file to output folder
+    shutil.move('mlcolvar_utils.log', os.path.join(output_folder, 'mlcolvar_utils.log'))
+    
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time: %.1f minutes' % (elapsed_time/60))
@@ -164,7 +159,10 @@ def set_logger(verbose: bool):
 
         verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
     """
-
+    # Issue warning if logging is already configured
+    if logging.getLogger().hasHandlers():
+        logging.warning("Logging has already been configured in the root logger. This may lead to unexpected behavior.")
+    
     # Get the path to this file
     file_path = Path(os.path.abspath(__file__))
 
@@ -175,15 +173,22 @@ def set_logger(verbose: bool):
     all_tools_path = tool_path.parent
 
     # Get the path to the parent directory
-    mlcolvars_utils_path = all_tools_path.parent
+    package_path = all_tools_path.parent
 
-    info_config_path = os.path.join(mlcolvars_utils_path, "configurations/log_file/info_configuration.ini")
-    debug_config_path = os.path.join(mlcolvars_utils_path, "configurations/log_file/debug_configuration.ini")
-
+    info_config_path = os.path.join(package_path, "configurations/log_file/info_configuration.ini")
+    debug_config_path = os.path.join(package_path, "configurations/log_file/debug_configuration.ini")
+    
+    # Check the existence of the configuration files
+    if not os.path.exists(info_config_path):
+        raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
+    
+    if not os.path.exists(debug_config_path):
+        raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
+    
     if verbose:
-        logging.config.fileConfig(debug_config_path)
+        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
     else:
-        logging.config.fileConfig(info_config_path)
+        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
 
     logger = logging.getLogger("mlcolvar_utils")
 
