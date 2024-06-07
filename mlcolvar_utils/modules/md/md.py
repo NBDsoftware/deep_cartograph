@@ -60,76 +60,70 @@ def extract_frames(trajectory_path: str, topology_path: str, frames: list, new_t
 
     return
 
-def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_name: str, traj_df: pd.DataFrame, centroids_df, metastable_df, output_folder: str, just_minima: bool = False):
+def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df: pd.DataFrame, centroids_df: pd.DataFrame = None,
+                               cluster_label: str = 'cluster', frame_label: str = 'frame', output_folder: str = 'clustered_traj'):
     """
-    Extract subset of frames for each cluster and save them in xtc format.
-    Extract centroid frame for each cluster and save them in pdb format.
-    Extract metastable frames for each cluster and save them in xtc format.
+    Extract all frames from the trajectory pertaining to each cluster and save them in a new trajectory files (XTC).
+
+    This function assumes that the traj_df contains a row for each frame in the trajectory and a column with the cluster label.
 
     Input
     -----
         trajectory_path     (str): path to the trajectory file.
         topology_path       (str): path to the topology file.
-        traj_name           (str): name of the trajectory.
         traj_df       (DataFrame): DataFrame containing the frames pertaining to each cluster.
-        centroids_df  (DataFrame): DataFrame containing the centroid frame pertaining to each cluster.
-        metastable_df (DataFrame): DataFrame containing the metastable frame pertaining to each cluster.
+        centroids_df  (DataFrame): DataFrame containing the centroids of each cluster.
+        cluster_label       (str): name of the column containing the cluster label.
+        frame_label         (str): name of the column containing the frame index.
         output_folder       (str): path to the output folder.
     """
-
-    # Create ensembles and states folders in output folder
-    os.makedirs(os.path.join(output_folder, 'ensembles'), exist_ok=True)
-    os.makedirs(os.path.join(output_folder, 'states'), exist_ok=True)
     
+    # Check the existence of trajectory and topology files
+    if not os.path.exists(trajectory_path):
+        logger.warning(f"Trajectory file {trajectory_path} not found.")
+        return
+
+    if not os.path.exists(topology_path):
+        logger.warning(f"Topology file {topology_path} not found.")
+        return
+
+    # Create output folder if needed
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
     # Find the different clusters from the trajectory
-    clusters = np.unique(traj_df['cluster_label'])
+    clusters = np.unique(traj_df[cluster_label])
 
     # Extract frames for each cluster
     for cluster in clusters:
 
-        # Select frames
-        cluster_frames = traj_df[traj_df['cluster_label'] == cluster]['frame']
-        centroid_frame = centroids_df[centroids_df['cluster_label'] == cluster]['frame']
+        # Skip if cluster is -1 (noise cluster)
+        if cluster == -1:
+            continue
+
+        # Find frames for this cluster
+        cluster_frames = traj_df[traj_df[cluster_label] == cluster][frame_label]
+
+        # Find topology frame
+        if centroids_df is not None:
+            # Make it the centroid frame if available
+            topology_frame = [centroids_df[centroids_df[cluster_label] == cluster][frame_label].values[0]]
+        else:
+            # Pick the first frame from the cluster is centroids are not available
+            topology_frame = [cluster_frames.values[0]]
+
 
         # Create file name
-        cluster_traj_name = f"{traj_name}_ensemble_{cluster}.xtc"
-        centroid_name = f"{traj_name}_ensemble_{cluster}_centroid.pdb"
+        cluster_traj_name = f"cluster_{cluster}.xtc"
+        cluster_top_name = f"cluster_{cluster}.pdb"
 
         # Create paths
-        cluster_traj_path = os.path.join(output_folder, 'ensembles', cluster_traj_name)
-        centroid_path = os.path.join(output_folder, 'ensembles', centroid_name)
+        cluster_traj_path = os.path.join(output_folder, cluster_traj_name)
+        cluster_top_path = os.path.join(output_folder, cluster_top_name)
 
         # Extract frames 
-        if not just_minima:
-            extract_frames(trajectory_path, topology_path, cluster_frames, cluster_traj_path)
-            extract_frames(trajectory_path, topology_path, centroid_frame, centroid_path, file_format='PDB')
-
-        if metastable_df is not None:
-            # Select metastable frames
-            cluster_metastable_frames = metastable_df[metastable_df['cluster_label'] == cluster]
-        else:
-            cluster_metastable_frames = []
-
-        # If there are any metastable frames in this cluster, extract them
-        if len(cluster_metastable_frames) > 0:
-
-            # Find all unique states in the cluster
-            cluster_states = np.unique(cluster_metastable_frames['state'])
-            
-            # For each state, extract metastable frames
-            for state in cluster_states:
-
-                # Extract state frames
-                state_name = f"{traj_name}_ensemble_{cluster}_state_{state}.xtc"
-                state_path = os.path.join(output_folder, 'states', state_name)
-                state_frames = cluster_metastable_frames[cluster_metastable_frames['state'] == state]['frame']
-                extract_frames(trajectory_path, topology_path, state_frames, state_path)
-
-                # Extract state topology
-                state_topology_name = f"{traj_name}_ensemble_{cluster}_state_{state}.pdb"
-                state_topology_path = os.path.join(output_folder, 'states', state_topology_name)
-                extract_frames(trajectory_path, topology_path, [state_frames.iloc[0]], state_topology_path, file_format='PDB')
-
+        extract_frames(trajectory_path, topology_path, cluster_frames, cluster_traj_path)
+        extract_frames(trajectory_path, topology_path, topology_frame, cluster_top_path, file_format='PDB')
 
 def find_supported_traj(parent_path, filename = None):
     """
