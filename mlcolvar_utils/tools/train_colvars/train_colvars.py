@@ -49,6 +49,7 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     start_time = time.time()
 
     # Create output directory
+    output_folder = common.get_unique_path(output_folder)
     common.create_output_folder(output_folder)
 
     ###############
