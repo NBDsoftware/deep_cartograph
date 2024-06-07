@@ -1,10 +1,10 @@
 # Import modules
 import os
+import sys
 import logging
 import numpy as np
+import pandas as pd
 from typing import List, Dict
-from sklearn.decomposition import PCA
-# from hdbscan import HDBSCAN - pip install hdbscan
 from sklearn.cluster import HDBSCAN
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -318,3 +318,45 @@ def hierarchical_clustering(feature_matrix, cutoff, num_clusters = None, linkage
             centroids[i,:] = np.mean(feature_matrix[frames,:], axis=0)
 
     return clustered_points, centroids
+
+def find_centroids(features_df: pd.DataFrame, centroids: np.array, feature_labels: list) -> pd.DataFrame:
+    """
+    Function that finds the closest sample to each centroid.
+
+    Inputs  
+    ------
+
+        features_df      (DataFrame): data containing the features of the samples
+        centroids      (numpy array): array with the estimated centroids for each cluster
+        feature_labels        (list): list of features to use from the dataframe
+    
+    Outputs
+    -------
+
+        centroids_df (DataFrame): DataFrame containing the closest sample to the centroid of each cluster
+    """
+
+    # Make sure the dimension of the centroids is the same as the dimension of the used features
+    if len(centroids[0]) != len(feature_labels):
+        logger.error("  The dimension of the centroids is not the same as the dimension of the used features.\n")
+        sys.exit(1)
+
+    # Create an empty DataFrame with the same structure features_df
+    centroids_df = features_df.iloc[0:0].copy()
+
+    # Print centroids df and type of the columns
+    logger.info(f"DataFrame: \n{features_df}")
+    logger.info(f"DataFrame types: \n{features_df.dtypes}")
+
+    # Find the closest sample to each centroid
+    for i, centroid in enumerate(centroids):
+
+        # Find closest sample to centroid 
+        distances = np.linalg.norm(features_df.loc[:,feature_labels].values - centroid, axis=1)
+        closest_sample_index = np.argmin(distances)
+
+        # Concatenate the closest sample to centroids dataframe
+        closest_sample = features_df.iloc[[closest_sample_index]]
+        centroids_df = pd.concat([centroids_df, closest_sample], ignore_index=True)
+
+    return centroids_df
