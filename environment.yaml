@@ -16,6 +16,7 @@ dependencies:
   - pytorch
   - pydantic<2        # workaround to avoid clashes with lightning
   - lightning
+  - mdanalysis
   - seaborn
   - matplotlib
   - scikit-learn
