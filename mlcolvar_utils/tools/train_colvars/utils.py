@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import torch, lightning
 from typing import List, Dict
+import matplotlib.pyplot as plt
 
 from mlcolvar.data import DictModule, DictDataset
 from mlcolvar.cvs import AutoEncoderCV, DeepTICA
@@ -243,6 +244,8 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
                               keys=['train_loss_epoch', 'valid_loss'], 
                               linestyles=['--','-'], colors=['fessa1','fessa5'], 
                               yscale='log')
+            
+            plt.tight_layout()
 
             # Save figure
             ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
@@ -581,22 +584,22 @@ def model_has_converged(validation_loss: List, training_loss: list, patience: in
 
     # Check if the loss function at the end of the training has decreased wrt the initial value
     if validation_loss[-1] > validation_loss[0]:
-        logger.info('WARNING: Validation loss has increased at the end of the training.')
+        logger.warning('Validation loss has increased at the end of the training.')
         return False
 
     # Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs
     if len(validation_loss) < patience*check_val_every_n_epoch:
-        logger.info('WARNING: The trainer did not run for enough epochs.')
+        logger.warning('The trainer did not run for enough epochs.')
         return False
 
     # Check if the validation loss has decreased overall in the last 'patience' x 'check_val_every_n_epoch' epochs
     if not validation_loss[-1] < validation_loss[-patience*check_val_every_n_epoch]:
-        logger.info('WARNING: Validation loss has not decreased in the last patience x check_val_every_n_epoch epochs.')
+        logger.warning(f'Validation loss has not decreased in the last patience x check_val_every_n_epoch = {patience*check_val_every_n_epoch} epochs.')
         return False
     
     # Check if the training and validation loss are similar at the end
     if validation_loss[-1] > val_train_ratio*training_loss[-1]:
-        logger.info(f'WARNING: The validation loss is {val_train_ratio} times larger than the training loss at the end of the training.')
+        logger.warning(f'The validation loss is {val_train_ratio} times larger than the training loss at the end of the training.')
         return False
 
     return True
