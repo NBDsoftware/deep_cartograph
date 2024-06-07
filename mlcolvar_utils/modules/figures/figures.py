@@ -203,7 +203,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
 
     return
 
-def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cmap_label: str, settings: Dict, file_path: str) -> None:
+def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cmap_label: str, settings: Dict, file_path: str, cmap: ListedColormap = None) -> None:
     """
     Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
     The color of the markers is given by the value of cmap_label
@@ -212,21 +212,25 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
     Inputs
     ------
 
-        data:       data with the trajectory projected on the 2D space
-        labels:     labels of the CVs used to project the trajectory
-        settings:   dictionary with the settings of the plot
-        file_path:  path where the figure will be saved
+        data_df:         data with the trajectory projected on the 2D space
+        axis_labels:     labels of the CVs used to project the trajectory
+        cmap_label:      label of the data used to color the markers
+        settings:        dictionary with the settings of the plot
+        file_path:       path where the figure will be saved
+        cmap:            ListedColormap with the colors to use for each cluster (to use the exact same colors as in other plots)
     """
 
     if settings.get('plot', True):
 
         logger.info(f'Creating projected trajectory plot...')
 
+        # If ListedColormap is not given, use the cmap in the settings
+        if cmap is None:
+            cmap = settings.get('cmap', 'viridis')
         marker_size = settings.get('marker_size', 10)
         alpha = settings.get('alpha', 0.5)
         num_bins = settings.get('num_bins', 50)
         bw_adjust = settings.get('bandwidth', 0.5)
-        cmap = settings.get('cmap', 'viridis')
         use_legend = settings.get('use_legend', False)
         if use_legend:
             legend = 'full' # Show all the labels, otherwise it will show only some representative labels
@@ -293,3 +297,117 @@ def find_limits(X: np.ndarray, X_ref: np.ndarray) -> List:
             limits.append((min_x-offset, max_x+offset))
 
     return limits
+
+def plot_clusters_size(cluster_labels: pd.Series, cmap: ListedColormap, output_folder: str):
+    """
+    Plot barplot with the number of members for each cluster.
+    
+    Inputs
+    ------
+
+        cluster_labels   : List with cluster ID for each frame
+        cmap             : ListedColormap with the colors to use for each cluster
+        output_folder    : Path to the output folder
+    """
+
+    # Find settings
+    font_size = 12
+    tick_size = 10
+
+    cluster_sizes = []
+    clusters = np.sort(np.unique(cluster_labels))
+
+    # Iterate over the clusters
+    for cluster in clusters:
+
+        # Count the number of frames in each cluster
+        cluster_sizes.append(np.count_nonzero(cluster_labels == cluster))
+
+    # Width of the bars
+    width = 0.7
+
+    # Number of clusters
+    num_clusters = len(clusters)
+
+    # Find the color used for each cluster
+    colors = [cmap(i) for i in range(num_clusters)]
+
+    # Transfor the RGB values to hex
+    colors = [rgb2hex(color) for color in colors]
+
+    # Create the figure
+    fig, ax = plt.subplots()
+
+    # Plot the barplot
+    bp = ax.bar(clusters, cluster_sizes, width, color=colors, label="Cluster size")
+
+    # add value on top of bars
+    for rect in bp:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width() / 2., height + 0.05,
+                '%d' % int(height),
+                ha='center', va='bottom', fontsize=font_size)
+
+    # Put labels and title
+    plt.xlabel("Clusters", fontsize=font_size)
+    plt.ylabel("Number of members", fontsize=font_size)
+    plt.title("Distribution within clusters", fontsize=font_size)
+
+    # Other formatting
+    plt.xticks(np.array(clusters) + (width / 2), clusters)
+    plt.xticks(fontsize=tick_size)
+    plt.yticks(fontsize=tick_size)
+    plt.tight_layout()
+    
+    # Save the plot
+    plt.savefig(os.path.join(output_folder, 'clusters_size.png'), dpi=300, bbox_inches='tight')
+
+    plt.close()
+
+def generate_cmap(num_colors: int, base_colormap: str):
+    """
+    Generate a color map with num_colors colors from a base colormap.
+    
+    Inputs
+    ------
+
+        num_colors (int): The number of colors to generate.
+        base_colormap (str): The name of the base colormap to use.
+
+    Output
+    ------
+        
+        cmap (ListedColormap): The generated color map.
+    """
+    
+    # Extract the desired number of colors from the base cmap in RGBA format
+    colors = generate_colors(num_colors, base_colormap)
+    
+    # Create a ListedColormap object using the extracted colors
+    cmap = ListedColormap(colors)
+    
+    return cmap  
+
+def generate_colors(num_colors: int, base_colormap: str) -> list:
+    """
+    Generate a list of colors from a base colormap.
+
+    Inputs
+    ------
+
+        num_colors (int): The number of colors to generate.
+        base_colormap (str): The name of the base colormap to use.
+    
+    Output
+    ------
+
+        colors (List): A list of colors in the RGB(A) format (0-1 range for each channel: (Red, Green, Blue, Alpha)).
+    """
+
+    # Get the base cmap
+    base_cmap = plt.cm.get_cmap(base_colormap)
+    
+    # Extract the desired number of colors from the base cmap
+    colors = base_cmap(np.linspace(0, 1, num_colors))
+    
+    return colors
