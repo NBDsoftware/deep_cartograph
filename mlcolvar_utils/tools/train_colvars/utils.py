@@ -27,6 +27,7 @@ from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 
 # Local imports
+from mlcolvar_utils.modules.md import md
 from mlcolvar_utils.modules.common import common
 from mlcolvar_utils.modules.figures import figures
 from mlcolvar_utils.modules.statistics import statistics
@@ -98,7 +99,7 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
             X_ref=projected_ref_features,
             labels=cv_labels,
             settings=figures_settings.get('fes', {}), 
-            file_path=os.path.join(pca_output_path,'fes.png'))
+            output_path=pca_output_path)
 
         project_traj(projected_features, cv_labels, figures_settings, clustering_settings, pca_output_path)
 
@@ -153,7 +154,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
         generator = torch.manual_seed(seed))
 
     # Create output directory
-    ae_output_path = common.create_output_folder(output_folder, 'autoencoder')
+    output_path = common.create_output_folder(output_folder, 'autoencoder')
 
     logger.info('Training Autoencoder CV...')
 
@@ -185,19 +186,22 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
 
             # Checkpoint to save the best model
             checkpoint = ModelCheckpoint(
-                save_top_k=1,                       # Number of best models to save according to the quantity monitored
-                dirpath=ae_output_path,
-                filename=None,                      # Default checkpoint file name '{epoch}-{step}'
+                dirpath=output_path,
                 monitor="valid_loss",               # Quantity to monitor
+                save_last=True,                     # Save the last checkpoint NOTE: set to false? we are intereseted in the best model only
+                save_top_k=1,                       # Number of best models to save according to the quantity monitored
+                save_weights_only=True,             # Save only the weights
+                filename=None,                      # Default checkpoint file name '{epoch}-{step}'
                 mode="min",
-                every_n_epochs=1)                   # Number of epochs between checkpoints.
+                every_n_epochs=1)                   # Number of epochs between checkpoints
 
             # Define trainer
             trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
                 callbacks=[metrics, early_stopping, checkpoint], 
                 max_epochs=max_epochs,
                 logger=None, 
-                enable_checkpointing=True,
+                enable_checkpointing = True,
+                enable_progress_bar = False,
                 check_val_every_n_epoch=check_val_every_n_epoch)   # Check validation every n epochs  
 
             trainer.fit(ae_model, datamodule)
@@ -219,10 +223,20 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
     if converged:
         try:
             # Load best model from checkpoint
-            best_ae_model = AutoEncoderCV.load_from_checkpoint(checkpoint.best_model_path)
+            best_model = AutoEncoderCV.load_from_checkpoint(checkpoint.best_model_path)
+            best_model_score = checkpoint.best_model_score
+
+            # Log score
+            logger.info(f'Best model score: {best_model_score}')
+
+            # Save the loss if requested
+            if training_settings.get('save_loss', False):
+                np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss_epoch']))
+                np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
+                np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
 
             # Put model in evaluation mode
-            best_ae_model.eval()
+            best_model.eval()
 
             # Plot loss
             ax = plot_metrics(metrics.metrics, 
@@ -232,30 +246,34 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
                               yscale='log')
 
             # Save figure
-            ax.figure.savefig(os.path.join(ae_output_path, f'loss.png'), dpi=300)
+            ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
             ax.figure.clf()
 
             # Data projected onto original latent space of the best model
             with torch.no_grad():
-                projected_features = best_ae_model(torch.Tensor(features_dataset[:]["data"]))
+                projected_features = best_model(torch.Tensor(features_dataset[:]["data"]))
 
             # Normalize the latent space
             norm =  Normalization(cv_dimension, mode='min_max', stats = Statistics(projected_features) ) 
-            best_ae_model.postprocessing = norm
+            best_model.postprocessing = norm
 
             # Data projected onto normalized latent space
             with torch.no_grad():
-                projected_features = best_ae_model(torch.Tensor(features_dataset[:]["data"])).numpy()
+                projected_features = best_model(torch.Tensor(features_dataset[:]["data"])).numpy()
             
             # If reference data is provided, project it as well
             if ref_features_dataset is not None:
                 with torch.no_grad():
-                    projected_ref_features = best_ae_model(torch.Tensor(ref_features_dataset[:]["data"])).numpy()
+                    projected_ref_features = best_model(torch.Tensor(ref_features_dataset[:]["data"])).numpy()
             else:
                 projected_ref_features = None
 
             # Save the best model with the latent space normalized
-            best_ae_model.to_torchscript(file_path = os.path.join(ae_output_path, 'weights.ptc'), method='trace')
+            best_model.to_torchscript(file_path = os.path.join(output_path, 'weights.ptc'), method='trace')
+
+            # Delete checkpoint file
+            if os.path.exists(checkpoint.best_model_path):
+                os.remove(checkpoint.best_model_path)
 
             # Create CV labels
             cv_labels = [f'AE {i+1}' for i in range(cv_dimension)]
@@ -266,9 +284,9 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
                 X_ref=projected_ref_features,
                 labels=cv_labels, 
                 settings=figures_settings.get('fes', {}), 
-                file_path=os.path.join(ae_output_path, 'fes.png'))
+                output_path=output_path)
 
-            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, ae_output_path)
+            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
 
         except Exception as e:
             logger.error(f'ERROR: Failed to save/evaluate the best autoencoder model. Error message: {e}')
@@ -342,7 +360,7 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
             X_ref=projected_ref_features,
             labels=cv_labels,
             settings=figures_settings.get('fes', {}), 
-            file_path=os.path.join(tica_output_path,'fes.png'))
+            output_path=tica_output_path)
     
         project_traj(projected_features, cv_labels, figures_settings, clustering_settings, tica_output_path)
     
@@ -367,8 +385,8 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
     # Training settings
     training_validation_lengths = training_settings.get('lengths', [0.8, 0.2])
-    batch_size = training_settings.get('batch_size', 32)
-    shuffle = training_settings.get('shuffle', True)
+    batch_size = training_settings.get('batch_size', 32) # NOTE: should be larger for deep tica?
+    shuffle = training_settings.get('shuffle', True) # NOTE: should be False? 
     seed = training_settings.get('seed', 0)
     patience = training_settings.get('patience', 10)
     min_delta = training_settings.get('min_delta', 1e-5)
@@ -399,7 +417,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         generator = torch.manual_seed(seed))
 
     # Create output directory
-    dtica_output_path = common.create_output_folder(output_folder, 'deep_tica')
+    output_path = common.create_output_folder(output_folder, 'deep_tica')
 
     logger.info('Calculating DeepTICA CV...')
 
@@ -432,7 +450,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             # Checkpoint to save the best model
             checkpoint = ModelCheckpoint(
                 save_top_k=1,                       # Number of best models to save according to the quantity monitored
-                dirpath=dtica_output_path,
+                dirpath=output_path,
                 filename=None,                      # Default checkpoint file name '{epoch}-{step}'
                 monitor="valid_loss",               # Quantity to monitor
                 mode="min",
@@ -444,7 +462,8 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 callbacks=[metrics, early_stopping, checkpoint],
                 max_epochs=max_epochs, 
                 logger=None, 
-                enable_checkpointing=True, 
+                enable_checkpointing=True,
+                enable_progress_bar = False, 
                 check_val_every_n_epoch=check_val_every_n_epoch)
 
             trainer.fit(dtica_model, timelagged_datamodule)
@@ -469,10 +488,20 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     if converged:
         try:
             # Load best model from checkpoint
-            best_dtica_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
+            best_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
+            best_model_score = checkpoint.best_model_score
+
+            # Log score
+            logger.info(f'Best model score: {best_model_score}')
+
+            # Save the loss if requested
+            if training_settings.get('save_loss', False):
+                np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss_epoch']))
+                np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
+                np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
 
             # Put model in evaluation mode
-            best_dtica_model.eval()
+            best_model.eval()
 
             # Plot eigenvalues
             ax = plot_metrics(metrics.metrics,
@@ -481,7 +510,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                                 yscale='log')
 
             # Save figure
-            ax.figure.savefig(os.path.join(dtica_output_path, f'eigenvalues.png'), dpi=300)
+            ax.figure.savefig(os.path.join(output_path, f'eigenvalues.png'), dpi=300)
             ax.figure.clf()
 
             # Plot loss: squared sum of the eigenvalues
@@ -492,30 +521,30 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                                 yscale='log')
             
             # Save figure
-            ax.figure.savefig(os.path.join(dtica_output_path, f'loss.png'), dpi=300)
+            ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
             ax.figure.clf()
 
             # Data projected onto original latent space of the best model
             with torch.no_grad():
-                projected_features = best_dtica_model(torch.Tensor(timelagged_dataset[:]["data"]))
+                projected_features = best_model(torch.Tensor(timelagged_dataset[:]["data"]))
 
             # Normalize the latent space
             norm =  Normalization(cv_dimension, mode='min_max', stats = Statistics(projected_features) )
-            best_dtica_model.postprocessing = norm
+            best_model.postprocessing = norm
             
             # Data projected onto normalized latent space
             with torch.no_grad():
-                projected_features = best_dtica_model(torch.Tensor(timelagged_dataset[:]["data"])).numpy()
+                projected_features = best_model(torch.Tensor(timelagged_dataset[:]["data"])).numpy()
 
             # If reference data is provided, project it as well
             if ref_features_dataframe is not None:
                 with torch.no_grad():
-                    projected_ref_features = best_dtica_model(torch.Tensor(ref_features_dataframe.to_numpy(dtype=np.float32))).numpy()
+                    projected_ref_features = best_model(torch.Tensor(ref_features_dataframe.to_numpy(dtype=np.float32))).numpy()
             else:
                 projected_ref_features = None
 
             # Save model
-            best_dtica_model.to_torchscript(os.path.join(dtica_output_path,'model.ptc'), method='trace')
+            best_model.to_torchscript(os.path.join(output_path,'model.ptc'), method='trace')
 
             # Create CV labels
             cv_labels = [f'DeepTIC {i+1}' for i in range(cv_dimension)]
@@ -526,9 +555,9 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 X_ref=projected_ref_features,
                 labels=cv_labels, 
                 settings=figures_settings.get('fes', {}), 
-                file_path=os.path.join(dtica_output_path,'fes.png')) 
+                output_path=output_path) 
 
-            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, dtica_output_path)
+            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
 
         except Exception as e:
             logger.info(f'ERROR: DeepTICA could not be computed. Error message: {e}')
@@ -573,7 +602,8 @@ def model_has_converged(validation_loss: List, training_loss: list, patience: in
 
     return True
 
-def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_settings: Dict, clustering_settings: Dict, output_path: str):
+def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_settings: Dict, clustering_settings: Dict, 
+                 output_path: str):
     """
     Plot the trajectory projection onto the CV space and cluster the projected features if requested.
 
@@ -589,9 +619,49 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
 
     # Create a pandas DataFrame from the data and the labels
     projected_traj_df = pd.DataFrame(projected_features, columns=cv_labels)
+    
+    if clustering_settings.get('run', False):
 
-    # Add a column with the order of the data points
-    projected_traj_df['order'] = np.arange(projected_traj_df.shape[0])
+        figure_settings = figures_settings.get('projected_clustered_trajectory', {})
+    
+        # Cluster the projected features
+        cluster_labels, centroids = statistics.optimize_clustering(projected_features, clustering_settings)
+
+        # Add a column with the order of the data points
+        projected_traj_df['order'] = np.arange(projected_traj_df.shape[0])
+
+        # Add cluster labels to the projected trajectory DataFrame
+        projected_traj_df['cluster'] = cluster_labels
+
+        # Find centroids in data
+        centroids_df = statistics.find_centroids(projected_traj_df, centroids, cv_labels)
+
+        # Generate color map for clusters
+        num_clusters = len(np.unique(cluster_labels))
+        cmap = figures.generate_cmap(num_clusters, figure_settings.get('cmap', 'viridis'))
+        
+        if len(cv_labels) == 2:
+
+            # Create a 2D plot of the projected trajectory
+            figures.plot_projected_trajectory(
+                projected_traj_df, 
+                axis_labels = cv_labels,
+                cmap_label = 'cluster', 
+                settings = figure_settings, 
+                file_path = os.path.join(output_path,'trajectory_clustered.png'),
+                cmap = cmap)
+
+        # Create a plot with the size of the clusters
+        figures.plot_clusters_size(cluster_labels, cmap, output_path)
+
+        # Extract frames from the trajectory - not implemented yet
+        md.extract_clusters_from_traj(trajectory_path = clustering_settings.get('traj_path'), 
+                                      topology_path = clustering_settings.get('top_path'), 
+                                      traj_df = projected_traj_df, 
+                                      centroids_df = centroids_df,
+                                      cluster_label = 'cluster',
+                                      frame_label = 'order', 
+                                      output_folder = os.path.join(output_path, 'clustered_traj'))
 
     if len(cv_labels) == 2:
 
@@ -602,24 +672,9 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
             cmap_label = 'order',
             settings = figures_settings.get('projected_trajectory', {}), 
             file_path = os.path.join(output_path,'trajectory.png'))
-
-    if clustering_settings.get('run', False):
     
-        # Cluster the projected features
-        cluster_labels, centroids = statistics.optimize_clustering(projected_features, clustering_settings)
-
-        # Add cluster labels to the projected trajectory DataFrame
-        projected_traj_df['cluster'] = cluster_labels
-
-        if len(cv_labels) == 2:
-
-            # Create a 2D plot of the projected trajectory
-            figures.plot_projected_trajectory(
-                projected_traj_df, 
-                axis_labels = cv_labels,
-                cmap_label = 'cluster', 
-                settings =  figures_settings.get('projected_clustered_trajectory', {}), 
-                file_path = os.path.join(output_path,'trajectory_clustered.png'))
-            
+    # Erase the order column
+    projected_traj_df.drop('order', axis=1, inplace=True)
+    
     # Save the projected trajectory DataFrame
     projected_traj_df.to_csv(os.path.join(output_path,'projected_trajectory.csv'), index=False)
