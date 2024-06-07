@@ -25,7 +25,6 @@ from mlcolvar.core.transform.utils import Statistics
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
-
 # Local imports
 from mlcolvar_utils.modules.md import md
 from mlcolvar_utils.modules.common import common
@@ -104,7 +103,7 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
         project_traj(projected_features, cv_labels, figures_settings, clustering_settings, pca_output_path)
 
     except Exception as e:
-        logger.info(f'ERROR: PCA could not be computed. Error message: {e}')
+        logger.error(f'PCA could not be computed. Error message: {e}')
         logger.info('Skipping PCA...')
 
 def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_dimension: int, figures_settings: Dict, training_settings: Dict, clustering_settings: Dict, output_folder: str):
@@ -199,7 +198,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
                 callbacks=[metrics, early_stopping, checkpoint], 
                 max_epochs=max_epochs,
-                logger=None, 
+                logger=False, 
                 enable_checkpointing = True,
                 enable_progress_bar = False,
                 check_val_every_n_epoch=check_val_every_n_epoch)   # Check validation every n epochs  
@@ -214,10 +213,10 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             if model_has_converged(validation_loss, training_loss, patience, check_val_every_n_epoch):
                 converged = True
             else:
-                logger.warning('WARNING: Autoencoder has not found a good solution. Re-starting training...')
+                logger.warning('Autoencoder has not found a good solution. Re-starting training...')
         
         except Exception as e:
-            logger.error(f'ERROR: Autoencoder training failed. Error message: {e}')
+            logger.error(f'Autoencoder training failed. Error message: {e}')
             logger.info('Retrying Autoencoder training...')
 
     if converged:
@@ -289,9 +288,9 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
 
         except Exception as e:
-            logger.error(f'ERROR: Failed to save/evaluate the best autoencoder model. Error message: {e}')
+            logger.error(f'Failed to save/evaluate the best autoencoder model. Error message: {e}')
     else:
-        logger.warning('WARNING: Autoencoder training did not find a good solution after maximum tries.')
+        logger.warning('Autoencoder training did not find a good solution after maximum tries.')
 
 def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
@@ -365,7 +364,7 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
         project_traj(projected_features, cv_labels, figures_settings, clustering_settings, tica_output_path)
     
     except Exception as e:
-        logger.info(f'ERROR: TICA could not be computed. Error message: {e}')
+        logger.error(f'TICA could not be computed. Error message: {e}')
         logger.info('Skipping TICA...')
 
 def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, training_settings: Dict, clustering_settings: Dict, output_folder: str):
@@ -461,7 +460,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
                 callbacks=[metrics, early_stopping, checkpoint],
                 max_epochs=max_epochs, 
-                logger=None, 
+                logger=False, 
                 enable_checkpointing=True,
                 enable_progress_bar = False, 
                 check_val_every_n_epoch=check_val_every_n_epoch)
@@ -482,7 +481,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 logger.warning('WARNING: Deep TICA has not found a good solution. Re-starting training...')
 
         except Exception as e:
-            logger.error(f'ERROR: Deep TICA training failed. Error message: {e}')
+            logger.error(f'Deep TICA training failed. Error message: {e}')
             logger.info('Retrying Deep TICA training...')
 
     if converged:
@@ -560,7 +559,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
 
         except Exception as e:
-            logger.info(f'ERROR: DeepTICA could not be computed. Error message: {e}')
+            logger.error(f'DeepTICA could not be computed. Error message: {e}')
             logger.info('Skipping DeepTICA...')
 
 def model_has_converged(validation_loss: List, training_loss: list, patience: int, check_val_every_n_epoch: int, val_train_ratio: float = 2.0):
@@ -616,6 +615,8 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         clustering_settings: Dictionary containing the settings for clustering the projected features.
         output_path:         Path to the output folder where the projected trajectory will be saved.   
     """
+
+    logger.info('Projecting trajectory...')
 
     # Create a pandas DataFrame from the data and the labels
     projected_traj_df = pd.DataFrame(projected_features, columns=cv_labels)

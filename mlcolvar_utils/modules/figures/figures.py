@@ -222,8 +222,6 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
 
     if settings.get('plot', True):
 
-        logger.info(f'Creating projected trajectory plot...')
-
         # If ListedColormap is not given, use the cmap in the settings
         if cmap is None:
             cmap = settings.get('cmap', 'viridis')

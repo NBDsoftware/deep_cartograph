@@ -344,10 +344,6 @@ def find_centroids(features_df: pd.DataFrame, centroids: np.array, feature_label
     # Create an empty DataFrame with the same structure features_df
     centroids_df = features_df.iloc[0:0].copy()
 
-    # Print centroids df and type of the columns
-    logger.info(f"DataFrame: \n{features_df}")
-    logger.info(f"DataFrame types: \n{features_df.dtypes}")
-
     # Find the closest sample to each centroid
     for i, centroid in enumerate(centroids):
 
