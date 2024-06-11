@@ -1,6 +1,7 @@
 import os
 import sys
 import yaml
+import math
 import torch
 import shutil
 import logging
@@ -282,3 +283,28 @@ def get_unique_path(path: str):
 
         # Return original path
         return path
+    
+
+# Related to training
+def closest_power_of_two(n: int) -> int:
+    """
+    Returns the closest power of two that is less than n.
+
+    Inputs
+    ------
+
+        n (int): Number
+    
+    Returns
+    -------
+
+        closest_power (int): Closest power of two that is less than n
+    """
+
+    # Get the power of two
+    closest_power = 2**math.floor(math.log2(n))
+
+    if closest_power == n:
+        closest_power = 2**(math.floor(math.log2(n)) - 1)
+        
+    return closest_power
