@@ -36,94 +36,104 @@ from mlcolvar_utils.modules.statistics import statistics
 logger = logging.getLogger(__name__)
 
 
-def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
-    Compute Principal Component Analysis (PCA) on the input features. Also, compute the Free Energy Surface (FES) along the PCA CVs.
+    Compute Principal Component Analysis (PCA) on the input features. 
+    Compute the Free Energy Surface (FES) along the PCA CVs.
+    Project the trajectory onto the PCA space and cluster the projected features if requested.
 
     Inputs
     ------
 
         features_dataframe:     DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
         ref_features_dataframe: DataFrame containing the time series of the reference features. Each column is a feature and each row is a time step.
-        cv_dimension:           Number of PCA components to consider for the CVs.
+        cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
         output_folder:          Path to the output folder where the PCA results will be saved.
     """
-    # NOTE: Normalization included or needed?
-    # NOTE: Increase resolution in try/except blocks
+    # Find cv dimension
+    cv_dimension = cv_settings.get('dimension', 2)
 
     # Create output directory
-    pca_output_path = common.create_output_folder(output_folder, 'pca')
+    output_path = common.create_output_folder(output_folder, 'pca')
 
     logger.info('Calculating PCA...')
 
+    # Get the number of features and samples
     num_features = features_dataframe.shape[1]
     num_samples = features_dataframe.shape[0]
 
     # Use PCA to compute high variance linear combinations of the input features
-    pca = PCA(in_features = num_features, out_features=min(num_features, num_samples))
+    # out_features is q in torch.pca_lowrank -> Controls the dimensionality of the random projection in the randomized SVD algorithm (trade-off between speed and accuracy)
+    pca = PCA(in_features = num_features, out_features=min(6, num_features, num_samples))
 
-    # Try to compute PCA
     try:
-        # NOTE: Try as well
-        # X = torch.tensor(features_dataframe.to_numpy())
-        # pca_eigvals, pca_eigvecs = pca.compute(X, center = True)
-        # projected_features_pca = pca(X)
+        # Compute PCA
+        pca_eigvals, pca_eigvecs = pca.compute(X=torch.tensor(features_dataframe.to_numpy()), center = True)
+    except Exception as e:
+        logger.error(f'PCA could not be computed. Error message: {e}')
+        return
+    
+    # Save the first cv_dimension eigenvectors as CVs 
+    pca_cv = pca_eigvecs[:,0:cv_dimension].numpy()
+    np.savetxt(os.path.join(output_path,'weights.txt'), pca_cv)        
+    
+    # Transform to array
+    features_array = features_dataframe.to_numpy(dtype=np.float32)
 
-        pca_eigvals, pca_eigvecs = pca.compute(X=torch.tensor(features_dataframe.to_numpy()))
+    # Project features onto the CV space
+    projected_features = np.matmul(features_array, pca_cv)
 
-        # Save the first cv_dimension eigenvectors as CVs 
-        pca_cv = pca_eigvecs[:,0:cv_dimension].numpy()
-        np.savetxt(os.path.join(pca_output_path,'weights.txt'), pca_cv)
+    # If reference data is provided, project it as well
+    if ref_features_dataframe is not None:
+        ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
+        projected_ref_features = np.matmul(ref_features_array, pca_cv)
+    else:
+        projected_ref_features = None
 
-        # Transform to array
-        features_array = features_dataframe.to_numpy(dtype=np.float32)
+    # Create CV labels 
+    cv_labels = [f'PC {i+1}' for i in range(cv_dimension)]
 
-        # Evaluate the CV on the colvars data
-        projected_features = np.matmul(features_array, pca_cv)
-
-        # If reference data is provided, project it as well
-        if ref_features_dataframe is not None:
-            ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
-            projected_ref_features = np.matmul(ref_features_array, pca_cv)
-        else:
-            projected_ref_features = None
-
-        # Create CV labels 
-        cv_labels = [f'PC {i+1}' for i in range(cv_dimension)]
-
+    try:
         # Create FES along the CV
         figures.plot_fes(
             X=projected_features, 
             X_ref=projected_ref_features,
             labels=cv_labels,
             settings=figures_settings.get('fes', {}), 
-            output_path=pca_output_path)
-
-        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, pca_output_path)
-
+            output_path=output_path)
     except Exception as e:
-        logger.error(f'PCA could not be computed. Error message: {e}')
-        logger.info('Skipping PCA...')
+        logger.error(f'Failed to plot the FES. Error message: {e}')
 
-def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_dimension: int, figures_settings: Dict, training_settings: Dict, clustering_settings: Dict, output_folder: str):
+    try:
+        # Project the trajectory onto the CV space
+        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
+    except Exception as e:
+        logger.error(f'Failed to project the trajectory. Error message: {e}')
+
+def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
-    Train Autoencoder on the input features. The CV is the latent space of the Autoencoder. Also, compute the Free Energy Surface (FES) along the Autoencoder CVs.
+    Train Autoencoder on the input features. The CV is the latent space of the Autoencoder. 
+    Compute the Free Energy Surface (FES) along the Autoencoder CVs.
+    Project the trajectory onto the Autoencoder space and cluster the projected features if requested.
 
     Inputs
     ------
 
         features_dataset:      Dataset containing the input features.
         ref_features_dataset:  Dataset containing the reference input features.
-        cv_dimension:          Dimension of the Autoencoder latent space (= dimension of the CVs).
+        cv_settings:           Dictionary containing the settings for the CVs.
         figures_settings:      Dictionary containing the settings for the figures.
-        training_settings:     Dictionary containing the settings for training the Autoencoder.
         clustering_settings:   Dictionary containing the settings for clustering the projected features.
         output_folder:         Path to the output folder where the Autoencoder results will be saved.
     """
 
+    # Find the dimension of the CV
+    cv_dimension = cv_settings.get('dimension', 2)
+
     # Training settings
+    training_settings = cv_settings.get('training', {})
     training_validation_lengths = training_settings.get('lengths', [0.8, 0.2])
     batch_size = int(training_settings.get('batch_size', 32))
     shuffle = bool(training_settings.get('shuffle', True))
@@ -134,17 +144,19 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
     dropout = float(training_settings.get('dropout', 0.1))
     hidden_layers = training_settings.get('hidden_layers', [15, 15])
     check_val_every_n_epoch = int(training_settings.get('check_val_every_n_epoch', 1))
+    save_check_every_n_epoch = int(training_settings.get('save_check_every_n_epoch', 1))
     max_tries = int(training_settings.get('max_tries', 10))
 
     # Get the number of features and samples
     num_features = features_dataset["data"].shape[1]
     num_samples = features_dataset["data"].shape[0]
+    num_training_samples =int(num_samples*training_validation_lengths[0])
 
-    # Check the batch size is not larger than the number of samples
-    if batch_size > num_samples:
-        logger.warning('WARNING: The batch size is larger than the number of samples. Setting the batch size to the number of samples.')
-        batch_size = num_samples
-
+    # Check the batch size is not larger than the number of samples in the training set
+    if batch_size >= num_training_samples:
+        batch_size = common.closest_power_of_two(num_samples*training_validation_lengths[0])
+        logger.warning(f'The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: {batch_size}')
+        
     # Build datamodule, split the dataset into training and validation
     datamodule = DictModule(
         dataset = features_dataset,
@@ -173,27 +185,28 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             tries += 1
 
             # Define model
-            ae_model = AutoEncoderCV(encoder_layers, options=options)  
+            model = AutoEncoderCV(encoder_layers, options=options)  
 
-            # Define callbacks
+            # Define MetricsCallback to store the loss
             metrics = MetricsCallback()
+
+            # Define EarlyStopping callback to stop training if the loss does not decrease
             early_stopping = EarlyStopping(
                 monitor="valid_loss", 
                 min_delta=min_delta,                 # Minimum change in the monitored quantity to qualify as an improvement
-                patience=patience,                   # Number of checks with no improvement after which training will be stopped (see check_val_every_n_epoch)
-                verbose=True, 
+                patience=patience,                   # Number of checks with no improvement after which training will be stopped (see check_val_every_n_epoch) 
                 mode="min")
 
-            # Checkpoint to save the best model
+            # Define ModelCheckpoint callback to save the best model
             checkpoint = ModelCheckpoint(
                 dirpath=output_path,
-                monitor="valid_loss",               # Quantity to monitor
-                save_last=True,                     # Save the last checkpoint NOTE: set to false? we are intereseted in the best model only
-                save_top_k=1,                       # Number of best models to save according to the quantity monitored
-                save_weights_only=True,             # Save only the weights
-                filename=None,                      # Default checkpoint file name '{epoch}-{step}'
-                mode="min",
-                every_n_epochs=1)                   # Number of epochs between checkpoints
+                monitor="valid_loss",                      # Quantity to monitor
+                save_last=False,                           # Save the last checkpoint
+                save_top_k=1,                              # Number of best models to save according to the quantity monitored
+                save_weights_only=True,                    # Save only the weights
+                filename=None,                             # Default checkpoint file name '{epoch}-{step}'
+                mode="min",                                # Best model is the one with the minimum monitored quantity
+                every_n_epochs=save_check_every_n_epoch)   # Number of epochs between checkpoints
 
             # Define trainer
             trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
@@ -204,7 +217,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
                 enable_progress_bar = False,
                 check_val_every_n_epoch=check_val_every_n_epoch)   # Check validation every n epochs  
 
-            trainer.fit(ae_model, datamodule)
+            trainer.fit(model, datamodule)
 
             # Get validation and training loss
             validation_loss = metrics.metrics['valid_loss']
@@ -220,37 +233,42 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             logger.error(f'Autoencoder training failed. Error message: {e}')
             logger.info('Retrying Autoencoder training...')
 
+    try:
+        # Load best model from checkpoint
+        best_model = AutoEncoderCV.load_from_checkpoint(checkpoint.best_model_path)
+        best_model_score = checkpoint.best_model_score
+
+        # Log score
+        logger.info(f'Best model score: {best_model_score}')
+
+        # Save the loss if requested
+        if training_settings.get('save_loss', False):
+            np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss']))
+            np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
+            np.save(os.path.join(output_path, 'epochs.npy'), np.array(metrics.metrics['epoch']))
+            np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
+
+        # Put model in evaluation mode
+        best_model.eval()
+
+        # Plot loss
+        ax = plot_metrics(metrics.metrics, 
+                            labels=['Training', 'Validation'], 
+                            keys=['train_loss', 'valid_loss'], 
+                            linestyles=['-','-'], colors=['fessa1','fessa5'], 
+                            yscale='log')
+        
+        plt.tight_layout()
+
+        # Save figure
+        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
+        ax.figure.clf()
+
+    except Exception as e:
+        logger.error(f'Failed to save/plot the loss. Error message: {e}')
+
     if converged:
         try:
-            # Load best model from checkpoint
-            best_model = AutoEncoderCV.load_from_checkpoint(checkpoint.best_model_path)
-            best_model_score = checkpoint.best_model_score
-
-            # Log score
-            logger.info(f'Best model score: {best_model_score}')
-
-            # Save the loss if requested
-            if training_settings.get('save_loss', False):
-                np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss_epoch']))
-                np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
-                np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
-
-            # Put model in evaluation mode
-            best_model.eval()
-
-            # Plot loss
-            ax = plot_metrics(metrics.metrics, 
-                              labels=['Training', 'Validation'], 
-                              keys=['train_loss_epoch', 'valid_loss'], 
-                              linestyles=['--','-'], colors=['fessa1','fessa5'], 
-                              yscale='log')
-            
-            plt.tight_layout()
-
-            # Save figure
-            ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
-            ax.figure.clf()
-
             # Data projected onto original latent space of the best model
             with torch.no_grad():
                 projected_features = best_model(torch.Tensor(features_dataset[:]["data"]))
@@ -291,11 +309,11 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
 
         except Exception as e:
-            logger.error(f'Failed to save/evaluate the best autoencoder model. Error message: {e}')
+            logger.error(f'Failed to project the trajectory. Error message: {e}')
     else:
         logger.warning('Autoencoder training did not find a good solution after maximum tries.')
 
-def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
     Compute Time-lagged Independent Component Analysis (TICA) on the input features. Also, compute the Free Energy Surface (FES) along the TICA CVs.
 
@@ -304,22 +322,25 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
 
         features_dataframe:     DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
         ref_features_dataframe: DataFrame containing the time series of the reference features. Each column is a feature and each row is a time step. 
-        cv_dimension:           Number of TICA components to consider for the CVs.
+        cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
         output_folder:          Path to the output folder where the PCA results will be saved.
     """
-    
-    # NOTE: Normalization included or needed?
-    # NOTE: Increase resolution in try/except blocks
+    # Find cv dimension
+    cv_dimension = cv_settings.get('dimension', 2)
+
+    # Training settings
+    training_settings = cv_settings.get('training', {})
+    lag_time = training_settings.get('lag_time', 10)
 
     # Create output directory
-    tica_output_path = common.create_output_folder(output_folder, 'tica')
+    output_path = common.create_output_folder(output_folder, 'tica')
 
     logger.info('Calculating TICA CV...')
 
     # Build time-lagged dataset (composed by pairs of configs at time t, t+lag)
-    timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=10)
+    timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=lag_time)
 
     # Get the number of features and samples
     num_features = timelagged_dataset["data"].shape[1]
@@ -329,48 +350,51 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
     features_array = features_dataframe.to_numpy(dtype=np.float32)
 
     # Use TICA to compute slow linear combinations of the input features
-    tica = TICA(in_features = num_features, out_features=min(num_features, num_samples))
+    # Here out_features is the number of eigenvectors to keep
+    tica = TICA(in_features = num_features, out_features=cv_dimension)
 
-    # Try to compute TICA
     try:
+        # Compute TICA
         tica_eigvals, tica_eigvecs = tica.compute(data=[timelagged_dataset['data'], timelagged_dataset['data_lag']], save_params = True, remove_average = True)
+    except Exception as e:
+        logger.error(f'TICA could not be computed. Error message: {e}')
+        return
 
-        # Save TICA eigenvectors and eigenvalues # NOTE: make this an option
-        np.savetxt(os.path.join(tica_output_path,'tica_eigvals.txt'), tica_eigvals.numpy())
-        np.savetxt(os.path.join(tica_output_path,'tica_eigvecs.txt'), tica_eigvecs.numpy())
+    # Save the first cv_dimension eigenvectors as CVs
+    tica_cv = tica_eigvecs.numpy()
+    np.savetxt(os.path.join(output_path,'weights.txt'), tica_cv)
 
-        # Save the first cv_dimension eigenvectors as CVs
-        tica_cv = tica_eigvecs[:,0:cv_dimension].numpy()
-        np.savetxt(os.path.join(tica_output_path,'weights.txt'), tica_cv)
+    # Evaluate the CV on the colvars data
+    projected_features = np.matmul(features_array, tica_cv)
 
-        # Evaluate the CV on the colvars data
-        projected_features = np.matmul(features_array, tica_cv)
+    # If reference data is provided, project it as well
+    if ref_features_dataframe is not None:
+        ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
+        projected_ref_features = np.matmul(ref_features_array, tica_cv)
+    else:
+        projected_ref_features = None
 
-        # If reference data is provided, project it as well
-        if ref_features_dataframe is not None:
-            ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
-            projected_ref_features = np.matmul(ref_features_array, tica_cv)
-        else:
-            projected_ref_features = None
+    # Create CV labels
+    cv_labels = [f'TIC {i+1}' for i in range(cv_dimension)]
 
-        # Create CV labels
-        cv_labels = [f'TIC {i+1}' for i in range(cv_dimension)]
-
+    try:
         # Create FES along the CV
         figures.plot_fes(
             X=projected_features, 
             X_ref=projected_ref_features,
             labels=cv_labels,
             settings=figures_settings.get('fes', {}), 
-            output_path=tica_output_path)
-    
-        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, tica_output_path)
-    
+            output_path=output_path)
     except Exception as e:
-        logger.error(f'TICA could not be computed. Error message: {e}')
-        logger.info('Skipping TICA...')
+        logger.error(f'Failed to plot the FES. Error message: {e}')
+    
+    try:
+        # Project the trajectory onto the CV space
+        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
+    except Exception as e:
+        logger.error(f'Failed to project the trajectory. Error message: {e}')
 
-def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_dimension: int, figures_settings: Dict, training_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
     """
     Train DeepTICA on the input features. The CV is the latent space of the DeepTICA model. Also, compute the Free Energy Surface (FES) along the DeepTICA CVs.
 
@@ -379,16 +403,21 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
         features_dataframe:     Dataset containing the input features.
         ref_features_dataframe: Dataset containing the reference input features.
-        cv_dimension:           Dimension of the DeepTICA latent space (= dimension of the CVs).
+        cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for the figures.
         training_settings:      Dictionary containing the settings for training the DeepTICA model.
         output_folder:          Path to the output folder where the DeepTICA results will be saved.
     """
 
+    # Find the dimension of the CV
+    cv_dimension = cv_settings.get('dimension', 2)
+
     # Training settings
+    training_settings = cv_settings.get('training', {})
+    lag_time = training_settings.get('lag_time', 10)
     training_validation_lengths = training_settings.get('lengths', [0.8, 0.2])
-    batch_size = training_settings.get('batch_size', 32) # NOTE: should be larger for deep tica?
-    shuffle = training_settings.get('shuffle', True) # NOTE: should be False? 
+    batch_size = training_settings.get('batch_size', 32) 
+    shuffle = training_settings.get('shuffle', True)
     seed = training_settings.get('seed', 0)
     patience = training_settings.get('patience', 10)
     min_delta = training_settings.get('min_delta', 1e-5)
@@ -396,19 +425,21 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     dropout = training_settings.get('dropout', 0.1)
     hidden_layers = training_settings.get('hidden_layers', [15, 15])
     check_val_every_n_epoch = training_settings.get('check_val_every_n_epoch', 1)
+    save_check_every_n_epoch = training_settings.get('save_check_every_n_epoch', 1)
     max_tries = training_settings.get('max_tries', 10)
 
     # Build time-lagged dataset (composed by pairs of configs at time t, t+lag)
-    timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=10)
+    timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=lag_time)
 
     # Get the number of features and samples
     num_features = timelagged_dataset["data"].shape[1]
     num_samples = timelagged_dataset["data"].shape[0]
+    num_training_samples =int(num_samples*training_validation_lengths[0])
 
-    # Check the batch size is not larger than the number of samples
-    if batch_size > num_samples:
-        logger.warning('WARNING: The batch size is larger than the number of samples. Setting the batch size to the number of samples.')
-        batch_size = num_samples
+    # Check the batch size is not larger than the number of samples in the training set
+    if batch_size >= num_training_samples:
+        batch_size = common.closest_power_of_two(num_samples*training_validation_lengths[0])
+        logger.warning(f'The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: {batch_size}')
 
     # Build time-lagged datamodule, split the dataset into training and validation
     timelagged_datamodule = DictModule(
@@ -440,8 +471,10 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             # Define model
             dtica_model = DeepTICA(nn_layers, options=options)
 
-            # Define callbacks
+            # Define MetricsCallback to store the loss
             metrics = MetricsCallback()
+
+            # Define EarlyStopping callback to stop training
             early_stopping = EarlyStopping(
                 monitor="valid_loss", 
                 min_delta=min_delta, 
@@ -449,15 +482,16 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 verbose = True, 
                 mode = "min")
 
-            # Checkpoint to save the best model
+            # Define ModelCheckpoint callback to save the best model
             checkpoint = ModelCheckpoint(
-                save_top_k=1,                       # Number of best models to save according to the quantity monitored
                 dirpath=output_path,
-                filename=None,                      # Default checkpoint file name '{epoch}-{step}'
-                monitor="valid_loss",               # Quantity to monitor
-                mode="min",
-                every_n_epochs=1)                   # Number of epochs between checkpoints.
-
+                monitor="valid_loss",                      # Quantity to monitor
+                save_last=False,                           # Save the last checkpoint
+                save_top_k=1,                              # Number of best models to save according to the quantity monitored
+                save_weights_only=True,                    # Save only the weights
+                filename=None,                             # Default checkpoint file name '{epoch}-{step}'
+                mode="min",                                # Best model is the one with the minimum monitored quantity
+                every_n_epochs=save_check_every_n_epoch)   # Number of epochs between checkpoints
             
             # Define trainer
             trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
@@ -472,7 +506,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
             # Get validation and training loss
             validation_loss = metrics.metrics['valid_loss']
-            training_loss = metrics.metrics['train_loss_epoch']
+            training_loss = metrics.metrics['train_loss']
             
             # Evaluate DeepTICA
             dtica_model.eval()
@@ -481,7 +515,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             if model_has_converged(validation_loss, training_loss, patience, check_val_every_n_epoch):
                 converged = True
             else:
-                logger.warning('WARNING: Deep TICA has not found a good solution. Re-starting training...')
+                logger.warning('Deep TICA has not found a good solution. Re-starting training...')
 
         except Exception as e:
             logger.error(f'Deep TICA training failed. Error message: {e}')
@@ -498,8 +532,9 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
             # Save the loss if requested
             if training_settings.get('save_loss', False):
-                np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss_epoch']))
+                np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss']))
                 np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
+                np.save(os.path.join(output_path, 'epochs.npy'), np.array(metrics.metrics['epoch']))
                 np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
 
             # Put model in evaluation mode
@@ -518,7 +553,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             # Plot loss: squared sum of the eigenvalues
             ax = plot_metrics(metrics.metrics,
                                 labels=['Training', 'Validation'], 
-                                keys=['train_loss_epoch', 'valid_loss'], 
+                                keys=['train_loss', 'valid_loss'], 
                                 linestyles=['--','-'], colors=['fessa1','fessa5'], 
                                 yscale='log')
             
