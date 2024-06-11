@@ -100,7 +100,7 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     if global_parameters['cv']['type'] in ('PCA', 'ALL'):
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
-                    cv_dimension = global_parameters['cv']['dimension'], 
+                    cv_settings = global_parameters['cv'], 
                     figures_settings = global_parameters['figures'], 
                     clustering_settings = global_parameters['clustering'],
                     output_folder = output_folder)
@@ -112,9 +112,8 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     if global_parameters['cv']['type'] in ('AE', 'ALL'):
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
-                   cv_dimension = global_parameters['cv']['dimension'],
+                   cv_settings = global_parameters['cv'],
                    figures_settings = global_parameters['figures'],
-                   training_settings = global_parameters['cv']['trainings'],
                    clustering_settings = global_parameters['clustering'],
                    output_folder = output_folder)
 
@@ -125,7 +124,7 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     if global_parameters['cv']['type'] in ('TICA', 'ALL'):
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
-                     cv_dimension = global_parameters['cv']['dimension'],
+                     cv_settings = global_parameters['cv'],
                      figures_settings = global_parameters['figures'],
                      clustering_settings = global_parameters['clustering'],
                      output_folder = output_folder)
@@ -137,9 +136,8 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     if global_parameters['cv']['type'] in ('DTICA', 'ALL'):
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
-                          cv_dimension = global_parameters['cv']['dimension'],
+                          cv_settings = global_parameters['cv'],
                           figures_settings = global_parameters['figures'],
-                          training_settings = global_parameters['cv']['trainings'],
                           clustering_settings = global_parameters['clustering'],
                           output_folder = output_folder)
 
@@ -148,7 +146,9 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     
     # End timer
     elapsed_time = time.time() - start_time
-    logger.info('Elapsed time: %.1f minutes' % (elapsed_time/60))
+
+    # Write time to log in hours, minutes and seconds
+    logger.info('Elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
 def set_logger(verbose: bool):
     """
