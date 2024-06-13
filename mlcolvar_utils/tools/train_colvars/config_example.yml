@@ -53,6 +53,7 @@ cv:
 #     bandwidth:                        (float) Bandwidth for the Kernel Density Estimation of the Projected Trajectory
 #     alpha:                            (float) Transparency of the points in the Projected Trajectory
 #     cmap:                             (str) Colormap for the Projected Trajectory
+#     marker_size:                      (int) Size of the markers in the Projected Trajectory
 #   projected_clustered_trajectory:   Settings for the Projected Clustered Trajectory
 #    plot:                              (bool) Plot the Projected Clustered Trajectory
 #    num_bins:                          (int) Number of bins for the Kernel Density Estimation of the Projected Clustered Trajectory
@@ -60,6 +61,7 @@ cv:
 #    alpha:                             (float) Transparency of the points in the Projected Clustered Trajectory
 #    cmap:                              (str) Colormap for the Projected Clustered Trajectory
 #    use_legend:                        (bool) Use a legend in the Projected Clustered Trajectory plot
+#    marker_size:                       (int) Size of the markers in the Projected Clustered Trajectory
 
 figures:
   fes:
@@ -76,6 +78,7 @@ figures:
     bandwidth: 0.25
     alpha: 0.6
     cmap: turbo
+    marker_size: 5
   projected_clustered_trajectory:
     plot: True
     num_bins: 100
@@ -83,6 +86,7 @@ figures:
     alpha: 0.8
     cmap: turbo
     use_legend: True
+    marker_size: 5
 
 # clustering:                        Settings for the clustering
 #   run:                              (bool) Whether to run the clustering or not
