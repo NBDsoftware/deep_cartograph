@@ -15,38 +15,22 @@ logger = logging.getLogger(__name__)
 
 
 # General utils
-def create_output_folder(output_path, folder_name = None):
+def create_output_folder(output_path: str) -> None:
     """
-    Creates the output path if it does not exist.
-    Creates a folder inside the output path if folder_name is not None.
-    Return the path of the created folder or None if folder_name is None.
+    Creates the parent output path if it does not exist.
 
     Parameters
     ----------
 
     output_path : str
-        Path where the output files are saved
-    folder_name : str
-        Name of the folder to be created
-
-    Returns
-    -------
-
-    output_path : str or None
-        Path of the created folder or None if folder_name is None.
+        Path of the output folder
     """
 
-    # Create output directory
+    # Create parent output directory if it does not exist
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-
-    # Create folder inside the output directory
-    if folder_name is not None:
-        folder_path = os.path.join(output_path, folder_name)
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
     
-    return folder_path if folder_name is not None else None
+    return
 
 def files_exist(*file_path):
     '''
