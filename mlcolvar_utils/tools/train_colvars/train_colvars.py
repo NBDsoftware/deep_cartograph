@@ -98,48 +98,52 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     ###########
 
     if global_parameters['cv']['type'] in ('PCA', 'ALL'):
+        pca_output_path = os.path.join(output_folder, 'pca')
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
                     cv_settings = global_parameters['cv'], 
                     figures_settings = global_parameters['figures'], 
                     clustering_settings = global_parameters['clustering'],
-                    output_folder = output_folder)
+                    output_path = pca_output_path)
 
     ###################
     # CV: Autoencoder #
     ###################
 
     if global_parameters['cv']['type'] in ('AE', 'ALL'):
+        ae_output_path = os.path.join(output_folder, 'ae')
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
                    cv_settings = global_parameters['cv'],
                    figures_settings = global_parameters['figures'],
                    clustering_settings = global_parameters['clustering'],
-                   output_folder = output_folder)
+                   output_path = ae_output_path)
 
     ############
     # CV: TICA #
     ############
 
     if global_parameters['cv']['type'] in ('TICA', 'ALL'):
+        tica_output_path = os.path.join(output_folder, 'tica')
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
                      cv_settings = global_parameters['cv'],
                      figures_settings = global_parameters['figures'],
                      clustering_settings = global_parameters['clustering'],
-                     output_folder = output_folder)
+                     output_path = tica_output_path)
     
     #################
     # CV: Deep-TICA #
     #################
 
     if global_parameters['cv']['type'] in ('DTICA', 'ALL'):
+        deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
                           cv_settings = global_parameters['cv'],
                           figures_settings = global_parameters['figures'],
                           clustering_settings = global_parameters['clustering'],
-                          output_folder = output_folder)
+                          output_path = deep_tica_output_path)
 
     # Move log file to output folder
     shutil.move('mlcolvar_utils.log', os.path.join(output_folder, 'mlcolvar_utils.log'))
