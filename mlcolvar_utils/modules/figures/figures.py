@@ -284,14 +284,28 @@ def find_limits(X: np.ndarray, X_ref: np.ndarray) -> List:
         X_ref = X
 
     # Find the limits of the axis
-    offset = 1e-3
     if fes_dimension == 1:
-        limits = (min(np.min(X), np.min(X_ref))-offset, max(np.max(X), np.max(X_ref))+offset)
+        # Find the range of the data
+        limits = (min(np.min(X), np.min(X_ref)), max(np.max(X), np.max(X_ref)))
+
+        # Define an offset as 5% of the range
+        offset = 0.05*(limits[1]-limits[0])
+
+        # Add the offset to the limits
+        limits = (limits[0]-offset, limits[1]+offset)
+
     else:
         limits = []
         for i in range(fes_dimension):
+
+            # Find the range of the data
             min_x = min(np.min(X[:, i]), np.min(X_ref[:, i]))
             max_x = max(np.max(X[:, i]), np.max(X_ref[:, i]))
+
+            # Define an offset as 5% of the range
+            offset = 0.05*(max_x-min_x)
+
+            # Add the offset to the limits
             limits.append((min_x-offset, max_x+offset))
 
     return limits
