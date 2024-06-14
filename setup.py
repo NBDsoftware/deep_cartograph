@@ -6,13 +6,12 @@ setup(name='deep_cartograph',
     install_requires=[
         'numpy',
         'pandas',
-        'pytorch',
-        'pydantic<2',
+        'torch',
         'lightning',
         'mdanalysis',
-        'scikit-learn>=1.3',
         'seaborn',
-        'scipy',
         'matplotlib',
-        'mlcolvar'
+        'scikit-learn>=1.3',
+        'mlcolvar',
+        'KDEpy'
     ])
