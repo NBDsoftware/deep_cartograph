@@ -57,7 +57,7 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     ###############
 
     # Get parameters and paths
-    global_parameters = common.get_global_parameters(configuration_path)
+    global_parameters = common.get_global_parameters(configuration_path, output_folder)
 
     # Enforce CLI arguments if any
     if cv_type:
