@@ -2,7 +2,7 @@
 Utils for the train_colvars tool. 
 
 These are functions that are used by the train_colvars tool that leverage or not
-the modules in the mlcolvars_utils package.
+the modules in the deep_cartograph package.
 """
 
 # General imports
@@ -27,10 +27,10 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 # Local imports
-from mlcolvar_utils.modules.md import md
-from mlcolvar_utils.modules.common import common
-from mlcolvar_utils.modules.figures import figures
-from mlcolvar_utils.modules.statistics import statistics
+from deep_cartograph.modules.md import md
+from deep_cartograph.modules.common import common
+from deep_cartograph.modules.figures import figures
+from deep_cartograph.modules.statistics import statistics
 
 # Set logger
 logger = logging.getLogger(__name__)

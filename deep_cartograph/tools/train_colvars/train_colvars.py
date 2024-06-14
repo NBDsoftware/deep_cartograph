@@ -8,10 +8,10 @@ from pathlib import Path
 from mlcolvar.utils.io import  create_dataset_from_files  
 
 # Import local modules
-from mlcolvar_utils.modules.common import common
+from deep_cartograph.modules.common import common
 
 # Import local utils
-from mlcolvar_utils.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
+from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
 
 ########
 # TOOL #
@@ -146,7 +146,7 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
                           output_path = deep_tica_output_path)
 
     # Move log file to output folder
-    shutil.move('mlcolvar_utils.log', os.path.join(output_folder, 'mlcolvar_utils.log'))
+    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
     
     # End timer
     elapsed_time = time.time() - start_time
@@ -195,7 +195,7 @@ def set_logger(verbose: bool):
     else:
         logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
 
-    logger = logging.getLogger("mlcolvar_utils")
+    logger = logging.getLogger("deep_cartograph")
 
     logger.info("MLColvar Utils: Tool to extract CVs from simulations data")
     logger.info("========================================================= \n")
@@ -220,7 +220,7 @@ if __name__ == "__main__":
 
     # Set logger
     set_logger(verbose=False)
-    logger = logging.getLogger("mlcolvar_utils")
+    logger = logging.getLogger("deep_cartograph")
 
     # Run tool
     train_cvs(args.configuration_path, args.colvars_path, args.ref_colvars_path, args.features_path, args.cv_dimension, args.cv_type, args.output_folder)

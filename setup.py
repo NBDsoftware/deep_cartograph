@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
-setup(name='mlcolvar_utils', 
+setup(name='deep_cartograph', 
     version='0.1', 
-    packages=find_packages(include=['mlcolvar_utils']),
+    packages=find_packages(include=['deep_cartograph']),
     install_requires=[
         'numpy',
         'pandas',

@@ -1,4 +1,4 @@
-name: mlcolvar_utils
+name: deep_cartograph
 channels:
 
   - conda-forge
