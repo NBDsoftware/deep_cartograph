@@ -36,7 +36,7 @@ from mlcolvar_utils.modules.statistics import statistics
 logger = logging.getLogger(__name__)
 
 
-def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Compute Principal Component Analysis (PCA) on the input features. 
     Compute the Free Energy Surface (FES) along the PCA CVs.
@@ -50,13 +50,14 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
-        output_folder:          Path to the output folder where the PCA results will be saved.
+        output_path:          Path to the output folder where the PCA results will be saved.
     """
     # Find cv dimension
     cv_dimension = cv_settings.get('dimension', 2)
 
     # Create output directory
-    output_path = common.create_output_folder(output_folder, 'pca')
+    output_path = common.get_unique_path(output_path)
+    common.create_output_folder(output_path)
 
     logger.info('Calculating PCA...')
 
@@ -112,7 +113,7 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
     except Exception as e:
         logger.error(f'Failed to project the trajectory. Error message: {e}')
 
-def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Train Autoencoder on the input features. The CV is the latent space of the Autoencoder. 
     Compute the Free Energy Surface (FES) along the Autoencoder CVs.
@@ -126,11 +127,15 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
         cv_settings:           Dictionary containing the settings for the CVs.
         figures_settings:      Dictionary containing the settings for the figures.
         clustering_settings:   Dictionary containing the settings for clustering the projected features.
-        output_folder:         Path to the output folder where the Autoencoder results will be saved.
+        output_path:         Path to the output folder where the Autoencoder results will be saved.
     """
 
     # Find the dimension of the CV
     cv_dimension = cv_settings.get('dimension', 2)
+
+    # Create output directory
+    output_path = common.get_unique_path(output_path)
+    common.create_output_folder(output_path)
 
     # Training settings
     training_settings = cv_settings.get('training', {})
@@ -164,9 +169,6 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
         batch_size = batch_size,
         shuffle = shuffle, 
         generator = torch.manual_seed(seed))
-
-    # Create output directory
-    output_path = common.create_output_folder(output_folder, 'autoencoder')
 
     logger.info('Training Autoencoder CV...')
 
@@ -313,7 +315,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
     else:
         logger.warning('Autoencoder training did not find a good solution after maximum tries.')
 
-def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Compute Time-lagged Independent Component Analysis (TICA) on the input features. Also, compute the Free Energy Surface (FES) along the TICA CVs.
 
@@ -325,7 +327,7 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
-        output_folder:          Path to the output folder where the PCA results will be saved.
+        output_path:          Path to the output folder where the PCA results will be saved.
     """
     # Find cv dimension
     cv_dimension = cv_settings.get('dimension', 2)
@@ -335,7 +337,8 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
     lag_time = training_settings.get('lag_time', 10)
 
     # Create output directory
-    output_path = common.create_output_folder(output_folder, 'tica')
+    output_path = common.get_unique_path(output_path)
+    common.create_output_folder(output_path)
 
     logger.info('Calculating TICA CV...')
 
@@ -394,7 +397,7 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
     except Exception as e:
         logger.error(f'Failed to project the trajectory. Error message: {e}')
 
-def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_folder: str):
+def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Train DeepTICA on the input features. The CV is the latent space of the DeepTICA model. Also, compute the Free Energy Surface (FES) along the DeepTICA CVs.
 
@@ -406,7 +409,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for the figures.
         training_settings:      Dictionary containing the settings for training the DeepTICA model.
-        output_folder:          Path to the output folder where the DeepTICA results will be saved.
+        output_path:          Path to the output folder where the DeepTICA results will be saved.
     """
 
     # Find the dimension of the CV
@@ -450,7 +453,8 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         generator = torch.manual_seed(seed))
 
     # Create output directory
-    output_path = common.create_output_folder(output_folder, 'deep_tica')
+    output_path = common.get_unique_path(output_path)
+    common.create_output_folder(output_path)
 
     logger.info('Calculating DeepTICA CV...')
 
@@ -693,14 +697,17 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         # Create a plot with the size of the clusters
         figures.plot_clusters_size(cluster_labels, cmap, output_path)
 
-        # Extract frames from the trajectory - not implemented yet
-        md.extract_clusters_from_traj(trajectory_path = clustering_settings.get('traj_path'), 
-                                      topology_path = clustering_settings.get('top_path'), 
-                                      traj_df = projected_traj_df, 
-                                      centroids_df = centroids_df,
-                                      cluster_label = 'cluster',
-                                      frame_label = 'order', 
-                                      output_folder = os.path.join(output_path, 'clustered_traj'))
+        # Extract frames from the trajectory
+        trajectory_path = clustering_settings.get('traj_path')
+        topology_path = clustering_settings.get('top_path')
+        if None not in [trajectory_path, topology_path]:
+            md.extract_clusters_from_traj(trajectory_path = trajectory_path, 
+                                        topology_path = topology_path, 
+                                        traj_df = projected_traj_df, 
+                                        centroids_df = centroids_df,
+                                        cluster_label = 'cluster',
+                                        frame_label = 'order', 
+                                        output_folder = os.path.join(output_path, 'clustered_traj'))
 
     if len(cv_labels) == 2:
 
