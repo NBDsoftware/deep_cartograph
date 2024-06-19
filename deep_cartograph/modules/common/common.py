@@ -7,17 +7,20 @@ import shutil
 import logging
 import numpy as np
 import pandas as pd
+from typing import Dict, List, Union
 from pathlib import PurePath
 from mlcolvar.data import DictDataset
 
 # Set logger
 logger = logging.getLogger(__name__)
 
+# Constants
+default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
 
 # General utils
 def create_output_folder(output_path: str) -> None:
     """
-    Creates the parent output path if it does not exist.
+    Creates the output path if it does not exist.
 
     Parameters
     ----------
@@ -44,77 +47,133 @@ def files_exist(*file_path):
     Output
     ------
 
-        exist (bool): True if they all exist. False if any of them doesnt exist
+        exist (bool): True if they all exist. False if any of them doesn't exist
     '''
 
-    exist = True
+    all_exist = True
 
     for path in file_path:
+        
+        this_file_exist = os.path.isfile(path)
+        all_exist = all_exist and this_file_exist
 
-        exist = exist and os.path.isfile(path)
+        if not this_file_exist:
+            logger.error(f"File not found: {path}")
             
-    return exist
+    return all_exist
 
-
+def read_configuration(configuration_path: str, output_folder: str = None) -> Dict:
     """
-    Function to read parameters from the configuration file. Exits if configuration file is not found.
-    """
-    
-    # Read global parameters from configuration file
-    if files_exist(configuration_path):
-        with open(configuration_path) as config_file:
-            global_parameters = yaml.load(config_file, Loader = yaml.FullLoader)
-    else:
-        logger.error(f"Configuration file: {configuration_path} not found")
-        sys.exit()
-    
-    return global_parameters
-
-def get_global_parameters(configuration_path: str, output_folder: str = None) -> dict:
-    """
-    Function to read global parameters from configuration file. Exits if configuration file is not found.
-    It also copies a backup of the configuration file to the output folder.
+    Function to read the YAML configuration file. Exits if configuration file is not found.
+    It also copies a backup of the configuration file to the output folder if given.
 
     Inputs
     ------
 
-        configuration_path (str): Path to configuration file
+        configuration_path (str): Path to YAML configuration file
         output_folder      (str): Path to output folder
 
     Outputs
     -------
         
-        global_parameters (dict): Dictionary with global parameters
+        configuration (dict): Dictionary with configuration
     """
-    
+
     # Read global parameters from configuration file
     if files_exist(configuration_path):
         with open(configuration_path) as config_file:
-            global_parameters = yaml.load(config_file, Loader = yaml.FullLoader)
+            configuration = yaml.load(config_file, Loader = yaml.FullLoader)
     else:
         logger.error("Configuration file not found")
         sys.exit(1)
     
     # Copy configuration file to output folder
     if output_folder is not None:
-        bck_configuration_path = get_unique_path(os.path.join(output_folder, "input_bck.yml"))
+        bck_configuration_path = get_unique_path(os.path.join(output_folder, "configuration.yml"))
         shutil.copyfile(configuration_path, bck_configuration_path)
     
-    return global_parameters
-
+    return configuration
 
 # Features utils
-def get_filter_dict(features_path: str, feat_regex: str):
+def find_feature_names(colvars_path: str) -> list:
     """
-    Create the filter dictionary to select the features to use. Either from
-    a list of features or a regex.
+    Find feature names from first colvars line and save them in a list
+
+    Inputs
+    ------
+
+        colvars_path: Path to the colvars file with the time series data of the features / collective variables
+    
+    Outputs
+    -------
+
+        feature_names: List of feature names
+    """
+
+    # Open the colvar file
+    with open(colvars_path, 'r') as colvar_file:
+
+        # Read the first line and split it
+        first_line = colvar_file.readline().split()
+
+    feature_names = []
+
+    # Loop over the elements of the first line, starting from the 4th element
+    for op_index in range(3, len(first_line)):
+        feature_names.append(first_line[op_index])
+
+    # Check if there are any features
+    if len(feature_names) == 0:
+        logger.error(f'No features found in the colvars file {colvars_path}')
+        sys.exit(1)
+        
+    return feature_names
+
+def read_feature_constraints(features_path: str, features_regex: str) -> Union[List[str], str]:
+    """
+    Read the feature constraints from the configuration file. Either a list of features or a regex.
+    If both are given, the list of features is used.
 
     Parameters
     ----------
+
     features_path : str
-        Path to the file containing a list of features
-    feat_regex : str
+        Path to the file with the list of features
+
+    features_regex : str
         Regular expression to select the features
+    
+    Returns
+    -------
+
+    feature_constraints : Union[List[str], str]
+        List of features to use or regex to select the features
+    """
+
+    if features_path is not None:
+        # Features path is given, load the list of features
+        feature_constraints = np.loadtxt(features_path, dtype=str)
+        logger.info(f' Using features in {features_path}')
+        return feature_constraints
+    
+    if features_regex is not None:
+        # Regex is given, use it to select the features
+        logger.info(f' Using regex to select features: {features_regex}')
+        return features_regex
+    
+    # No features path or regex is given, use default filter
+    logger.info(' Using all features except time, *labels, *walker and *bias columns')
+    return default_regex
+
+def get_filter_dict(feature_constraints: Union[List[str], str]) -> Dict:
+    """
+    Create the filter dictionary to select the features to use from the feature constraints.
+
+    Parameters
+    ----------
+
+    feature_constraints: Union[List[str], str]
+        List of features to use or regex to select the features
     
     Returns
     -------
@@ -123,21 +182,17 @@ def get_filter_dict(features_path: str, feat_regex: str):
         Dictionary with the filter to select the features
     """
 
-    if features_path is not None:
-        # Features path is given, load the list of features and use it to create the filter dictionary
-        used_features = np.loadtxt(features_path, dtype=str)
-        logger.info(f' Using features in {features_path}')
-        filter_dict = dict(items=used_features)
+    if isinstance(feature_constraints, list):
+        # List of features is given
+        filter_dict = dict(items=feature_constraints)
+
+    elif isinstance(feature_constraints, str):
+        # Regex is given
+        filter_dict = dict(regex=feature_constraints)
+        
     else:
-        # Features path is not given
-        if feat_regex is not None:
-            # Regex is given, use it to create the filter dictionary
-            logger.info(f' Using regex to select features: {feat_regex}')
-            filter_dict = dict(regex=feat_regex)
-        else:
-            # No features path or regex is given, use default filter
-            logger.info(' Using all features except time and *.bias columns')
-            filter_dict = dict(regex='^(?!.*time)^(?!.*bias)')
+        # No constraints are given
+        filter_dict = dict(regex=default_regex)
     
     return filter_dict
 
@@ -268,6 +323,48 @@ def get_unique_path(path: str):
         # Return original path
         return path
     
+def read_colvars_pandas(colvars_path: str, feature_names: list, stratified_samples: list = None ) -> Dict:
+    """ 
+    Read the data of the features in the feature_names list from the colvars file.
+    If stratified_samples is not None, only read the samples corresponding to the indices in stratified_samples list.
+    
+    Inputs
+    ------
+
+        colvars_path:           Path to the colvar file with the time series data of the features / collective variables
+        feature_names:          List of names feature names to read
+        stratified_samples:     List of indices of the samples to use starting at 1
+    
+    Outputs
+    -------
+
+        ops_data:               Dictionary with the time series data of the features in the feature_names list
+    """
+
+    # Read first line of COLVARS file
+    with open(colvars_path, 'r') as colvars_file:
+        first_line = colvars_file.readline()
+    
+    # Close COLVARS file
+    colvars_file.close()
+
+    # Separate first line by spaces
+    first_line = first_line.split()
+
+    # The first element is "#!" and the second is "FIELDS", remove them
+    column_names = first_line[2:]
+
+    if stratified_samples is None:
+        # Read colvar file using pandas, read only the columns of the features to analyze
+        colvars_df = pd.read_csv(colvars_path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, names=column_names)
+    else:
+        # Read colvar file using pandas, read only the columns of the features to analyze and only the rows in stratified_samples
+        colvars_df = pd.read_csv(colvars_path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, skiprows= lambda x: x not in stratified_samples, names=column_names)
+
+    # Convert the dataframe to a dictionary
+    features_data = colvars_df.to_dict('list')
+
+    return features_data
 
 # Related to training
 def closest_power_of_two(n: int) -> int:

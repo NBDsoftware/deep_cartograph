@@ -1,7 +1,6 @@
 # cv:                           Settings for the Collective Variables calculations
 #   type:                         (str: PCA, AE, TICA, DTICA, ALL) Type of Collective Variable to calculate
 #   dimension:                    (int) Number of dimensions to calculate
-#   features_regex:               (str or null) Regular expression to select the features to use
 #   trainings:                    Settings for the training of the Collective Variables (when applicable)
 #     max_tries:                    (int) Maximum number of tries for the training
 #     seed:                         (int) Seed for the PyTorch random number generator
@@ -21,7 +20,6 @@
 cv:
   type: ALL
   dimension: 2
-  features_regex: null
   trainings: 
     max_tries: 10
     seed: 42

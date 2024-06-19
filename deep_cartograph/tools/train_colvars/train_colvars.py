@@ -5,19 +5,18 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
+from typing import Dict, List, Union
 from mlcolvar.utils.io import  create_dataset_from_files  
 
 # Import local modules
-from deep_cartograph.modules.common import common
-
-# Import local utils
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, files_exist, get_filter_dict, read_feature_constraints
 from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
 
 ########
 # TOOL #
 ########
 
-def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str, features_path: str, cv_dimension: int, cv_type: str, output_folder: str):
+def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], ref_colvars_path: str = None, cv_dimension: int = 2, cv_type: str = 'ALL', output_folder: str = 'output'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -30,45 +29,49 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
 
     It also plots an estimate of the Free Energy Surface (FES) along the CVs from the trajectory data.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        configuration_path: path to the configuration file
-        colvars_path:       path to the colvars file with the input data
-        ref_colvars_path:   path to the colvars file with the reference data
-        features_path:      path to a file containing a list of features that should be used (if no path is given, all features are used)
-        cv_dimension:       dimension of the CVs to train
-        cv_type:            type of CV to train (PCA, AE, TICA, DTICA, ALL)
-        output_path:        path where the output files are saved
+        configuration:       configuration dictionary (see config_example.yml for more information)
+        colvars_path:        path to the colvars file with the input data (samples of features)
+        feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
+        ref_colvars_path:    path to the colvars file with the reference data, if None, no reference data is used
+        cv_dimension:        dimension of the CVs to train, if None, the value in the configuration file is used
+        cv_type:             type of CV to train (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
+        output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
+
+    logger = logging.getLogger("deep_cartograph")
 
     # Title
     logger.info("Training of Collective Variables\n")
+    logger.info("=============================== \n")
+    logger.info("Training of collective variables using the mlcolvar library.\n")
 
     # Start timer
     start_time = time.time()
 
-    # Create output directory
-    output_folder = common.get_unique_path(output_folder)
-    common.create_output_folder(output_folder)
+    # If output folder does not exist, create it
+    create_output_folder(output_folder)
 
     ###############
     # PREPARATION #
     ###############
 
-    # Get parameters and paths
-    global_parameters = common.get_global_parameters(configuration_path, output_folder)
-
     # Enforce CLI arguments if any
     if cv_type:
-        global_parameters['cv']['type'] = cv_type
+        configuration['cv']['type'] = cv_type
     if cv_dimension:
-        global_parameters['cv']['dimension'] = cv_dimension
+        configuration['cv']['dimension'] = cv_dimension
 
     logger.info('Creating datasets from colvars...')
 
-    # Get filter dictionary to select input features for the training
-    filter_dict = common.get_filter_dict(features_path, global_parameters['cv']['features_regex'])
+    # Create feature filter dictionary from feature constraints
+    filter_dict = get_filter_dict(feature_constraints)
+
+    # Check if the colvars file exists
+    if not files_exist(colvars_path):
+        return 
 
     # Build dataset from colvars file with the selected features
     features_dataset, colvars_dataframe = create_dataset_from_files(file_names=[colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)  
@@ -97,56 +100,53 @@ def train_cvs(configuration_path: str, colvars_path: str, ref_colvars_path: str,
     # CV: PCA #
     ###########
 
-    if global_parameters['cv']['type'] in ('PCA', 'ALL'):
+    if configuration['cv']['type'] in ('PCA', 'ALL'):
         pca_output_path = os.path.join(output_folder, 'pca')
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
-                    cv_settings = global_parameters['cv'], 
-                    figures_settings = global_parameters['figures'], 
-                    clustering_settings = global_parameters['clustering'],
+                    cv_settings = configuration['cv'], 
+                    figures_settings = configuration['figures'], 
+                    clustering_settings = configuration['clustering'],
                     output_path = pca_output_path)
 
     ###################
     # CV: Autoencoder #
     ###################
 
-    if global_parameters['cv']['type'] in ('AE', 'ALL'):
+    if configuration['cv']['type'] in ('AE', 'ALL'):
         ae_output_path = os.path.join(output_folder, 'ae')
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
-                   cv_settings = global_parameters['cv'],
-                   figures_settings = global_parameters['figures'],
-                   clustering_settings = global_parameters['clustering'],
+                   cv_settings = configuration['cv'],
+                   figures_settings = configuration['figures'],
+                   clustering_settings = configuration['clustering'],
                    output_path = ae_output_path)
 
     ############
     # CV: TICA #
     ############
 
-    if global_parameters['cv']['type'] in ('TICA', 'ALL'):
+    if configuration['cv']['type'] in ('TICA', 'ALL'):
         tica_output_path = os.path.join(output_folder, 'tica')
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
-                     cv_settings = global_parameters['cv'],
-                     figures_settings = global_parameters['figures'],
-                     clustering_settings = global_parameters['clustering'],
+                     cv_settings = configuration['cv'],
+                     figures_settings = configuration['figures'],
+                     clustering_settings = configuration['clustering'],
                      output_path = tica_output_path)
     
     #################
     # CV: Deep-TICA #
     #################
 
-    if global_parameters['cv']['type'] in ('DTICA', 'ALL'):
+    if configuration['cv']['type'] in ('DTICA', 'ALL'):
         deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
-                          cv_settings = global_parameters['cv'],
-                          figures_settings = global_parameters['figures'],
-                          clustering_settings = global_parameters['clustering'],
+                          cv_settings = configuration['cv'],
+                          figures_settings = configuration['figures'],
+                          clustering_settings = configuration['clustering'],
                           output_path = deep_tica_output_path)
-
-    # Move log file to output folder
-    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
     
     # End timer
     elapsed_time = time.time() - start_time
@@ -171,13 +171,9 @@ def set_logger(verbose: bool):
     # Get the path to this file
     file_path = Path(os.path.abspath(__file__))
 
-    # Get the path to the parent directory
+    # Get the path to the package
     tool_path = file_path.parent
-
-    # Get the path to the parent directory
     all_tools_path = tool_path.parent
-
-    # Get the path to the parent directory
     package_path = all_tools_path.parent
 
     info_config_path = os.path.join(package_path, "configurations/log_file/info_configuration.ini")
@@ -197,8 +193,8 @@ def set_logger(verbose: bool):
 
     logger = logging.getLogger("deep_cartograph")
 
-    logger.info("MLColvar Utils: Tool to extract CVs from simulations data")
-    logger.info("========================================================= \n")
+    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+    logger.info("===============================================================================================")
 
 ########
 # MAIN #
@@ -206,21 +202,42 @@ def set_logger(verbose: bool):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser("CV trainer with mlcolvar")
+    parser = argparse.ArgumentParser("Deep Cartograph: Train Collective Variables", description="Train collective variables using the mlcolvar library.")
 
     parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the colvars file", required=True)
     parser.add_argument("-ref_colvars", dest='ref_colvars_path', type=str, help="Path to the colvars file with the reference data", required=False)
-    parser.add_argument("-features", dest='features_path', type=str, help="Path to a file containing the features that should be used (these are used if the path is given)", required=False)
+    parser.add_argument("-features_path", type=str, help="Path to a file containing the list of features that should be used (these are used if the path is given)", required=False)
+    parser.add_argument("-features_regex", type=str, help="Regex to filter the features (features_path is prioritized over this, mutually exclusive)", required=False)
     parser.add_argument("-cv_dimension", type=int, help="Dimension of the CVs", required=False)
     parser.add_argument("-cv_type", type=str, help="Type of CV to train (PCA, AE, TICA, DTICA, ALL)", required=False)
     parser.add_argument("-output", dest='output_folder', type=str, default='output', help="Output folder", required=False)
-    
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
+
     args = parser.parse_args()
 
     # Set logger
-    set_logger(verbose=False)
-    logger = logging.getLogger("deep_cartograph")
+    set_logger(verbose=args.verbose)
+
+    # Create unique output directory
+    output_folder = get_unique_path(args.output_folder)
+    create_output_folder(output_folder)
+
+    # Read configuration
+    configuration = read_configuration(args.configuration_path, output_folder)
+
+    # Read features to use
+    feature_constraints = read_feature_constraints(args.features_path, args.features_regex)
 
     # Run tool
-    train_cvs(args.configuration_path, args.colvars_path, args.ref_colvars_path, args.features_path, args.cv_dimension, args.cv_type, args.output_folder)
+    train_colvars(
+        configuration = configuration, 
+        colvars_path = args.colvars_path, 
+        feature_constraints = feature_constraints, 
+        ref_colvars_path = args.ref_colvars_path, 
+        cv_dimension = args.cv_dimension, 
+        cv_type = args.cv_type, 
+        output_folder = output_folder)
+
+    # Move log file to output folder
+    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))

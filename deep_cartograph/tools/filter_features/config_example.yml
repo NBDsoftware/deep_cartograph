@@ -1,0 +1,25 @@
+# Input files
+input_paths:
+  features_to_exclude: null   # Path to file with list of order parameters names to exclude from the analysis (None by default)
+  features_to_include: null   # Path to file with list of order parameters names to include in the analysis (None by default)
+
+filter_settings:
+  compute_diptest: True              # Compute Hartigan's dip test (True by default)
+  compute_entropy: True              # Compute entropy of the order parameters (True by default)
+  compute_std: True                  # Compute standard deviation of the order parameters (True by default)
+  diptest_significance_level: 0.05   # Hartigan's dip test significance level (0.05 by default, 0 to skip filter)
+  entropy_quantile: 0                # Entropy quantile to use for filtering (0.1 by default, 0 to skip filter)
+  std_quantile: 0                    # Standard deviation quantile to use for filtering (0.1 by default, 0 to skip filter)
+  
+amino_settings:
+  run_amino: False                 # Run amino analysis (False by default)
+  max_independent_features: 20     # Maximum number of independent order parameters to find
+  min_independent_features: 5      # Minimum number of independent order parameters to find
+  features_batch_size: null        # Max number of order parameters that will be analyzed simultaneously (all by default, must be greater or equal than max_ind_features)
+  num_bins: 100                    # Number of bins to use for the histograms (50 by default)
+  bandwidth: 0.1                   # Bandwidth to use for the kernel density estimation (0.1 by default)
+  
+sampling_settings:
+  num_samples: null                # Number of samples to use for each order parameter (all by default)
+  total_num_samples: null          # Total number of samples per order parameter in the colvars file (Required if num_samples is used)
+  relaxation_time: 1               # Relaxation time of the system in number of samples (1 by default)

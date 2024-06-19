@@ -1,0 +1,55 @@
+# plumed_settings:
+#   traj_stride:                Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
+#   moltype:                    Molecule type: protein, dna or rna
+#   whole_molecule_selection:   Selection of atoms that define the molecules that should be whole to compute the descriptors.
+#   input_name:                 Name of the input file to be used in the PLUMED input file (without the .dat extension)
+#   features:                   Definition of features to be included in the PLUMED input file
+#     distance_groups:          Groups of distance features.
+#       group_name:             Name of the group. All pairwise distances between atoms in the two selections are included
+#         first_selection:      Selection of atoms to be included in the first selection of this group (MDAnalysis selection syntax)
+#         second_selection:     Selection of atoms to be included in the second selection of this group (MDAnalysis selection syntax)
+#         first_stride:         Stride for the first selection. Include only every first_stride-th atom in the selection
+#         second_stride:        Stride for the second selection. Include only every second_stride-th atom in the selection
+#         skip_neigh_residues:  If True, skip distances involving atoms in consecutive/neighboring residues
+#         skip_bonded_atoms:    If True, skip distances between atoms that are bonded
+#         atoms_format:         Format of the ATOMS field in the distance plumed command. Options: (atom_name or index)
+#     dihedral_groups:          Groups of dihedral features.
+#       group_name:             Name of the group.
+#         selection:            Selection of atoms to be included in this group (MDAnalysis selection syntax)
+#         periodic_encoding:    If True, encode the dihedral angle in a periodic function, i.e. the sin and cos of the angle (to obtain smooth features as 0 and 360 degrees correspond to the same angle)
+#         search_mode:          Mode to search for the dihedrals. Options: (virtual, protein_backbone, real)
+#         atoms_format:         Format of the ATOMS field in the torsions plumed command. Options: (atom_name or index)
+#    distance_to_center_groups: Groups of distances to a geometric center.
+#      group_name:              Name of the group. All distances between atoms in the selection and the geometric center are included.
+#        selection:             Selection of atoms to compute the distance to the geometric center to (MDAnalysis selection syntax)
+#        center_selection:      Selection of atoms to be included in geometric center calculation (MDAnalysis selection syntax) 
+
+# NOTE: It's the user's responsibility to make sure that the selections are correct and that the groups do not overlap (the selections may or not overlap)
+
+plumed_settings:
+  traj_stride: 1
+  moltype: protein
+  input_name: distances
+  whole_molecule_selection: all
+  features:
+    distance_groups:
+      dist:
+        first_selection: "not name H*"
+        second_selection: "not name H*"
+        first_stride: 1
+        second_stride: 10
+        skip_neigh_residues: False
+        skip_bonded_atoms: True 
+        atoms_format: atom_name
+
+# plumed_environment:      Plumed environment settings
+#   bin_path:              Path to the PLUMED binary
+#   kernel_path:           Path to the PLUMED kernel library 
+#   env_commands:          List of commands to run before running the plumed command
+
+plumed_environment:                                                           
+  bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed                 
+  kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so  
+  env_commands: 
+    - "ml PLUMED/2.9.0-intel-2021b"                                              
+    - "unset I_MPI_PMI_LIBRARY"                                                    
