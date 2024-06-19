@@ -12,6 +12,7 @@ dependencies:
 
   # Package dependencies
   - numpy
+  - dask 
   - pandas
   - pytorch
   - lightning
@@ -24,4 +25,6 @@ dependencies:
   - pip:
     - mlcolvar
     - KDEpy            # (Optional) Faster than scikit-learn for KDE
+    - diptest
+    - plumed=2.9.0     # (Optional) Otherwise use an external installation
   # - hdbscan          # Alternative to installing scikit-learn - note that the corresponding imports would have to be changed in the code
