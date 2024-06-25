@@ -77,7 +77,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     distance_commands = []
     
     # Check for distance groups
-    if configuration['features'].get('distance_groups') is not None:
+    if configuration['features'].get('distance_groups', {}) != {}:
 
         # Find list of groups
         distance_group_names = configuration['features']['distance_groups'].keys()
@@ -118,7 +118,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     dihedral_commands = []
 
     # Check for dihedral groups
-    if configuration['features'].get('dihedral_groups') is not None:
+    if configuration['features'].get('dihedral_groups', {}) != {}:
 
         # Find list of groups
         dihedral_group_names = configuration['features']['dihedral_groups'].keys()
@@ -135,7 +135,10 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
             # Find atom and command labels for all dihedrals in this group
             dihedral_names, atomic_definitions = plumed_utils.get_dihedral_labels(plumed_topology_path, dihedral_group, dihedral_group_name)
             
-            logger.info(f"Found {len(atomic_definitions)} features for {dihedral_group_name}")
+            if dihedral_group.get('periodic_encoding', True):
+                logger.info(f"Found {2*len(atomic_definitions)} features for {dihedral_group_name}") # Each dihedral has 2 features (sin and cos)
+            else:
+                logger.info(f"Found {len(atomic_definitions)} features for {dihedral_group_name}")
 
             # Iterate over labels
             for command_label, atom_label in zip(dihedral_names, atomic_definitions):
@@ -174,7 +177,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     distance_to_center_commands = []
 
     # Check for distance to com groups
-    if configuration['features'].get('distance_to_center_groups') is not None:
+    if configuration['features'].get('distance_to_center_groups', {}) != {}:
 
         # Find the list of groups
         distance_to_center_group_names = configuration['features']['distance_to_center_groups'].keys()
