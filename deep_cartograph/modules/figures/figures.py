@@ -39,7 +39,7 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
             logger.warning('The FES can only be plotted for 1D or 2D CVs.')
             return
 
-        logger.info(f'Computing FES(' + ','.join(labels) + ')...')
+        logger.info(f'Computing FES(' + ', '.join(labels) + ')...')
 
         # Find settings
         temperature = settings.get('temperature', 300)
