@@ -1,5 +1,5 @@
 # cv:                           Settings for the Collective Variables calculations
-#   type:                         (str: PCA, AE, TICA, DTICA, ALL) Type of Collective Variable to calculate
+#   cv_type:                      (str: PCA, AE, TICA, DTICA, ALL) Type of Collective Variable to calculate
 #   dimension:                    (int) Number of dimensions to calculate
 #   trainings:                    Settings for the training of the Collective Variables (when applicable)
 #     max_tries:                    (int) Maximum number of tries for the training
@@ -18,7 +18,7 @@
 #     plot_loss:                    (bool) Wether to plot the loss after training
 
 cv:
-  type: ALL
+  cv_type: ALL
   dimension: 2
   trainings: 
     max_tries: 10
