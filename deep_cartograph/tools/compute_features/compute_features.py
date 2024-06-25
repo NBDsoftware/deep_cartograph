@@ -10,23 +10,24 @@ from typing import Dict
 # Local imports
 from deep_cartograph.modules.plumed import utils as plumed_utils
 from deep_cartograph.modules.plumed.input_file import input_file as plumed_input
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, files_exist
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist
+from deep_cartograph.yaml_schemas.compute_features_schema import ComputeFeaturesSchema
 
 ########
 # TOOL #
 ########
 
-def compute_features(configuration: Dict, trajectory: str, topology: str, colvars_path: str, output_folder: str) -> None:
+def compute_features(configuration: Dict, trajectory: str, topology: str, colvars_path: str = None, output_folder: str = 'compute_features') -> str:
     """
     Function that 
 
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see config_example.yml for more information)
+        configuration:       configuration dictionary (see default_config.yml for more information)
         trajectory:          Path to the trajectory file that will be analyzed.
         topology:            Path to the topology file of the system.
-        colvars_path:        Path to the colvars file with the time series of the features.
+        colvars_path:        Path to the output colvars file with the time series of the features.
         output_folder:       Path to the output folder
     """
 
@@ -34,16 +35,29 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     logger = logging.getLogger("deep_cartograph")
 
     # Title
-    logger.info("Compute features from trajectory")
-    logger.info("================================")
+    logger.info("Compute features")
+    logger.info("================")
 
     # Start timer
     start_time = time.time()
 
+    # Create output folder if it does not exist
+    create_output_folder(output_folder)
+
+    # Validate configuration
+    validate_configuration(configuration, ComputeFeaturesSchema)
+
     # Check if files exist
-    if not files_exist(trajectory, topology):
-        logger.error("One or more files do not exist. Exiting...")
+    if not files_exist(trajectory):
+        logger.error(f"Trajectory file {trajectory} does not exist. Exiting...")
         sys.exit(1)
+    if not files_exist(topology):
+        logger.error(f"Topology file {topology} does not exist. Exiting...")
+        sys.exit(1)
+
+    # Create colvars path if not provided
+    if colvars_path is None:
+        colvars_path = os.path.join(output_folder, 'colvars.dat')
 
     # Build PLUMED input
     plumed_input_path, plumed_topology = plumed_input.track_features(configuration['plumed_settings'], topology, colvars_path, output_folder)
@@ -56,9 +70,9 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
 
     # End timer
     elapsed_time = time.time() - start_time
+    logger.info('Elapsed time (Compute features): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
-    # Write time to log in hours, minutes and seconds
-    logger.info('Elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
+    return colvars_path
 
 def set_logger(verbose: bool):
     """
@@ -82,8 +96,8 @@ def set_logger(verbose: bool):
     all_tools_path = tool_path.parent
     package_path = all_tools_path.parent
 
-    info_config_path = os.path.join(package_path, "configurations/log_file/info_configuration.ini")
-    debug_config_path = os.path.join(package_path, "configurations/log_file/debug_configuration.ini")
+    info_config_path = os.path.join(package_path, "log_config/info_configuration.ini")
+    debug_config_path = os.path.join(package_path, "log_config/debug_configuration.ini")
     
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
@@ -113,7 +127,7 @@ if __name__ == "__main__":
     parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     parser.add_argument('-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
     parser.add_argument('-topology', dest='topology', help="Path to topology file.", required=True)
-    parser.add_argument('-colvars', dest='colvars_path', help="Path to the colvars file that the PLUMED input will produce", required=True)
+    parser.add_argument('-colvars', dest='colvars_path', help="Path to the output colvars file that the PLUMED input will produce", required=True)
     parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=True)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
@@ -130,7 +144,7 @@ if __name__ == "__main__":
     configuration = read_configuration(args.configuration_path, output_folder)
 
     # Run tool
-    compute_features(
+    _ = compute_features(
         configuration = configuration, 
         trajectory = args.trajectory,
         topology = args.topology,

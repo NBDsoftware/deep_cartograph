@@ -10,23 +10,24 @@ from typing import Dict
 # Local imports
 from deep_cartograph.modules.amino import amino
 from deep_cartograph.tools.filter_features.filtering import Filter
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, save_list, find_feature_names, files_exist
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, save_list, find_feature_names, files_exist
+from deep_cartograph.yaml_schemas.filter_features_schema import FilterFeaturesSchema
 
 ########
 # TOOL #
 ########
 
-def filter_features(configuration: Dict, colvars_path: str, filtered_features_path: str, csv_summary: bool, output_folder: str):
+def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = False, filtered_features_path: str = None, output_folder: str = 'filter_features'):
     """
     Function that filters the features in the colvars file using different algorithms to select a subset of features that contains the most information about the system.
 
     Parameters
     ----------
 
-        configuration:             configuration dictionary (see config_example.yml for more information)
-        colvars_path:              Path to the colvars file with the time series of features / collective variables
-        filtered_features_path:    Path to the output file with the set of filtered collective variables
+        configuration:             configuration dictionary (see default_config.yml for more information)
+        colvars_path:              Path to the input colvars file with the time series of features / collective variables
         csv_summary:               If True, saves a CSV summary with the filter values for each collective variable
+        filtered_features_path:    Path to the output file with the set of filtered collective variables
         output_folder:             Path to the output folder
 
     Returns
@@ -37,22 +38,28 @@ def filter_features(configuration: Dict, colvars_path: str, filtered_features_pa
 
     logger = logging.getLogger("deep_cartograph")
     
-    logger.info("Information filtering ")
-    logger.info("===================== \n")
-    logger.info("Finding the features that contains the most information about the system.\n")
+    logger.info("Filtering features")
+    logger.info("==================")
+    logger.info("Finding the features that contains the most information about the system.")
     logger.info("The following algorithms are available:")
     logger.info("Hartigan's dip test filter. Keeps features that are not unimodal.")
     logger.info("Shannon entropy filter. Keeps features with entropy greater than a threshold.")
     logger.info("Standard deviation filter. Keeps features with standard deviation greater than a threshold.")
-    logger.info("Final Mutual information filter (AMINO). Clusters filtered features according to a mutual information based distance and selects one feature per cluster minimizing the distorsion.")
-    logger.info("Note that the all features must be in the same units to apply the entropy and standard deviation filters meaningfully. \n")
+    logger.info("Final Mutual information clustering (AMINO). Clusters filtered features according to a mutual information based distance and selects one feature per cluster minimizing the distorsion.")
+    logger.info("Note that the all features must be in the same units to apply the entropy and standard deviation filters meaningfully.")
 
     # Start timer
     start_time = time.time()
 
+    # Create output folder if it does not exist
+    create_output_folder(output_folder)
+
+    # Validate configuration
+    validate_configuration(configuration, FilterFeaturesSchema)
+
     # Check the colvars file exists
     if not files_exist(colvars_path):
-        logger.error(f"File not found: {colvars_path}")
+        logger.error(f"Colvars file {colvars_path} does not exist. Exiting...")
         sys.exit(1)
 
     # Initialize the list of features
@@ -79,9 +86,7 @@ def filter_features(configuration: Dict, colvars_path: str, filtered_features_pa
 
     # End timer
     elapsed_time = time.time() - start_time
-
-    # Write time to log in hours, minutes and seconds
-    logger.info('Elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
+    logger.info('Elapsed time (Filter features): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
             
     return filtered_features
 
@@ -107,8 +112,8 @@ def set_logger(verbose: bool):
     all_tools_path = tool_path.parent
     package_path = all_tools_path.parent
 
-    info_config_path = os.path.join(package_path, "configurations/log_file/info_configuration.ini")
-    debug_config_path = os.path.join(package_path, "configurations/log_file/debug_configuration.ini")
+    info_config_path = os.path.join(package_path, "log_config/info_configuration.ini")
+    debug_config_path = os.path.join(package_path, "log_config/debug_configuration.ini")
     
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
@@ -136,7 +141,7 @@ if __name__ == "__main__":
     
     # Inputs
     parser.add_argument("-conf", dest='configuration_path', help="Path to the YAML configuration file with the settings of the filtering task", required=True)
-    parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the colvars file", required=True)
+    parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the input colvars file", required=True)
     parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=True)
     parser.add_argument("-out_features", dest='filtered_features_path', help="Path to the output file with the set of filtered features", required=False)
     parser.add_argument("-csv_summary", action='store_true', help="Save a CSV summary with the values of the different metrics for each feature", required=False)

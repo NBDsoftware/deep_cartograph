@@ -1,5 +1,6 @@
 # Import modules
 import os
+import sys
 import time
 import shutil
 import argparse
@@ -9,14 +10,15 @@ from typing import Dict, List, Union
 from mlcolvar.utils.io import  create_dataset_from_files  
 
 # Import local modules
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, files_exist, get_filter_dict, read_feature_constraints
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints
 from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
+from deep_cartograph.yaml_schemas.train_colvars_schema import TrainColvarsSchema
 
 ########
 # TOOL #
 ########
 
-def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], ref_colvars_path: str = None, cv_dimension: int = 2, cv_type: str = 'ALL', output_folder: str = 'output'):
+def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], ref_colvars_path: str = None, cv_dimension: int = None, cv_type: str = None, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -32,7 +34,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see config_example.yml for more information)
+        configuration:       configuration dictionary (see default_config.yml for more information)
         colvars_path:        path to the colvars file with the input data (samples of features)
         feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
         ref_colvars_path:    path to the colvars file with the reference data, if None, no reference data is used
@@ -44,23 +46,35 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     logger = logging.getLogger("deep_cartograph")
 
     # Title
-    logger.info("Training of Collective Variables\n")
-    logger.info("=============================== \n")
-    logger.info("Training of collective variables using the mlcolvar library.\n")
+    logger.info("Training of Collective Variables")
+    logger.info("================================")
+    logger.info("Training of collective variables using the mlcolvar library.")
 
     # Start timer
     start_time = time.time()
 
-    # If output folder does not exist, create it
+    # Validate configuration
+    validate_configuration(configuration, TrainColvarsSchema)
+
+    # Create output folder if it does not exist
     create_output_folder(output_folder)
 
+    # Check if files exist
+    if not files_exist(colvars_path):
+        logger.error(f"Colvars file {colvars_path} does not exist. Exiting...")
+        sys.exit(1)
+    if ref_colvars_path is not None:
+        if not files_exist(ref_colvars_path):
+            logger.error(f"Reference colvars file {ref_colvars_path} does not exist. Exiting...")
+            sys.exit(1)
+        
     ###############
     # PREPARATION #
     ###############
 
     # Enforce CLI arguments if any
     if cv_type:
-        configuration['cv']['type'] = cv_type
+        configuration['cv']['cv_type'] = cv_type
     if cv_dimension:
         configuration['cv']['dimension'] = cv_dimension
 
@@ -100,7 +114,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: PCA #
     ###########
 
-    if configuration['cv']['type'] in ('PCA', 'ALL'):
+    if configuration['cv']['cv_type'] in ('PCA', 'ALL'):
         pca_output_path = os.path.join(output_folder, 'pca')
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
@@ -113,7 +127,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: Autoencoder #
     ###################
 
-    if configuration['cv']['type'] in ('AE', 'ALL'):
+    if configuration['cv']['cv_type'] in ('AE', 'ALL'):
         ae_output_path = os.path.join(output_folder, 'ae')
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
@@ -126,7 +140,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: TICA #
     ############
 
-    if configuration['cv']['type'] in ('TICA', 'ALL'):
+    if configuration['cv']['cv_type'] in ('TICA', 'ALL'):
         tica_output_path = os.path.join(output_folder, 'tica')
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
@@ -139,7 +153,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: Deep-TICA #
     #################
 
-    if configuration['cv']['type'] in ('DTICA', 'ALL'):
+    if configuration['cv']['cv_type'] in ('DTICA', 'ALL'):
         deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
@@ -150,9 +164,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     
     # End timer
     elapsed_time = time.time() - start_time
-
-    # Write time to log in hours, minutes and seconds
-    logger.info('Elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
+    logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
 def set_logger(verbose: bool):
     """
@@ -176,8 +188,8 @@ def set_logger(verbose: bool):
     all_tools_path = tool_path.parent
     package_path = all_tools_path.parent
 
-    info_config_path = os.path.join(package_path, "configurations/log_file/info_configuration.ini")
-    debug_config_path = os.path.join(package_path, "configurations/log_file/debug_configuration.ini")
+    info_config_path = os.path.join(package_path, "log_config/info_configuration.ini")
+    debug_config_path = os.path.join(package_path, "log_config/debug_configuration.ini")
     
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
