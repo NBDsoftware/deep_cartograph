@@ -1,6 +1,7 @@
   python
   pip
   numpy
+  dask
   pandas
   torch
   lightning
@@ -10,3 +11,5 @@
   scikit-learn>=1.3
   mlcolvar
   KDEpy             # (Optional) Faster than scikit-learn for KDE
+  diptest
+  plumed
