@@ -7,9 +7,11 @@ import shutil
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Union
 from pathlib import PurePath
 from mlcolvar.data import DictDataset
+from pydantic import ValidationError
+from pydantic import BaseModel
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -37,8 +39,7 @@ def create_output_folder(output_path: str) -> None:
 
 def files_exist(*file_path):
     '''
-    Returns true if all files exist
-
+    Returns true if all files exist.
     Inputs
     ------
 
@@ -56,13 +57,10 @@ def files_exist(*file_path):
         
         this_file_exist = os.path.isfile(path)
         all_exist = all_exist and this_file_exist
-
-        if not this_file_exist:
-            logger.error(f"File not found: {path}")
             
     return all_exist
 
-def read_configuration(configuration_path: str, output_folder: str = None) -> Dict:
+def read_configuration(configuration_path: str, output_folder: str = None) -> Dict[str, Any]:
     """
     Function to read the YAML configuration file. Exits if configuration file is not found.
     It also copies a backup of the configuration file to the output folder if given.
@@ -70,29 +68,56 @@ def read_configuration(configuration_path: str, output_folder: str = None) -> Di
     Inputs
     ------
 
-        configuration_path (str): Path to YAML configuration file
-        output_folder      (str): Path to output folder
+        configuration_path       (str): Path to YAML configuration file
+        output_folder            (str): Path to output folder
 
     Outputs
     -------
         
-        configuration (dict): Dictionary with configuration
+        configuration (dict): Dictionary with valid configuration
     """
 
-    # Read global parameters from configuration file
+    # Read configuration file
     if files_exist(configuration_path):
         with open(configuration_path) as config_file:
             configuration = yaml.load(config_file, Loader = yaml.FullLoader)
     else:
-        logger.error("Configuration file not found")
+        logger.error(f"Configuration file {configuration_path} not found")
         sys.exit(1)
-    
+
     # Copy configuration file to output folder
     if output_folder is not None:
         bck_configuration_path = get_unique_path(os.path.join(output_folder, "configuration.yml"))
         shutil.copyfile(configuration_path, bck_configuration_path)
     
     return configuration
+
+def validate_configuration(configuration: Dict[str, Any], schema: BaseModel) -> Dict[str, Any]:
+    """
+    Validate the configuration dictionary with the given schema.
+
+    Parameters
+    ----------
+
+    configuration : Dict[str, Any]
+        Configuration dictionary
+    schema : BaseModel
+        Pydantic schema to validate the configuration
+
+    Returns
+    -------
+
+    validated_configuration : Dict[str, Any]
+        Validated configuration dictionary
+    """
+
+    try:
+        validated_configuration = schema(**configuration).dict()
+    except ValidationError as e:
+        logger.error(f"Configuration file is not valid: {e}")
+        sys.exit(1)
+    
+    return validated_configuration
 
 # Features utils
 def find_feature_names(colvars_path: str) -> list:
