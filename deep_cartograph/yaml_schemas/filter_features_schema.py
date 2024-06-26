@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Union
 
 class FilterSettingsSchema(BaseModel):
     
@@ -24,7 +25,7 @@ class AminoSettingsSchema(BaseModel):
     # Minimum number of independent features to find
     min_independent_features: int = 5
     # Max number of features that will be analyzed simultaneously (all by default, must be greater or equal than max_ind_features)
-    features_batch_size: int = None
+    features_batch_size: Union[int, None] = None
     # Number of bins to use for the histograms
     num_bins: int = 50
     # Bandwidth to use for the kernel density estimation
@@ -33,9 +34,9 @@ class AminoSettingsSchema(BaseModel):
 class SamplingSettingsSchema(BaseModel):
     
     # Number of samples to use for each feature
-    num_samples: int = None
+    num_samples:  Union[int, None] = None
     # Total number of samples per feature in the colvars file
-    total_num_samples: int = None
+    total_num_samples: Union[int, None] = None
     # Relaxation time of the system in number of samples
     relaxation_time: int = 1
 

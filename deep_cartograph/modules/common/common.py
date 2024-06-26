@@ -107,7 +107,7 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, out
     """
 
     try:
-        validated_configuration = schema(**configuration).dict()
+        validated_configuration = schema(**configuration).model_dump()
     except ValidationError as e:
         logger.error(f"Configuration file is not valid: {e}")
         sys.exit(1)

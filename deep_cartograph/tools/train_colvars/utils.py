@@ -31,6 +31,7 @@ from deep_cartograph.modules.md import md
 from deep_cartograph.modules.common import common
 from deep_cartograph.modules.figures import figures
 from deep_cartograph.modules.statistics import statistics
+from deep_cartograph.yaml_schemas.train_colvars_schema import  CVSchema, FiguresSchema, ClusteringSchema
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -50,14 +51,19 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
-        output_path:          Path to the output folder where the PCA results will be saved.
+        output_path:            Path to the output folder where the PCA results will be saved.
     """
-    # Find cv dimension
-    cv_dimension = cv_settings.get('dimension', 2)
 
     # Create output directory
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
+
+    # Validate accessed settings
+    cv_settings = CVSchema(**cv_settings).model_dump()
+    figures_settings = FiguresSchema(**figures_settings).model_dump()
+
+    # Find cv dimension
+    cv_dimension = cv_settings['dimension']
 
     logger.info('Calculating PCA...')
 
@@ -102,7 +108,7 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
             X=projected_features, 
             X_ref=projected_ref_features,
             labels=cv_labels,
-            settings=figures_settings.get('fes', {}), 
+            settings=figures_settings['fes'], 
             output_path=output_path)
     except Exception as e:
         logger.error(f'Failed to plot the FES. Error message: {e}')
@@ -130,27 +136,30 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
         output_path:         Path to the output folder where the Autoencoder results will be saved.
     """
 
-    # Find the dimension of the CV
-    cv_dimension = cv_settings.get('dimension', 2)
-
     # Create output directory
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
 
-    # Training settings
-    training_settings = cv_settings.get('training', {})
-    training_validation_lengths = training_settings.get('lengths', [0.8, 0.2])
-    batch_size = int(training_settings.get('batch_size', 32))
-    shuffle = bool(training_settings.get('shuffle', True))
-    seed = int(training_settings.get('seed', 0))
-    patience = int(training_settings.get('patience', 10))
-    min_delta = float(training_settings.get('min_delta', 1e-5))
-    max_epochs = int(training_settings.get('max_epochs', 1000))
-    dropout = float(training_settings.get('dropout', 0.1))
-    hidden_layers = training_settings.get('hidden_layers', [15, 15])
-    check_val_every_n_epoch = int(training_settings.get('check_val_every_n_epoch', 1))
-    save_check_every_n_epoch = int(training_settings.get('save_check_every_n_epoch', 1))
-    max_tries = int(training_settings.get('max_tries', 10))
+    # Validate accessed settings
+    cv_settings = CVSchema(**cv_settings).model_dump()
+
+    # Find the dimension of the CV
+    cv_dimension = cv_settings['dimension']
+
+    # Training settings - already validated
+    training_settings = cv_settings['training']
+    training_validation_lengths = training_settings['lengths']
+    batch_size = training_settings['batch_size']
+    shuffle = training_settings['shuffle']
+    seed = training_settings['seed']
+    patience = training_settings['patience']
+    min_delta = training_settings['min_delta']
+    max_epochs = training_settings['max_epochs']
+    dropout = training_settings['dropout']
+    hidden_layers = training_settings['hidden_layers']
+    check_val_every_n_epoch = training_settings['check_val_every_n_epoch']
+    save_check_every_n_epoch = training_settings['save_check_every_n_epoch']
+    max_tries = training_settings['max_tries']
 
     # Get the number of features and samples
     num_features = features_dataset["data"].shape[1]
@@ -305,7 +314,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
                 X=projected_features, 
                 X_ref=projected_ref_features,
                 labels=cv_labels, 
-                settings=figures_settings.get('fes', {}), 
+                settings=figures_settings['fes'], 
                 output_path=output_path)
 
             project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
@@ -329,16 +338,21 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
         output_path:          Path to the output folder where the PCA results will be saved.
     """
-    # Find cv dimension
-    cv_dimension = cv_settings.get('dimension', 2)
-
-    # Training settings
-    training_settings = cv_settings.get('training', {})
-    lag_time = training_settings.get('lag_time', 10)
 
     # Create output directory
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
+
+    # Validate accessed settings
+    cv_settings = CVSchema(**cv_settings).model_dump()
+    figures_settings = FiguresSchema(**figures_settings).model_dump()
+
+    # Find cv dimension
+    cv_dimension = cv_settings['dimension']
+
+    # Training settings - already validated
+    training_settings = cv_settings['training']
+    lag_time = training_settings['lag_time']
 
     logger.info('Calculating TICA CV...')
 
@@ -386,7 +400,7 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
             X=projected_features, 
             X_ref=projected_ref_features,
             labels=cv_labels,
-            settings=figures_settings.get('fes', {}), 
+            settings=figures_settings['fes'], 
             output_path=output_path)
     except Exception as e:
         logger.error(f'Failed to plot the FES. Error message: {e}')
@@ -412,24 +426,32 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         output_path:          Path to the output folder where the DeepTICA results will be saved.
     """
 
+    # Create output directory
+    output_path = common.get_unique_path(output_path)
+    common.create_output_folder(output_path)
+
+    # Validate accessed settings
+    cv_settings = CVSchema(**cv_settings).model_dump()
+    figures_settings = FiguresSchema(**figures_settings).model_dump()
+
     # Find the dimension of the CV
-    cv_dimension = cv_settings.get('dimension', 2)
+    cv_dimension = cv_settings['dimension']
 
     # Training settings
-    training_settings = cv_settings.get('training', {})
-    lag_time = training_settings.get('lag_time', 10)
-    training_validation_lengths = training_settings.get('lengths', [0.8, 0.2])
-    batch_size = training_settings.get('batch_size', 32) 
-    shuffle = training_settings.get('shuffle', True)
-    seed = training_settings.get('seed', 0)
-    patience = training_settings.get('patience', 10)
-    min_delta = training_settings.get('min_delta', 1e-5)
-    max_epochs = training_settings.get('max_epochs', 1000)
-    dropout = training_settings.get('dropout', 0.1)
-    hidden_layers = training_settings.get('hidden_layers', [15, 15])
-    check_val_every_n_epoch = training_settings.get('check_val_every_n_epoch', 1)
-    save_check_every_n_epoch = training_settings.get('save_check_every_n_epoch', 1)
-    max_tries = training_settings.get('max_tries', 10)
+    training_settings = cv_settings['training']
+    lag_time = training_settings['lag_time']
+    training_validation_lengths = training_settings['lengths']
+    batch_size = training_settings['batch_size']
+    shuffle = training_settings['shuffle']
+    seed = training_settings['seed']
+    patience = training_settings['patience']
+    min_delta = training_settings['min_delta']
+    max_epochs = training_settings['max_epochs']
+    dropout = training_settings['dropout']
+    hidden_layers = training_settings['hidden_layers']
+    check_val_every_n_epoch = training_settings['check_val_every_n_epoch']
+    save_check_every_n_epoch = training_settings['save_check_every_n_epoch']
+    max_tries = training_settings['max_tries']
 
     # Build time-lagged dataset (composed by pairs of configs at time t, t+lag)
     timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=lag_time)
@@ -451,10 +473,6 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         batch_size = batch_size,
         shuffle = shuffle, 
         generator = torch.manual_seed(seed))
-
-    # Create output directory
-    output_path = common.get_unique_path(output_path)
-    common.create_output_folder(output_path)
 
     logger.info('Calculating DeepTICA CV...')
 
@@ -595,7 +613,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 X=projected_features, 
                 X_ref=projected_ref_features,
                 labels=cv_labels, 
-                settings=figures_settings.get('fes', {}), 
+                settings=figures_settings['fes'], 
                 output_path=output_path) 
 
             project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
@@ -658,14 +676,18 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         output_path:         Path to the output folder where the projected trajectory will be saved.   
     """
 
+    # Validate accessed settings
+    figures_settings = FiguresSchema(**figures_settings).model_dump()
+    clustering_settings = ClusteringSchema(**clustering_settings).model_dump()
+
     logger.info('Projecting trajectory...')
 
     # Create a pandas DataFrame from the data and the labels
     projected_traj_df = pd.DataFrame(projected_features, columns=cv_labels)
     
-    if clustering_settings.get('run', False):
+    if clustering_settings['run']:
 
-        figure_settings = figures_settings.get('projected_clustered_trajectory', {})
+        figure_settings = figures_settings['projected_clustered_trajectory']
     
         # Cluster the projected features
         cluster_labels, centroids = statistics.optimize_clustering(projected_features, clustering_settings)
@@ -681,7 +703,7 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
 
         # Generate color map for clusters
         num_clusters = len(np.unique(cluster_labels))
-        cmap = figures.generate_cmap(num_clusters, figure_settings.get('cmap', 'viridis'))
+        cmap = figures.generate_cmap(num_clusters, figure_settings['cmap'])
         
         if len(cv_labels) == 2:
 
@@ -716,7 +738,7 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
             projected_traj_df, 
             axis_labels = cv_labels, 
             cmap_label = 'order',
-            settings = figures_settings.get('projected_trajectory', {}), 
+            settings = figures_settings['projected_trajectory'], 
             file_path = os.path.join(output_path,'trajectory.png'))
     
     # Erase the order column

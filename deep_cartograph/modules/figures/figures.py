@@ -7,8 +7,10 @@ import seaborn as sns
 from typing import List, Dict
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, rgb2hex
-
 from mlcolvar.utils.fes import compute_fes
+
+# Import local modules
+from deep_cartograph.yaml_schemas.train_colvars_schema import FesFigureSchema 
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -27,7 +29,10 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
         output_path: path where the outputs are saved
     """
 
-    if settings.get('compute', True):
+    # Validate the settings
+    settings = FesFigureSchema(**settings).model_dump()
+
+    if settings['compute']:
 
         # Create fes folder inside the output path
         output_path = os.path.join(output_path, 'fes')
@@ -42,11 +47,11 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
         logger.info(f'Computing FES(' + ', '.join(labels) + ')...')
 
         # Find settings
-        temperature = settings.get('temperature', 300)
-        max_fes = settings.get('max_fes', 10)
-        num_bins = settings.get('num_bins', 100)
-        num_blocks = settings.get('num_blocks', 10)
-        bandwidth = settings.get('bandwidth', 0.1)
+        temperature = settings['temperature']
+        max_fes = settings['max_fes']
+        num_bins = settings['num_bins']
+        num_blocks = settings['num_blocks']
+        bandwidth = settings['bandwidth']
         min_block_size = 20
 
         # Number of samples for the FES

@@ -53,11 +53,11 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # Start timer
     start_time = time.time()
 
-    # Validate configuration
-    configuration = validate_configuration(configuration, TrainColvarsSchema, output_folder)
-
     # Create output folder if it does not exist
     create_output_folder(output_folder)
+    
+    # Validate configuration
+    configuration = validate_configuration(configuration, TrainColvarsSchema, output_folder)
 
     # Check if files exist
     if not files_exist(colvars_path):
