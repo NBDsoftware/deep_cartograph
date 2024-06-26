@@ -33,6 +33,7 @@ cv:
     check_val_every_n_epoch: 10
     min_delta: 0.00001
     save_check_every_n_epoch: 10
+    lag_time: 10
     save_loss: True
     plot_loss: True
 

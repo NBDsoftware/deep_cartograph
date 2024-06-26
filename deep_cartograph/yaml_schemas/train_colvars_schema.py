@@ -27,6 +27,8 @@ class TrainingsSchema(BaseModel):
     min_delta: float = 0.00001
     # Save the model every n epochs
     save_check_every_n_epoch: int = 10
+    # Lag time for TICA and DeepTICA
+    lag_time: int = 10
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training
