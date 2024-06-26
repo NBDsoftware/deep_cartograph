@@ -18,7 +18,7 @@ from deep_cartograph.yaml_schemas.deep_cartograph_schema import DeepCartographSc
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory: str, topology: str, cv_dimension: int = None, cv_type: str = None, output_folder: str = 'deep_cartograph') -> None:
+def deep_cartograph(configuration: Dict, trajectory: str, topology: str, dimension: int = None, model: str = None, output_folder: str = 'deep_cartograph') -> None:
     """
     Function that maps the trajectory onto the collective variables.
 
@@ -28,6 +28,8 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, cv_dime
         configuration:       configuration dictionary (see default_config.yml for more information)
         trajectory:          Path to the trajectory file that will be analyzed.
         topology:            Path to the topology file of the system.
+        dimension:           Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
+        model:               Type of collective variable model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
         output_folder:       Path to the output folder
     """
 
@@ -36,6 +38,12 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, cv_dime
 
     # Start timer
     start_time = time.time()
+
+    # If cv dimension and type are given, update the configuration accordingly
+    if dimension is not None:
+        configuration['train_colvars']['cv']['dimension'] = dimension
+    if model is not None:
+        configuration['train_colvars']['cv']['model'] = model
 
     # Validate configuration
     validate_configuration(configuration, DeepCartographSchema)
@@ -75,8 +83,8 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, cv_dime
         colvars_path = traj_colvars_path,
         feature_constraints = filtered_features,
         ref_colvars_path = top_colvars_path,
-        cv_dimension = cv_dimension,
-        cv_type = cv_type,
+        dimension = dimension,
+        model = model,
         output_folder = step3_output_folder)
             
     # End timer
@@ -136,8 +144,8 @@ if __name__ == "__main__":
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     parser.add_argument('-traj', '-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
     parser.add_argument('-top', '-topology', dest='topology', help="Path to topology file.", required=True)
-    parser.add_argument('-dim', '-cv_dimension', dest='cv_dimension', type=int, help="Dimension of the CVs", required=False)
-    parser.add_argument('-type', '-cv_type', dest='cv_type', type=str, help="Type of CV to train (PCA, AE, TICA, DTICA, ALL)", required=False)
+    parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
+    parser.add_argument('-m', '-model', dest='model', type=str, help="Type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL)", required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=True)
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
@@ -158,8 +166,8 @@ if __name__ == "__main__":
         configuration = configuration, 
         trajectory = args.trajectory,
         topology = args.topology,
-        cv_dimension = args.cv_dimension, 
-        cv_type = args.cv_type, 
+        dimension = args.dimension, 
+        model = args.model, 
         output_folder = output_folder)
 
     # Move log file to output folder

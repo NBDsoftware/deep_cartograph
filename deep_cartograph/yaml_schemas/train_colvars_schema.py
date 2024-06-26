@@ -35,11 +35,11 @@ class TrainingsSchema(BaseModel):
 class CVSchema(BaseModel):
 
     # Type of Collective Variable to calculate (PCA, AE, TICA, DTICA, ALL)
-    cv_type: str = "ALL"
+    model: str = "ALL"
     # Number of dimensions to calculate
     dimension: int = 2
     # Settings for the training of the Collective Variables (when applicable)
-    trainings: TrainingsSchema = TrainingsSchema()
+    training: TrainingsSchema = TrainingsSchema()
 
 class FesFigureSchema(BaseModel):
       
