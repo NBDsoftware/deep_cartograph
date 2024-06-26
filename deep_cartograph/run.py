@@ -46,7 +46,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, dimensi
         configuration['train_colvars']['cv']['model'] = model
 
     # Validate configuration
-    validate_configuration(configuration, DeepCartographSchema)
+    validate_configuration(configuration, DeepCartographSchema, output_folder)
 
     # Check if files exist
     if not files_exist(trajectory, topology):
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     create_output_folder(output_folder)
 
     # Read configuration
-    configuration = read_configuration(args.configuration_path, output_folder)
+    configuration = read_configuration(args.configuration_path)
 
     # Run tool
     deep_cartograph(

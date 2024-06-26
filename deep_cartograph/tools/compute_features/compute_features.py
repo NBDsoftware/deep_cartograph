@@ -45,7 +45,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     create_output_folder(output_folder)
 
     # Validate configuration
-    validate_configuration(configuration, ComputeFeaturesSchema)
+    validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
 
     # Check if files exist
     if not files_exist(trajectory):
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     create_output_folder(output_folder)
 
     # Read configuration
-    configuration = read_configuration(args.configuration_path, output_folder)
+    configuration = read_configuration(args.configuration_path)
 
     # Run tool
     _ = compute_features(

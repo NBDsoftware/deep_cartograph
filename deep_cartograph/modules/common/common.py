@@ -60,21 +60,19 @@ def files_exist(*file_path):
             
     return all_exist
 
-def read_configuration(configuration_path: str, output_folder: str = None) -> Dict[str, Any]:
+def read_configuration(configuration_path: str) -> Dict[str, Any]:
     """
     Function to read the YAML configuration file. Exits if configuration file is not found.
-    It also copies a backup of the configuration file to the output folder if given.
 
     Inputs
     ------
 
         configuration_path       (str): Path to YAML configuration file
-        output_folder            (str): Path to output folder
 
     Outputs
     -------
         
-        configuration (dict): Dictionary with valid configuration
+        configuration (dict): Dictionary with configuration
     """
 
     # Read configuration file
@@ -84,17 +82,13 @@ def read_configuration(configuration_path: str, output_folder: str = None) -> Di
     else:
         logger.error(f"Configuration file {configuration_path} not found")
         sys.exit(1)
-
-    # Copy configuration file to output folder
-    if output_folder is not None:
-        bck_configuration_path = get_unique_path(os.path.join(output_folder, "configuration.yml"))
-        shutil.copyfile(configuration_path, bck_configuration_path)
     
     return configuration
 
-def validate_configuration(configuration: Dict[str, Any], schema: BaseModel) -> Dict[str, Any]:
+def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, output_folder: str) -> Dict[str, Any]:
     """
-    Validate the configuration dictionary with the given schema.
+    Validate the configuration dictionary with the given schema and dump the validated configuration to
+    the output folder.
 
     Parameters
     ----------
@@ -103,6 +97,8 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel) -> 
         Configuration dictionary
     schema : BaseModel
         Pydantic schema to validate the configuration
+    output_folder : str
+        Path to the output folder
 
     Returns
     -------
@@ -117,6 +113,12 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel) -> 
         logger.error(f"Configuration file is not valid: {e}")
         sys.exit(1)
     
+    # Dump the validated configuration to the output folder
+    if output_folder is not None:
+        bck_configuration_path = get_unique_path(os.path.join(output_folder, "configuration.yml"))
+        with open(bck_configuration_path, 'w') as config_file:
+            yaml.dump(validated_configuration, config_file)
+
     return validated_configuration
 
 # Features utils
