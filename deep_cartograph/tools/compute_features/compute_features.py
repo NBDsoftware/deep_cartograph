@@ -45,7 +45,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     create_output_folder(output_folder)
 
     # Validate configuration
-    validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
+    configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
 
     # Check if files exist
     if not files_exist(trajectory):

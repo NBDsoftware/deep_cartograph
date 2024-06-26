@@ -55,7 +55,7 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
     create_output_folder(output_folder)
 
     # Validate configuration
-    validate_configuration(configuration, FilterFeaturesSchema, output_folder)
+    configuration = validate_configuration(configuration, FilterFeaturesSchema, output_folder)
 
     # Check the colvars file exists
     if not files_exist(colvars_path):
