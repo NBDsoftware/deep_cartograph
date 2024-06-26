@@ -3,7 +3,6 @@ import sys
 import yaml
 import math
 import torch
-import shutil
 import logging
 import numpy as np
 import pandas as pd
