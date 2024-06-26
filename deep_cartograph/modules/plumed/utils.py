@@ -237,7 +237,7 @@ def run_driver_command(driver_command: str, plumed_settings: dict = None, plumed
     all_commands = " && ".join(all_commands)
 
     # Log execution information
-    logger.info(f"        Executing PLUMED driver command: {all_commands}")
+    logger.info(f"Executing PLUMED driver command: {all_commands}")
 
     # Find level of logging
     if logger.isEnabledFor(logging.DEBUG):

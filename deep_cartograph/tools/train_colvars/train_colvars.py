@@ -107,8 +107,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         ref_features_dataframe = None
 
     # Log number of features and samples
-    logger.info(f' Number of samples: {features_dataframe.shape[0]}')
-    logger.info(f' Number of features: {features_dataframe.shape[1]}')
+    logger.info(f'Number of samples: {features_dataframe.shape[0]}')
+    logger.info(f'Number of features: {features_dataframe.shape[1]}')
 
     ###########
     # CV: PCA #

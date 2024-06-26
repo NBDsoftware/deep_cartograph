@@ -121,7 +121,7 @@ class Filter:
         # Dip test filter: those with the p-value of the Hartigan's Dip Test above the significance level don't pass the filter
         if self.compute_diptest:
 
-            logger.info('    Computing dip test.')
+            logger.info('Computing dip test.')
             self.dip_test()
 
             if self.diptest_significance_level > 0:
@@ -143,7 +143,7 @@ class Filter:
         final_num_features = len(self.features_data)
 
         # Log the number of features filtered
-        logger.info(f'    Filtered {initial_num_features - final_num_features} features.')
+        logger.info(f'Filtered {initial_num_features - final_num_features} features.')
 
         # Return a list with the features to analyze
         return self.features_data['op_name'].tolist()
