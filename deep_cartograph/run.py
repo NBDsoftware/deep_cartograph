@@ -18,7 +18,7 @@ from deep_cartograph.yaml_schemas.deep_cartograph_schema import DeepCartographSc
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory: str, topology: str, dimension: int = None, model: str = None, output_folder: str = 'deep_cartograph') -> None:
+def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, dimension: int = None, model: str = None, output_folder: str = 'deep_cartograph') -> None:
     """
     Function that maps the trajectory onto the collective variables.
 
@@ -28,6 +28,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, dimensi
         configuration:       configuration dictionary (see default_config.yml for more information)
         trajectory:          Path to the trajectory file that will be analyzed.
         topology:            Path to the topology file of the system.
+        reference_folder:    Path to the folder with reference data.
         dimension:           Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
         model:               Type of collective variable model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
         output_folder:       Path to the output folder
@@ -48,10 +49,21 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, dimensi
     # Validate configuration
     configuration = validate_configuration(configuration, DeepCartographSchema, output_folder)
 
-    # Check if files exist
-    if not files_exist(trajectory, topology):
-        logger.error("One or more files do not exist. Exiting...")
+    # Check if trajectory file exists
+    if not os.path.isfile(trajectory):
+        logger.error("Trajectory file not found: %s", trajectory)
         sys.exit(1)
+
+    # Check if topology file exists
+    if not os.path.isfile(topology):
+        logger.error("Topology file not found: %s", topology)
+        sys.exit(1)
+
+    # Check if reference folder exists
+    if reference_folder is not None:
+        if not os.path.exists(reference_folder):
+            logger.error("Reference folder not found: %s", reference_folder)
+            sys.exit(1)
 
     # Step 1: Compute features for trajectory
     step1_output_folder = os.path.join(output_folder, 'compute_features_traj')
@@ -144,6 +156,7 @@ if __name__ == "__main__":
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     parser.add_argument('-traj', '-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
     parser.add_argument('-top', '-topology', dest='topology', help="Path to topology file.", required=True)
+    parser.add_argument('-ref', '-reference', dest='reference_folder', help="Path to folder with reference data. It should contain structures or trajectories.", required=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
     parser.add_argument('-m', '-model', dest='model', type=str, help="Type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL)", required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=True)
@@ -166,6 +179,7 @@ if __name__ == "__main__":
         configuration = configuration, 
         trajectory = args.trajectory,
         topology = args.topology,
+        reference_folder = args.reference_folder,
         dimension = args.dimension, 
         model = args.model, 
         output_folder = output_folder)
