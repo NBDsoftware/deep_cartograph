@@ -631,7 +631,7 @@ def find_supported_traj(parent_path, filename = None):
     """
 
     # List supported formats (MDAnalysis supported)
-    traj_formats = ['.xtc', '.dcd', '.xyz', '.arc', '.trr', '.tng', '.nc', '.netcdf', '.mdcrd', '.crd', '.h5', '.hdf5', '.lh5']
+    traj_formats = ['.xtc', '.pdb', '.xpdb', '.pdbqt', '.parmed', '.ncdf', '.nc', '.dcd', '.xyz', '.arc', '.trr', '.tng', '.nc', '.netcdf', '.mdcrd', '.crd', '.h5', '.hdf5', '.lh5']
 
     if filename is None:
         filename = "*"  
@@ -669,7 +669,7 @@ def find_supported_top(parent_path, filename = None):
     """
 
     # List supported formats
-    top_formats = ['.pdb', '.gro', '.psf', '.prmtop', '.parm7', '.top', '.itp']
+    top_formats = ['.pdb', '.gro', '.crd', '.data', '.pqr', '.pdbqt', '.mol2', '.psf', '.prmtop', '.parm7', '.top', '.itp']
 
     if filename is None:
         filename = "*"
