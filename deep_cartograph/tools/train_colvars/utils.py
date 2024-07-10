@@ -184,65 +184,89 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
     # Autoencoder settings
     encoder_layers = [num_features] + hidden_layers + [cv_dimension]
     nn_args = {'activation': 'shifted_softplus', 'dropout': dropout} 
-    options=  {'encoder': nn_args, 'decoder': nn_args}
+
+    # Optimizer
+    opt_name = 'Adam'                                        # 'Adadelta', 'Adagrad', 'Adam', 'AdamW', 'SparseAdam', 'Adamax', 'ASGD', 'LBFGS', 'NAdam', 'RAdam', 'RMSprop', 'SGD'
+    optimizer_kwargs = {'lr': 0.001, 'weight_decay': 0.0}
+
+    # Learning rate scheduler
+    lr_scheduler_kwargs = {'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau, 'mode': 'min', 'factor': 0.1, 'patience': 10, 'threshold': 0.0001, 'threshold_mode': 'rel', 'cooldown': 0, 'min_lr': 0, 'eps': 1e-08}
+
+    # All options
+    options = {'encoder': nn_args, 'decoder': nn_args, "optimizer": optimizer_kwargs, "lr_scheduler": lr_scheduler_kwargs, "lr_interval": "epoch", "lr_monitor": "valid_loss", "lr_frequency": 1}
 
     converged = False
     tries = 0
 
     # Train until model finds a good solution
     while not converged and tries < max_tries:
-        try:
+        #try:
         
-            tries += 1
+        tries += 1
 
-            # Define model
-            model = AutoEncoderCV(encoder_layers, options=options)  
+        # Debug
+        logger.debug(f'Initializing Autoencoder object...')
 
-            # Define MetricsCallback to store the loss
-            metrics = MetricsCallback()
+        # Define model
+        model = AutoEncoderCV(encoder_layers, options=options) 
 
-            # Define EarlyStopping callback to stop training if the loss does not decrease
-            early_stopping = EarlyStopping(
-                monitor="valid_loss", 
-                min_delta=min_delta,                 # Minimum change in the monitored quantity to qualify as an improvement
-                patience=patience,                   # Number of checks with no improvement after which training will be stopped (see check_val_every_n_epoch) 
-                mode="min")
+        # Set optimizer name
+        model._optimizer_name = opt_name
 
-            # Define ModelCheckpoint callback to save the best model
-            checkpoint = ModelCheckpoint(
-                dirpath=output_path,
-                monitor="valid_loss",                      # Quantity to monitor
-                save_last=False,                           # Save the last checkpoint
-                save_top_k=1,                              # Number of best models to save according to the quantity monitored
-                save_weights_only=True,                    # Save only the weights
-                filename=None,                             # Default checkpoint file name '{epoch}-{step}'
-                mode="min",                                # Best model is the one with the minimum monitored quantity
-                every_n_epochs=save_check_every_n_epoch)   # Number of epochs between checkpoints
+        # Debug
+        logger.debug(f'Initializing metrics and callbacks...')
 
-            # Define trainer
-            trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
-                callbacks=[metrics, early_stopping, checkpoint], 
-                max_epochs=max_epochs,
-                logger=False, 
-                enable_checkpointing = True,
-                enable_progress_bar = False,
-                check_val_every_n_epoch=check_val_every_n_epoch)   # Check validation every n epochs  
+        # Define MetricsCallback to store the loss
+        metrics = MetricsCallback()
 
-            trainer.fit(model, datamodule)
+        # Define EarlyStopping callback to stop training if the loss does not decrease
+        early_stopping = EarlyStopping(
+            monitor="valid_loss", 
+            min_delta=min_delta,                       # Minimum change in the monitored quantity to qualify as an improvement
+            patience=patience,                         # Number of checks with no improvement after which training will be stopped (see check_val_every_n_epoch) 
+            mode="min")
 
-            # Get validation and training loss
-            validation_loss = metrics.metrics['valid_loss']
-            training_loss = metrics.metrics['train_loss_epoch']
+        # Define ModelCheckpoint callback to save the best model
+        checkpoint = ModelCheckpoint(
+            dirpath=output_path,
+            monitor="valid_loss",                      # Quantity to monitor
+            save_last=False,                           # Save the last checkpoint
+            save_top_k=1,                              # Number of best models to save according to the quantity monitored
+            save_weights_only=True,                    # Save only the weights
+            filename=None,                             # Default checkpoint file name '{epoch}-{step}'
+            mode="min",                                # Best model is the one with the minimum monitored quantity
+            every_n_epochs=save_check_every_n_epoch)   # Number of epochs between checkpoints
 
-            # Check the evolution of the loss
-            if model_has_converged(validation_loss, training_loss, patience, check_val_every_n_epoch):
-                converged = True
-            else:
-                logger.warning('Autoencoder has not found a good solution. Re-starting training...')
+        # Debug
+        logger.debug(f'Initializing Trainer...')
+
+        # Define trainer
+        trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
+            callbacks=[metrics, early_stopping, checkpoint], 
+            max_epochs=max_epochs,
+            logger=False, 
+            enable_checkpointing = True,
+            enable_progress_bar = False,
+            check_val_every_n_epoch=check_val_every_n_epoch)   # Check validation every n epochs  
+
+        # Debug
+        logger.debug(f'Training...')
+
+        trainer.fit(model, datamodule)
+
+        # Get validation and training loss
+        validation_loss = metrics.metrics['valid_loss']
+        training_loss = metrics.metrics['train_loss_epoch']
+
+        # Check the evolution of the loss
+        if model_has_converged(validation_loss, training_loss, patience, check_val_every_n_epoch):
+            converged = True
+        else:
+            logger.warning('Autoencoder has not found a good solution. Re-starting training...')
         
-        except Exception as e:
-            logger.error(f'Autoencoder training failed. Error message: {e}')
-            logger.info('Retrying Autoencoder training...')
+        #except Exception as e:
+        #    logger.error(f'Autoencoder training failed. Error message: {e}')
+        #    logger.info('Retrying Autoencoder training...')
 
     try:
         # Load best model from checkpoint
