@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Union
 
 class TrainingsSchema(BaseModel):
   
@@ -29,6 +29,8 @@ class TrainingsSchema(BaseModel):
     save_check_every_n_epoch: int = 10
     # Lag time for TICA and DeepTICA
     lag_time: int = 10
+    # Slightly overestimated rank of the main trajectory data to compute the PCA more efficiently (see torch.pca_lowrank) - if None, q = num_features (n)
+    pca_lowrank_q: Union[int, None] = None
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training

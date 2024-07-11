@@ -35,6 +35,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     logger = logging.getLogger("deep_cartograph")
 
     # Title
+    logger.info("================")
     logger.info("Compute features")
     logger.info("================")
 
@@ -51,6 +52,9 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     if not files_exist(trajectory):
         logger.error(f"Trajectory file {trajectory} does not exist. Exiting...")
         sys.exit(1)
+    else:
+        logger.info(f"Trajectory file: {trajectory}")
+        
     if not files_exist(topology):
         logger.error(f"Topology file {topology} does not exist. Exiting...")
         sys.exit(1)
@@ -114,7 +118,6 @@ def set_logger(verbose: bool):
     logger = logging.getLogger("deep_cartograph")
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-    logger.info("===============================================================================================")
 
 ########
 # MAIN #

@@ -11,7 +11,7 @@ import logging
 import numpy as np
 import pandas as pd
 import torch, lightning
-from typing import List, Dict
+from typing import List, Dict, Union
 import matplotlib.pyplot as plt
 
 from mlcolvar.data import DictModule, DictDataset
@@ -37,7 +37,8 @@ from deep_cartograph.yaml_schemas.train_colvars_schema import  CVSchema, Figures
 logger = logging.getLogger(__name__)
 
 
-def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[List[pd.DataFrame], None], ref_labels: Union[List[str], None], 
+                cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Compute Principal Component Analysis (PCA) on the input features. 
     Compute the Free Energy Surface (FES) along the PCA CVs.
@@ -46,8 +47,9 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
     Inputs
     ------
 
-        features_dataframe:     DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
-        ref_features_dataframe: DataFrame containing the time series of the reference features. Each column is a feature and each row is a time step.
+        features_dataframe:     DataFrame containing the time series of the input features for the main trajectory. Each column is a feature and each row is a time step.
+        ref_features_dataframe: List of DataFrames containing the time series of the input features for the reference data. Each column is a feature and each row is a time step.
+        ref_labels:             List of labels for the reference data.
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
@@ -71,9 +73,14 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
     num_features = features_dataframe.shape[1]
     num_samples = features_dataframe.shape[0]
 
+    # Find the user requested q for torch.pca_lowrank
+    pca_lowrank_q = cv_settings['training']['pca_lowrank_q']
+    if pca_lowrank_q is None:
+        pca_lowrank_q = num_features
+
     # Use PCA to compute high variance linear combinations of the input features
     # out_features is q in torch.pca_lowrank -> Controls the dimensionality of the random projection in the randomized SVD algorithm (trade-off between speed and accuracy)
-    pca = PCA(in_features = num_features, out_features=min(6, num_features, num_samples))
+    pca = PCA(in_features = num_features, out_features=min(pca_lowrank_q, num_features, num_samples))
 
     try:
         # Compute PCA
@@ -82,8 +89,15 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
         logger.error(f'PCA could not be computed. Error message: {e}')
         return
     
-    # Save the first cv_dimension eigenvectors as CVs 
+    # Extract the first cv_dimension eigenvectors as CVs 
     pca_cv = pca_eigvecs[:,0:cv_dimension].numpy()
+
+    # Follow a criteria for the sign of the eigenvectors - first weight of each eigenvector should be positive
+    for i in range(cv_dimension):
+        if pca_cv[0,i] < 0:
+            pca_cv[:,i] = -pca_cv[:,i]
+
+    # Save the first cv_dimension eigenvectors as CVs
     np.savetxt(os.path.join(output_path,'weights.txt'), pca_cv)        
     
     # Transform to array
@@ -94,8 +108,11 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
 
     # If reference data is provided, project it as well
     if ref_features_dataframe is not None:
-        ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
-        projected_ref_features = np.matmul(ref_features_array, pca_cv)
+        
+        projected_ref_features = []
+        for df in ref_features_dataframe:
+            ref_features_array = df.to_numpy(dtype=np.float32)
+            projected_ref_features.append(np.matmul(ref_features_array, pca_cv))
     else:
         projected_ref_features = None
 
@@ -106,8 +123,9 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
         # Create FES along the CV
         figures.plot_fes(
             X=projected_features, 
+            cv_labels=cv_labels,
             X_ref=projected_ref_features,
-            labels=cv_labels,
+            X_ref_labels=ref_labels,
             settings=figures_settings['fes'], 
             output_path=output_path)
     except Exception as e:
@@ -119,7 +137,8 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Dat
     except Exception as e:
         logger.error(f'Failed to project the trajectory. Error message: {e}')
 
-def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[DictDataset], None], ref_labels: Union[List[str], None], 
+               cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Train Autoencoder on the input features. The CV is the latent space of the Autoencoder. 
     Compute the Free Energy Surface (FES) along the Autoencoder CVs.
@@ -128,12 +147,13 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
     Inputs
     ------
 
-        features_dataset:      Dataset containing the input features.
-        ref_features_dataset:  Dataset containing the reference input features.
+        features_dataset:      Dataset containing the input features for the main trajectory.
+        ref_features_dataset:  List of Datasets containing the reference data.
+        ref_labels:            List of labels for the reference data.
         cv_settings:           Dictionary containing the settings for the CVs.
         figures_settings:      Dictionary containing the settings for the figures.
         clustering_settings:   Dictionary containing the settings for clustering the projected features.
-        output_path:         Path to the output folder where the Autoencoder results will be saved.
+        output_path:           Path to the output folder where the Autoencoder results will be saved.
     """
 
     # Create output directory
@@ -294,8 +314,10 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             
             # If reference data is provided, project it as well
             if ref_features_dataset is not None:
-                with torch.no_grad():
-                    projected_ref_features = best_model(torch.Tensor(ref_features_dataset[:]["data"])).numpy()
+                projected_ref_features = []
+                for dataset in ref_features_dataset:
+                    with torch.no_grad():
+                        projected_ref_features.append(best_model(torch.Tensor(dataset[:]["data"])).numpy())
             else:
                 projected_ref_features = None
 
@@ -312,8 +334,9 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
             # Create FES along the CV
             figures.plot_fes(
                 X=projected_features, 
+                cv_labels=cv_labels,
                 X_ref=projected_ref_features,
-                labels=cv_labels, 
+                X_ref_labels=ref_labels,
                 settings=figures_settings['fes'], 
                 output_path=output_path)
 
@@ -324,19 +347,21 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: DictDataset,
     else:
         logger.warning('Autoencoder training did not find a good solution after maximum tries.')
 
-def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[List[pd.DataFrame], None], ref_labels: Union[List[str], None], 
+                 cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Compute Time-lagged Independent Component Analysis (TICA) on the input features. Also, compute the Free Energy Surface (FES) along the TICA CVs.
 
     Inputs
     ------
 
-        features_dataframe:     DataFrame containing the time series of the input features. Each column is a feature and each row is a time step.
-        ref_features_dataframe: DataFrame containing the time series of the reference features. Each column is a feature and each row is a time step. 
+        features_dataframe:     DataFrame containing the time series of the input features for the main trajectory. Each column is a feature and each row is a time step.
+        ref_features_dataframe: List of DataFrames containing the reference data. Each column is a feature and each row is a time step. 
+        ref_labels:             List of labels for the reference data.
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
-        output_path:          Path to the output folder where the PCA results will be saved.
+        output_path:            Path to the output folder where the PCA results will be saved.
     """
 
     # Create output directory
@@ -386,8 +411,10 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
 
     # If reference data is provided, project it as well
     if ref_features_dataframe is not None:
-        ref_features_array = ref_features_dataframe.to_numpy(dtype=np.float32)
-        projected_ref_features = np.matmul(ref_features_array, tica_cv)
+        projected_ref_features = []
+        for df in ref_features_dataframe:
+            ref_features_array = df.to_numpy(dtype=np.float32)
+            projected_ref_features.append(np.matmul(ref_features_array, tica_cv))
     else:
         projected_ref_features = None
 
@@ -398,8 +425,9 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
         # Create FES along the CV
         figures.plot_fes(
             X=projected_features, 
+            cv_labels=cv_labels,
             X_ref=projected_ref_features,
-            labels=cv_labels,
+            X_ref_labels=ref_labels,
             settings=figures_settings['fes'], 
             output_path=output_path)
     except Exception as e:
@@ -411,19 +439,21 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.Da
     except Exception as e:
         logger.error(f'Failed to project the trajectory. Error message: {e}')
 
-def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: pd.DataFrame, cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[List[pd.DataFrame], None], ref_labels: Union[List[str], None], 
+                      cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
     """
     Train DeepTICA on the input features. The CV is the latent space of the DeepTICA model. Also, compute the Free Energy Surface (FES) along the DeepTICA CVs.
 
     Inputs
     ------
 
-        features_dataframe:     Dataset containing the input features.
-        ref_features_dataframe: Dataset containing the reference input features.
+        features_dataframe:     Dataset containing the input features for the main trajectory.
+        ref_features_dataframe: List of Datasets containing the reference data.
+        ref_labels:             List of labels for the reference data.
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for the figures.
         training_settings:      Dictionary containing the settings for training the DeepTICA model.
-        output_path:          Path to the output folder where the DeepTICA results will be saved.
+        output_path:            Path to the output folder where the DeepTICA results will be saved.
     """
 
     # Create output directory
@@ -597,8 +627,11 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
             # If reference data is provided, project it as well
             if ref_features_dataframe is not None:
-                with torch.no_grad():
-                    projected_ref_features = best_model(torch.Tensor(ref_features_dataframe.to_numpy(dtype=np.float32))).numpy()
+                projected_ref_features = []
+                for df in ref_features_dataframe:
+                    ref_features_array = df.to_numpy(dtype=np.float32)
+                    with torch.no_grad():
+                        projected_ref_features.append(best_model(torch.Tensor(ref_features_array)).numpy())
             else:
                 projected_ref_features = None
 
@@ -611,8 +644,9 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             # Create FES along the CV
             figures.plot_fes(
                 X=projected_features, 
+                cv_labels=cv_labels, 
                 X_ref=projected_ref_features,
-                labels=cv_labels, 
+                X_ref_labels=ref_labels,
                 settings=figures_settings['fes'], 
                 output_path=output_path) 
 
