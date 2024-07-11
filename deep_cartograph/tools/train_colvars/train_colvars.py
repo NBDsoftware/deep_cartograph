@@ -18,7 +18,9 @@ from deep_cartograph.yaml_schemas.train_colvars_schema import TrainColvarsSchema
 # TOOL #
 ########
 
-def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], ref_colvars_path: str = None, dimension: int = None, model: str = None, output_folder: str = 'train_colvars'):
+def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
+                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
+                  dimension: int = None, model: str = None, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -37,7 +39,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         configuration:       configuration dictionary (see default_config.yml for more information)
         colvars_path:        path to the colvars file with the input data (samples of features)
         feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
-        ref_colvars_path:    path to the colvars file with the reference data, if None, no reference data is used
+        ref_colvars_path:    list of paths to colvars files with reference data. If None, no reference data is used
+        ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
         dimension:           dimension of the CVs to train or compute, if None, the value in the configuration file is used
         model:               type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
@@ -46,6 +49,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     logger = logging.getLogger("deep_cartograph")
 
     # Title
+    logger.info("================================")
     logger.info("Training of Collective Variables")
     logger.info("================================")
     logger.info("Training of collective variables using the mlcolvar library.")
@@ -64,9 +68,10 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         logger.error(f"Colvars file {colvars_path} does not exist. Exiting...")
         sys.exit(1)
     if ref_colvars_path is not None:
-        if not files_exist(ref_colvars_path):
+        if not files_exist(*ref_colvars_path):
             logger.error(f"Reference colvars file {ref_colvars_path} does not exist. Exiting...")
             sys.exit(1)
+
         
     ###############
     # PREPARATION #
@@ -90,20 +95,26 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # Build dataset from colvars file with the selected features
     features_dataset, colvars_dataframe = create_dataset_from_files(file_names=[colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)  
 
-    # If reference data is given, build dataset from colvars file with the selected features
-    if ref_colvars_path:
-        ref_features_dataset, ref_colvars_dataframe = create_dataset_from_files(file_names=[ref_colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)     
-    else:
-        ref_features_dataset = None
-        ref_colvars_dataframe = None  
-
     # Filter dataframe to keep just the selected features
     features_dataframe = colvars_dataframe.filter(**filter_dict)
 
-    # If reference data is given, filter dataframe to keep just the selected features
+    # If reference data is given
     if ref_colvars_path:
-        ref_features_dataframe = ref_colvars_dataframe.filter(**filter_dict)
+
+        ref_features_dataset = []
+        ref_features_dataframe = []
+
+        for path in ref_colvars_path:
+
+            # Build dataset from colvars file with the selected features
+            ref_features_dataset_i, ref_colvars_dataframe_i = create_dataset_from_files(file_names=[path], filter_args=filter_dict, verbose = False, return_dataframe=True)     
+            # Filter dataframe to keep just the selected features
+            ref_features_dataframe_i = ref_colvars_dataframe_i.filter(**filter_dict)
+
+            ref_features_dataset.append(ref_features_dataset_i)
+            ref_features_dataframe.append(ref_features_dataframe_i)
     else:
+        ref_features_dataset = None
         ref_features_dataframe = None
 
     # Log number of features and samples
@@ -118,6 +129,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         pca_output_path = os.path.join(output_folder, 'pca')
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
+                    ref_labels = ref_labels,
                     cv_settings = configuration['cv'], 
                     figures_settings = configuration['figures'], 
                     clustering_settings = configuration['clustering'],
@@ -131,6 +143,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         ae_output_path = os.path.join(output_folder, 'ae')
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
+                   ref_labels = ref_labels,
                    cv_settings = configuration['cv'],
                    figures_settings = configuration['figures'],
                    clustering_settings = configuration['clustering'],
@@ -144,6 +157,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         tica_output_path = os.path.join(output_folder, 'tica')
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
+                     ref_labels = ref_labels,
                      cv_settings = configuration['cv'],
                      figures_settings = configuration['figures'],
                      clustering_settings = configuration['clustering'],
@@ -157,6 +171,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
+                          ref_labels = ref_labels,
                           cv_settings = configuration['cv'],
                           figures_settings = configuration['figures'],
                           clustering_settings = configuration['clustering'],
@@ -206,7 +221,6 @@ def set_logger(verbose: bool):
     logger = logging.getLogger("deep_cartograph")
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-    logger.info("===============================================================================================")
 
 ########
 # MAIN #
@@ -219,6 +233,7 @@ if __name__ == "__main__":
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help='Path to configuration file (.yml)', required=True)
     parser.add_argument('-colvars', dest='colvars_path', type=str, help='Path to the colvars file', required=True)
     parser.add_argument('-ref_colvars', dest='ref_colvars_path', type=str, help='Path to the colvars file with the reference data', required=False)
+    parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', type=int, help='Dimension of the CV to train or compute', required=False)
@@ -241,12 +256,20 @@ if __name__ == "__main__":
     # Read features to use
     feature_constraints = read_feature_constraints(args.features_path, args.features_regex)
 
+    # Reference data should be list or None - see train_colvars API
+    ref_labels = None
+    if args.ref_colvars_path:
+        ref_colvars_path = [args.ref_colvars_path]
+        if args.use_reference_labels:
+            ref_labels = [Path(args.ref_colvars_path).stem]
+            
     # Run tool
     train_colvars(
         configuration = configuration, 
         colvars_path = args.colvars_path, 
         feature_constraints = feature_constraints, 
-        ref_colvars_path = args.ref_colvars_path, 
+        ref_colvars_path = ref_colvars_path,
+        ref_labels = ref_labels,
         dimension = args.dimension, 
         model = args.model, 
         output_folder = output_folder)
