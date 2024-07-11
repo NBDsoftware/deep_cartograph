@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import List, Dict
+from typing import List, Dict, Union
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, rgb2hex
 from mlcolvar.utils.fes import compute_fes
@@ -15,18 +15,19 @@ from deep_cartograph.yaml_schemas.train_colvars_schema import FesFigureSchema
 # Set logger
 logger = logging.getLogger(__name__)
 
-def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict, output_path: str):
+def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray], None] , X_ref_labels: Union[List[str], None], settings: Dict, output_path: str):
     """
     Creates a figure of the free energy surface and saves it to a file.
 
     Parameters
     ----------
 
-        X:           data with time series of the variables along which the FES is computed (1D or 2D)
-        X_ref:       data with the reference values of the variables along which the FES is computed
-        settings:    dictionary with the settings of the FES plot
-        labels:      labels of the variables along which the FES is computed
-        output_path: path where the outputs are saved
+        X:            data with time series of the variables along which the FES is computed (1D or 2D)
+        cv_labels:    labels of the variables along which the FES is computed
+        X_ref:        data with the reference values of the variables along which the FES is computed
+        X_ref_labels: labels of the reference variables
+        settings:     dictionary with the settings of the FES plot
+        output_path:  path where the outputs are saved
     """
 
     # Validate the settings
@@ -44,7 +45,7 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
             logger.warning('The FES can only be plotted for 1D or 2D CVs.')
             return
 
-        logger.info(f'Computing FES(' + ', '.join(labels) + ')...')
+        logger.info(f'Computing FES(' + ', '.join(cv_labels) + ')...')
 
         # Find settings
         temperature = settings['temperature']
@@ -85,23 +86,27 @@ def plot_fes(X: np.ndarray, X_ref: np.ndarray, labels: List[str], settings: Dict
         # Add reference data to the FES plot
         if X_ref is not None:
 
-            # If the reference data is 2D
-            if X_ref.shape[1] == 2:
-                
-                # Add as a scatter plot
-                ax.scatter(X_ref[:,0], X_ref[:,1], c='black', s=5, label='Reference data')
+            for i, X_ref_i in enumerate(X_ref):
 
-            # If the reference data is 1D
-            elif X_ref.shape[1] == 1:
+                label = X_ref_labels[i] if X_ref_labels else ''
 
-                # Add as a histogram
-                ax.hist(X_ref, bins=num_bins, color='red', alpha=0.5, density=True, label='Reference data')
+                # If the reference data is 2D
+                if X_ref_i.shape[1] == 2:
+                    
+                    # Add as a scatter plot
+                    ax.scatter(X_ref_i[:,0], X_ref_i[:,1], c='black', s=5, label=label)
+
+                # If the reference data is 1D
+                elif X_ref_i.shape[1] == 1:
+
+                    # Add as a histogram
+                    ax.hist(X_ref_i, bins=num_bins, color='red', alpha=0.5, density=True, label=label)
 
         # Set axis labels
-        ax.set_xlabel(labels[0])
+        ax.set_xlabel(cv_labels[0])
 
-        if len(labels) > 1:
-            ax.set_ylabel(labels[1]) 
+        if len(cv_labels) > 1:
+            ax.set_ylabel(cv_labels[1]) 
 
         # Enforce FES limit if needed (max_fes defined and 1D FES)
         if max_fes and cv_dimension == 1:
@@ -265,7 +270,7 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
         # Save the figure
         plt.savefig(file_path, dpi=300)
 
-def find_limits(X: np.ndarray, X_ref: np.ndarray) -> List:
+def find_limits(X: np.ndarray, X_ref: Union[List[np.ndarray], None]) -> List:
     """
     Find the limits of the axis for the FES plot.
 
@@ -283,15 +288,27 @@ def find_limits(X: np.ndarray, X_ref: np.ndarray) -> List:
 
     # Dimensions of the input data
     fes_dimension = X.shape[1]
-    
-    # If there is no reference data, set X_ref to X
-    if X_ref is None:
-        X_ref = X
 
     # Find the limits of the axis
     if fes_dimension == 1:
-        # Find the range of the data
-        limits = (min(np.min(X), np.min(X_ref)), max(np.max(X), np.max(X_ref)))
+
+        # Find the range of the main data
+        limits = (np.min(X), np.max(X))
+
+        # If reference data is provided
+        if X_ref is not None:
+
+            # Update limits with the range of the reference data
+            for X_ref_i in X_ref:
+
+                min_x = np.min(X_ref_i)
+                max_x = np.max(X_ref_i)
+
+                if min_x < limits[0]:
+                    limits = (min_x, limits[1])
+
+                if max_x > limits[1]:
+                    limits = (limits[0], max_x)
 
         # Define an offset as 5% of the range
         offset = 0.05*(limits[1]-limits[0])
@@ -300,18 +317,34 @@ def find_limits(X: np.ndarray, X_ref: np.ndarray) -> List:
         limits = (limits[0]-offset, limits[1]+offset)
 
     else:
-        limits = []
-        for i in range(fes_dimension):
 
-            # Find the range of the data
-            min_x = min(np.min(X[:, i]), np.min(X_ref[:, i]))
-            max_x = max(np.max(X[:, i]), np.max(X_ref[:, i]))
+        limits = []
+
+        for i in range(fes_dimension):
+            
+            # Find the range of the main data
+            limit_i = (np.min(X[:, i]), np.max(X[:, i]))
+
+            # If reference data is provided
+            if X_ref is not None:
+
+                # Update limits with the range of the reference data
+                for X_ref_i in X_ref:
+
+                    min_x = np.min(X_ref_i[:, i])
+                    max_x = np.max(X_ref_i[:, i])
+
+                    if min_x < limit_i[0]:
+                        limit_i = (min_x, limit_i[1])
+
+                    if max_x > limit_i[1]:
+                        limit_i = (limit_i[0], max_x)
 
             # Define an offset as 5% of the range
-            offset = 0.05*(max_x-min_x)
+            offset = 0.05*(limit_i[1]-limit_i[0])
 
             # Add the offset to the limits
-            limits.append((min_x-offset, max_x+offset))
+            limits.append((limit_i[0]-offset, limit_i[1]+offset))
 
     return limits
 

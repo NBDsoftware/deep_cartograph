@@ -18,20 +18,21 @@ from deep_cartograph.yaml_schemas.deep_cartograph_schema import DeepCartographSc
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, dimension: int = None, model: str = None, output_folder: str = 'deep_cartograph') -> None:
+def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, use_reference_labels: bool = False, dimension: int = None, model: str = None, output_folder: str = 'deep_cartograph') -> None:
     """
     Function that maps the trajectory onto the collective variables.
 
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see default_config.yml for more information)
-        trajectory:          Path to the trajectory file that will be analyzed.
-        topology:            Path to the topology file of the system.
-        reference_folder:    Path to the folder with reference data.
-        dimension:           Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
-        model:               Type of collective variable model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
-        output_folder:       Path to the output folder
+        configuration:        configuration dictionary (see default_config.yml for more information)
+        trajectory:           Path to the trajectory file that will be analyzed.
+        topology:             Path to the topology file of the system.
+        reference_folder:     Path to the folder with reference data.
+        use_reference_labels: Use labels for reference data (names of the files in the reference folder)
+        dimension:            Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
+        model:                Type of collective variable model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
+        output_folder:        Path to the output folder
     """
 
     # Set logger
@@ -65,6 +66,14 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
             logger.error("Reference folder not found: %s", reference_folder)
             sys.exit(1)
 
+        # List only the files in the reference folder
+        ref_file_paths = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if os.path.isfile(os.path.join(reference_folder, f))]
+
+        # Check if there are files in the reference folder
+        if len(ref_file_paths) == 0:
+            logger.error("Reference folder is empty: %s", reference_folder)
+            sys.exit(1)
+
     # Step 1: Compute features for trajectory
     step1_output_folder = os.path.join(output_folder, 'compute_features_traj')
     traj_colvars_path = compute_features(
@@ -73,13 +82,25 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         topology = topology, 
         output_folder = step1_output_folder)
     
-    # Step 1.2: Compute features for topology
-    step1_output_folder = os.path.join(output_folder, 'compute_features_top')
-    top_colvars_path = compute_features(
-        configuration = configuration['compute_features'], 
-        trajectory = topology, 
-        topology = topology, 
-        output_folder = step1_output_folder)
+    # Step 1.2: Compute features for each reference file
+    ref_colvars_paths = []
+    ref_labels = []
+    for ref_file_path in ref_file_paths:
+
+        # Create unique output folder
+        ref_file_name = Path(ref_file_path).stem
+        step1_output_folder = os.path.join(output_folder, f"compute_features_{ref_file_name}")
+
+        # Compute features for reference file
+        ref_colvars_path = compute_features(
+            configuration = configuration['compute_features'], 
+            trajectory = ref_file_path, 
+            topology = topology, 
+            output_folder = step1_output_folder)
+        
+        # Save path to colvars file and name of reference file
+        ref_colvars_paths.append(ref_colvars_path)
+        ref_labels.append(ref_file_name)
 
     # Step 2: Filter features
     step2_output_folder = os.path.join(output_folder, 'filter_features')
@@ -88,13 +109,17 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
             colvars_path = traj_colvars_path,
             output_folder = step2_output_folder)
 
+    if not use_reference_labels:
+        ref_labels = None
+
     # Step 3: Train colvars
     step3_output_folder = os.path.join(output_folder, 'train_colvars')
     train_colvars(
         configuration = configuration['train_colvars'],
         colvars_path = traj_colvars_path,
         feature_constraints = filtered_features,
-        ref_colvars_path = top_colvars_path,
+        ref_colvars_path = ref_colvars_paths,
+        ref_labels = ref_labels,
         dimension = dimension,
         model = model,
         output_folder = step3_output_folder)
@@ -143,7 +168,6 @@ def set_logger(verbose: bool):
     logger = logging.getLogger("deep_cartograph")
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-    logger.info("===============================================================================================")
 
 ########
 # MAIN #
@@ -157,6 +181,7 @@ if __name__ == "__main__":
     parser.add_argument('-traj', '-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
     parser.add_argument('-top', '-topology', dest='topology', help="Path to topology file.", required=True)
     parser.add_argument('-ref', '-reference', dest='reference_folder', help="Path to folder with reference data. It should contain structures or trajectories.", required=False)
+    parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
     parser.add_argument('-m', '-model', dest='model', type=str, help="Type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL)", required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=True)
@@ -180,6 +205,7 @@ if __name__ == "__main__":
         trajectory = args.trajectory,
         topology = args.topology,
         reference_folder = args.reference_folder,
+        use_reference_labels = args.use_reference_labels,
         dimension = args.dimension, 
         model = args.model, 
         output_folder = output_folder)
