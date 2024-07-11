@@ -38,14 +38,15 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
 
     logger = logging.getLogger("deep_cartograph")
     
+    logger.info("==================")
     logger.info("Filtering features")
     logger.info("==================")
-    logger.info("Finding the features that contains the most information about the system.")
+    logger.info("Finding the features that contains the most information about the transitions or conformational changes.")
     logger.info("The following algorithms are available:")
-    logger.info("Hartigan's dip test filter. Keeps features that are not unimodal.")
-    logger.info("Shannon entropy filter. Keeps features with entropy greater than a threshold.")
-    logger.info("Standard deviation filter. Keeps features with standard deviation greater than a threshold.")
-    logger.info("Final Mutual information clustering (AMINO). Clusters filtered features according to a mutual information based distance and selects one feature per cluster minimizing the distorsion.")
+    logger.info("- Hartigan's dip test filter. Keeps features that are not unimodal.")
+    logger.info("- Shannon entropy filter. Keeps features with entropy greater than a threshold.")
+    logger.info("- Standard deviation filter. Keeps features with standard deviation greater than a threshold.")
+    logger.info("- Final Mutual information clustering (AMINO). Clusters filtered features according to a mutual information based distance and selects one feature per cluster minimizing the distorsion.")
     logger.info("Note that the all features must be in the same units to apply the entropy and standard deviation filters meaningfully.")
 
     # Start timer
@@ -130,7 +131,6 @@ def set_logger(verbose: bool):
     logger = logging.getLogger("deep_cartograph")
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-    logger.info("===============================================================================================")
 
 
 
