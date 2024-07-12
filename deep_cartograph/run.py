@@ -83,24 +83,28 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         output_folder = step1_output_folder)
     
     # Step 1.2: Compute features for each reference file
-    ref_colvars_paths = []
-    ref_labels = []
-    for ref_file_path in ref_file_paths:
+    if reference_folder is not None:
+        ref_colvars_paths = []
+        ref_labels = []
+        for ref_file_path in ref_file_paths:
 
-        # Create unique output folder
-        ref_file_name = Path(ref_file_path).stem
-        step1_output_folder = os.path.join(output_folder, f"compute_features_{ref_file_name}")
+            # Create unique output folder
+            ref_file_name = Path(ref_file_path).stem
+            step1_output_folder = os.path.join(output_folder, f"compute_features_{ref_file_name}")
 
-        # Compute features for reference file
-        ref_colvars_path = compute_features(
-            configuration = configuration['compute_features'], 
-            trajectory = ref_file_path, 
-            topology = topology, 
-            output_folder = step1_output_folder)
-        
-        # Save path to colvars file and name of reference file
-        ref_colvars_paths.append(ref_colvars_path)
-        ref_labels.append(ref_file_name)
+            # Compute features for reference file
+            ref_colvars_path = compute_features(
+                configuration = configuration['compute_features'], 
+                trajectory = ref_file_path, 
+                topology = topology, 
+                output_folder = step1_output_folder)
+            
+            # Save path to colvars file and name of reference file
+            ref_colvars_paths.append(ref_colvars_path)
+            ref_labels.append(ref_file_name)
+    else:
+        ref_colvars_paths = None
+        ref_labels = None
 
     # Step 2: Filter features
     step2_output_folder = os.path.join(output_folder, 'filter_features')
