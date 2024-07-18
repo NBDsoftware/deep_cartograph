@@ -31,7 +31,6 @@ from deep_cartograph.modules.md import md
 from deep_cartograph.modules.common import common
 from deep_cartograph.modules.figures import figures
 from deep_cartograph.modules.statistics import statistics
-from deep_cartograph.yaml_schemas.train_colvars_schema import  CVSchema, FiguresSchema, ClusteringSchema
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -59,10 +58,6 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[
     # Create output directory
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
-
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
 
     # Find cv dimension
     cv_dimension = cv_settings['dimension']
@@ -159,9 +154,6 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
     # Create output directory
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
-
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
 
     # Find the dimension of the CV
     cv_dimension = cv_settings['dimension']
@@ -392,10 +384,6 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
 
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
-
     # Find cv dimension
     cv_dimension = cv_settings['dimension']
 
@@ -483,10 +471,6 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     # Create output directory
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
-
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
 
     # Find the dimension of the CV
     cv_dimension = cv_settings['dimension']
@@ -733,10 +717,6 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         clustering_settings: Dictionary containing the settings for clustering the projected features.
         output_path:         Path to the output folder where the projected trajectory will be saved.   
     """
-
-    # Validate accessed settings
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
-    clustering_settings = ClusteringSchema(**clustering_settings).model_dump()
 
     logger.info('Projecting trajectory...')
 

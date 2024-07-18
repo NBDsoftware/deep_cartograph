@@ -11,7 +11,7 @@ from typing import Dict
 from deep_cartograph.modules.plumed import utils as plumed_utils
 from deep_cartograph.modules.plumed.input_file import input_file as plumed_input
 from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist
-from deep_cartograph.yaml_schemas.compute_features_schema import ComputeFeaturesSchema
+from deep_cartograph.yaml_schemas.compute_features import ComputeFeatures
 
 ########
 # TOOL #
@@ -46,7 +46,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     create_output_folder(output_folder)
 
     # Validate configuration
-    configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
+    configuration = validate_configuration(configuration, ComputeFeatures, output_folder)
 
     # Check if files exist
     if not files_exist(trajectory):

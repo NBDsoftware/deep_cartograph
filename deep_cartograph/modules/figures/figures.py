@@ -10,7 +10,7 @@ from matplotlib.colors import ListedColormap, rgb2hex
 from mlcolvar.utils.fes import compute_fes
 
 # Import local modules
-from deep_cartograph.yaml_schemas.train_colvars_schema import FesFigureSchema 
+from deep_cartograph.yaml_schemas.train_colvars import FesFigure 
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
     """
 
     # Validate the settings
-    settings = FesFigureSchema(**settings).model_dump()
+    settings = FesFigure(**settings).model_dump()
 
     if settings['compute']:
 

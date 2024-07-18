@@ -12,7 +12,7 @@ from mlcolvar.utils.io import  create_dataset_from_files
 # Import local modules
 from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints
 from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
-from deep_cartograph.yaml_schemas.train_colvars_schema import TrainColvarsSchema
+from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
 
 ########
 # TOOL #
@@ -61,7 +61,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     create_output_folder(output_folder)
     
     # Validate configuration
-    configuration = validate_configuration(configuration, TrainColvarsSchema, output_folder)
+    configuration = validate_configuration(configuration, TrainColvars, output_folder)
 
     # Check if files exist
     if not files_exist(colvars_path):
