@@ -120,6 +120,43 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, out
 
     return validated_configuration
 
+def merge_configurations(default_config: Dict, specific_config: Union[Dict, None]) -> Dict:
+    """
+    Merge the default configuration with the specific configuration recursively.
+
+    It preserves all key and value pairs in default_config that are not in specific_config.
+
+    Parameters
+    ----------
+
+    default_config : Dict   
+        Default configuration dictionary
+
+    specific_config : Dict
+        Specific configuration dictionary
+    
+    Returns
+    -------
+
+    merged_config : Dict
+        Merged configuration dictionary
+    """
+    
+    merged_config = default_config.copy()
+
+    if specific_config is None:
+        return merged_config
+    else:
+        for key, value in specific_config.items():
+            if key in merged_config and isinstance(merged_config[key], dict) and isinstance(value, dict):
+                # if both values are dictionaries, merge them recursively
+                merged_config[key] = merge_configurations(merged_config[key], value)
+            else:
+                # otherwise, use the value from the specific configuration
+                merged_config[key] = value
+    
+    return merged_config
+
 # Features utils
 def find_feature_names(colvars_path: str) -> list:
     """
