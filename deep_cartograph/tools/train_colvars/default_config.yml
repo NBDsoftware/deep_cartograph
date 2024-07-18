@@ -1,42 +1,79 @@
-# cv:                           Settings for the Collective Variables calculations
-#   cv_type:                      (str: PCA, AE, TICA, DTICA, ALL) Type of Collective Variable to calculate
+# cvs:                           List of Collective Variables to calculate
+# common:                        Common settings for the Collective Variables
 #   dimension:                    (int) Number of dimensions to calculate
-#   trainings:                    Settings for the training of the Collective Variables (when applicable)
-#     max_tries:                    (int) Maximum number of tries for the training
-#     seed:                         (int) Seed for the PyTorch random number generator
-#     lengths:                      (list) Lengths of the training and validation sets, e.g. [0.8, 0.2]
-#     batch_size:                   (int) Batch size for the training
-#     max_epochs:                   (int) Maximum number of epochs for the training
-#     hidden_layers:                (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
-#     dropout:                      (float) Dropout rate for the training
-#     shuffle:                      (bool) Shuffle the data before training 
-#     patience:                     (int) Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
-#     check_val_every_n_epoch:      (int) Do a validation check every n epochs
-#     min_delta:                    (float) Minimum change in the loss function to consider it an improvement
-#     save_check_every_n_epoch:     (int) Save the model every n epochs
+#   architecture:                 Settings for the architecture of the Collective Variables
+#     hidden_layers:              (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
+#     lag_time:                   (int) Lag time for the Collective Variables
+#     pca_lowrank_q:              (int) Number of components to keep for the low-rank approximation of the PCA
+#   training:                    Settings for the training of the Collective Variables (when applicable)
+#     general:                    General settings for the training
+#       max_tries:                    (int) Maximum number of tries for the training
+#       seed:                         (int) Seed for the PyTorch random number generator
+#       lengths:                      (list) Lengths of the training and validation sets, e.g. [0.8, 0.2]
+#       batch_size:                   (int) Batch size for the training
+#       max_epochs:                   (int) Maximum number of epochs for the training
+#       dropout:                      (float) Dropout rate for the training
+#       shuffle:                      (bool) Shuffle the data before training 
+#       check_val_every_n_epoch:      (int) Do a validation check every n epochs
+#       save_check_every_n_epoch:     (int) Save the model every n epochs
+#     early_stopping:              Settings for the early stopping
+#       patience:                     (int) Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
+#       min_delta:                    (float) Minimum change in the loss function to consider it an improvement
+#     optimizer:                   Settings for the optimizer
+#       name:                         (str) Name of the optimizer
+#       kwargs:                       (dict) Keyword arguments for the optimizer
+#     lr_scheduler:                Settings for the learning rate scheduler
+#       name:                         (str) Name of the learning rate scheduler
+#       kwargs:                       (dict) Keyword arguments for the learning rate scheduler
 #     save_loss:                    (bool) Wether to save the training and validation losses after training 
 #     plot_loss:                    (bool) Wether to plot the loss after training
 
-cv:
-  cv_type: ALL
-  dimension: 2
-  trainings: 
-    max_tries: 10
-    seed: 42
-    lengths: [0.8, 0.2]
-    batch_size: 32
-    max_epochs: 1000
+cvs: ['pca', 'ae', 'tica', 'dtica']
+common:
+  dimension: 1
+  architecture:
     hidden_layers: [15, 15]
-    dropout: 0.1
-    shuffle: True
-    patience: 2
-    check_val_every_n_epoch: 10
-    min_delta: 0.00001
-    save_check_every_n_epoch: 10
     lag_time: 10
     pca_lowrank_q: null
+  training: 
+    general:
+      max_tries: 10
+      seed: 42
+      lengths: [0.8, 0.2]
+      batch_size: 32
+      max_epochs: 1000
+      dropout: 0.1
+      shuffle: False
+      check_val_every_n_epoch: 10
+      save_check_every_n_epoch: 10
+    early_stopping:
+      patience: 2
+      min_delta: 0.00001
+    optimizer:
+      name: Adam
+      kwargs: 
+        lr: 0.01
+        weight_decay: 0.0
+    lr_scheduler:
+      name: ReduceLROnPlateau
+      kwargs:
+        mode: min
+        factor: 0.5
+        patience: 5
+        threshold: 0.05
+        threshold_mode: rel
+        cooldown: 0
+        min_lr: 0.0001
+        eps: 0.000000001
     save_loss: True
     plot_loss: True
+ae:
+  training:
+    general: 
+      shuffle: True
+    optimizer:
+      kwargs: 
+        lr: 0.01
 
 # figures:                          Settings for additional figures
 #   fes:                              Settings for the Free Energy Surface calculation
