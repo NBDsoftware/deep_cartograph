@@ -10,7 +10,7 @@ from typing import Dict, List, Literal, Union
 from mlcolvar.utils.io import  create_dataset_from_files  
 
 # Import local modules
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints, merge_configurations
 from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
 
@@ -128,10 +128,14 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
 
     if 'pca' in configuration['cvs']:
         pca_output_path = os.path.join(output_folder, 'pca')
+
+        # Merge common and pca configurations
+        pca_configuration = merge_configurations(configuration['common'], configuration.get('pca',{}))
+
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
                     ref_labels = ref_labels,
-                    cv_settings = configuration['cv'], 
+                    cv_settings = pca_configuration, 
                     figures_settings = configuration['figures'], 
                     clustering_settings = configuration['clustering'],
                     output_path = pca_output_path)
@@ -142,10 +146,14 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
 
     if 'ae' in configuration['cvs']:
         ae_output_path = os.path.join(output_folder, 'ae')
+
+        # Merge common and ae configurations
+        ae_configuration = merge_configurations(configuration['common'], configuration.get('ae',{}))
+
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
                    ref_labels = ref_labels,
-                   cv_settings = configuration['cv'],
+                   cv_settings = ae_configuration,
                    figures_settings = configuration['figures'],
                    clustering_settings = configuration['clustering'],
                    output_path = ae_output_path)
@@ -156,10 +164,14 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
 
     if 'tica' in configuration['cvs']:
         tica_output_path = os.path.join(output_folder, 'tica')
+
+        # Merge common and tica configurations
+        tica_configuration = merge_configurations(configuration['common'], configuration.get('tica',{}))
+
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
                      ref_labels = ref_labels,
-                     cv_settings = configuration['cv'],
+                     cv_settings = tica_configuration,
                      figures_settings = configuration['figures'],
                      clustering_settings = configuration['clustering'],
                      output_path = tica_output_path)
@@ -170,10 +182,14 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
 
     if 'dtica' in configuration['cvs']:
         deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
+
+        # Merge common and deep tica configurations
+        deep_tica_configuration = merge_configurations(configuration['common'], configuration.get('dtica',{}))
+
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
                           ref_labels = ref_labels,
-                          cv_settings = configuration['cv'],
+                          cv_settings = deep_tica_configuration,
                           figures_settings = configuration['figures'],
                           clustering_settings = configuration['clustering'],
                           output_path = deep_tica_output_path)
