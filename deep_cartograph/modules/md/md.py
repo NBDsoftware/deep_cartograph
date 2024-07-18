@@ -66,7 +66,7 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
         
         < atoms_format value > : example
         
-        atom_name: "@atom_name-atom_resid,@atom_name-atom_resid"
+        name:       "@atom_name-atom_resid,@atom_name-atom_resid"
         
         index:      "atom_index,atom_index"      -----------------> Note that MDAnalysis indexing starts at 0, thus we sum one to the index.
 
@@ -80,7 +80,7 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
         stride2            : stride for the second selection.
         skip_neighbors     : skip distances between atoms in the same residue or neighboring residues.
         skip_bonded_atoms  : skip distances between bonded atoms.
-        atoms_format       : format of the atom labels defining each distance. Options: (index, atom_name)
+        atoms_format       : format of the atom labels defining each distance. Options: (index, name)
 
     Output
     ------
@@ -236,7 +236,7 @@ def get_virtual_dihedral_labels(topology_path: str, selection: str, atoms_format
 
     < atoms_format > : < example >
             
-            atom_name        : "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
+            name             : "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
             
             index            : "atom_index,atom_index,atom_index,atom_index" -----------------> Note that MDAnalysis indexing starts at 0, thus we sum one to the index.
 
@@ -273,10 +273,10 @@ def get_virtual_dihedral_labels(topology_path: str, selection: str, atoms_format
         # Create atom label
         if atoms_format == "index":
             dihedral_label = f"{atoms[i-3].index + 1},{atoms[i-2].index + 1},{atoms[i-1].index + 1},{atoms[i].index + 1}"
-        elif atoms_format == "name_resid":
+        elif atoms_format == "name":
             dihedral_label = f"@{atoms[i-3].name}-{atoms[i-3].resid},@{atoms[i-2].name}-{atoms[i-2].resid},@{atoms[i-1].name}-{atoms[i-1].resid},@{atoms[i].name}-{atoms[i].resid}"
         else:
-            raise ValueError(f"atom_label_format {atoms_format} not supported. Options for virtual dihedrals: (atom_name, index)")
+            raise ValueError(f"atoms_format {atoms_format} not supported. Options for virtual dihedrals: (name, index)")
 
         # Add atomic definition of the dihedral
         atomic_definitions.append(dihedral_label)
@@ -340,7 +340,7 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
         
         < atoms_format > : < example >
         
-        atom_name        : "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
+        name             : "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
         
         index            : "atom_index,atom_index,atom_index,atom_index" -----------------> Note that MDAnalysis indexing starts at 0, thus we sum one to the index.
 
@@ -352,7 +352,7 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
 
         topology_path  : path to the topology file.
         selection      : selection of atoms.
-        atoms_format   : format of the atom labels defining each dihedral. Options: (atom_name or index)
+        atoms_format   : format of the atom labels defining each dihedral. Options: (name or index)
 
     Output
     ------
@@ -458,11 +458,11 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
                             if atoms_format == "index":
                                 dihedral_label = f"{i_neighbor},{i},{j},{j_neighbor}"
                                 equivalent_dihedral_label = f"{j_neighbor},{j},{i},{i_neighbor}"
-                            elif atoms_format == "atom_name":
+                            elif atoms_format == "name":
                                 dihedral_label = f"@{heavy_atoms[i_neighbor].name}-{heavy_atoms[i_neighbor].resid},@{heavy_atoms[i].name}-{heavy_atoms[i].resid},@{heavy_atoms[j].name}-{heavy_atoms[j].resid},@{heavy_atoms[j_neighbor].name}-{heavy_atoms[j_neighbor].resid}"
                                 equivalent_dihedral_label = f"@{heavy_atoms[j_neighbor].name}-{heavy_atoms[j_neighbor].resid},@{heavy_atoms[j].name}-{heavy_atoms[j].resid},@{heavy_atoms[i].name}-{heavy_atoms[i].resid},@{heavy_atoms[i_neighbor].name}-{heavy_atoms[i_neighbor].resid}"
                             else:
-                                raise ValueError(f"atom_label_format {atoms_format} not supported. Options for real dihedrals: (atom_name, index)")
+                                raise ValueError(f"atoms_format {atoms_format} not supported. Options for real dihedrals: (name, index)")
                             
                             # Check dihedral is not repeated
                             if dihedral_label not in atomic_definitions and equivalent_dihedral_label not in atomic_definitions:

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Union
 
-class FilterSettingsSchema(BaseModel):
+class FilterSettings(BaseModel):
     
     # Compute Hartigan's dip test
     compute_diptest: bool = True
@@ -16,7 +16,7 @@ class FilterSettingsSchema(BaseModel):
     # Standard deviation quantile to use for filtering (0 to skip filter)
     std_quantile: float = 0
 
-class AminoSettingsSchema(BaseModel):
+class AminoSettings(BaseModel):
     
     # Run amino analysis
     run_amino: bool = False
@@ -31,7 +31,7 @@ class AminoSettingsSchema(BaseModel):
     # Bandwidth to use for the kernel density estimation
     bandwidth: float = 0.1
 
-class SamplingSettingsSchema(BaseModel):
+class SamplingSettings(BaseModel):
     
     # Number of samples to use for each feature
     num_samples:  Union[int, None] = None
@@ -40,11 +40,11 @@ class SamplingSettingsSchema(BaseModel):
     # Relaxation time of the system in number of samples
     relaxation_time: int = 1
 
-class FilterFeaturesSchema(BaseModel):
+class FilterFeatures(BaseModel):
         
         # Definition of filter settings
-        filter_settings: FilterSettingsSchema = FilterSettingsSchema()
+        filter_settings: FilterSettings = FilterSettings()
         # Definition of amino settings
-        amino_settings: AminoSettingsSchema = AminoSettingsSchema()
+        amino_settings: AminoSettings = AminoSettings()
         # Definition of sampling settings
-        sampling_settings: SamplingSettingsSchema = SamplingSettingsSchema()
+        sampling_settings: SamplingSettings = SamplingSettings()

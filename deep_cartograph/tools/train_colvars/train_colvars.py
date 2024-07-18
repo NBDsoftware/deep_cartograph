@@ -6,13 +6,13 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Literal, Union
 from mlcolvar.utils.io import  create_dataset_from_files  
 
 # Import local modules
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints, merge_configurations
 from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
-from deep_cartograph.yaml_schemas.train_colvars_schema import TrainColvarsSchema
+from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
 
 ########
 # TOOL #
@@ -20,16 +20,17 @@ from deep_cartograph.yaml_schemas.train_colvars_schema import TrainColvarsSchema
 
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
                   ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
-                  dimension: int = None, model: str = None, output_folder: str = 'train_colvars'):
+                  dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
+                  output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
     The following CVs can be computed: 
 
-        - PCA (Principal Component Analysis) 
-        - AE (Autoencoder)
-        - TICA (Time Independent Component Analysis)
-        - DTICA (Deep Time Independent Component Analysis)
+        - pca (Principal Component Analysis) 
+        - ae (Autoencoder)
+        - tica (Time Independent Component Analysis)
+        - dtica (Deep Time Independent Component Analysis)
 
     It also plots an estimate of the Free Energy Surface (FES) along the CVs from the trajectory data.
 
@@ -42,7 +43,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         ref_colvars_path:    list of paths to colvars files with reference data. If None, no reference data is used
         ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
         dimension:           dimension of the CVs to train or compute, if None, the value in the configuration file is used
-        model:               type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
+        cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
 
@@ -61,7 +62,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     create_output_folder(output_folder)
     
     # Validate configuration
-    configuration = validate_configuration(configuration, TrainColvarsSchema, output_folder)
+    configuration = validate_configuration(configuration, TrainColvars, output_folder)
 
     # Check if files exist
     if not files_exist(colvars_path):
@@ -72,16 +73,16 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
             logger.error(f"Reference colvars file {ref_colvars_path} does not exist. Exiting...")
             sys.exit(1)
 
-        
+
     ###############
     # PREPARATION #
     ###############
 
     # Enforce CLI arguments if any
-    if model:
-        configuration['cv']['model'] = model
+    if cvs:
+        configuration['cvs']= cvs
     if dimension:
-        configuration['cv']['dimension'] = dimension
+        configuration['common']['dimension'] = dimension
 
     logger.info('Creating datasets from colvars...')
 
@@ -125,12 +126,16 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: PCA #
     ###########
 
-    if configuration['cv']['model'] in ('PCA', 'ALL'):
+    if 'pca' in configuration['cvs']:
         pca_output_path = os.path.join(output_folder, 'pca')
+
+        # Merge common and pca configurations
+        pca_configuration = merge_configurations(configuration['common'], configuration.get('pca',{}))
+
         compute_pca(features_dataframe = features_dataframe, 
                     ref_features_dataframe = ref_features_dataframe,
                     ref_labels = ref_labels,
-                    cv_settings = configuration['cv'], 
+                    cv_settings = pca_configuration, 
                     figures_settings = configuration['figures'], 
                     clustering_settings = configuration['clustering'],
                     output_path = pca_output_path)
@@ -139,12 +144,16 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: Autoencoder #
     ###################
 
-    if configuration['cv']['model'] in ('AE', 'ALL'):
+    if 'ae' in configuration['cvs']:
         ae_output_path = os.path.join(output_folder, 'ae')
+
+        # Merge common and ae configurations
+        ae_configuration = merge_configurations(configuration['common'], configuration.get('ae',{}))
+
         compute_ae(features_dataset = features_dataset, 
                    ref_features_dataset = ref_features_dataset,
                    ref_labels = ref_labels,
-                   cv_settings = configuration['cv'],
+                   cv_settings = ae_configuration,
                    figures_settings = configuration['figures'],
                    clustering_settings = configuration['clustering'],
                    output_path = ae_output_path)
@@ -153,12 +162,16 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: TICA #
     ############
 
-    if configuration['cv']['model'] in ('TICA', 'ALL'):
+    if 'tica' in configuration['cvs']:
         tica_output_path = os.path.join(output_folder, 'tica')
+
+        # Merge common and tica configurations
+        tica_configuration = merge_configurations(configuration['common'], configuration.get('tica',{}))
+
         compute_tica(features_dataframe = features_dataframe,
                      ref_features_dataframe = ref_features_dataframe,
                      ref_labels = ref_labels,
-                     cv_settings = configuration['cv'],
+                     cv_settings = tica_configuration,
                      figures_settings = configuration['figures'],
                      clustering_settings = configuration['clustering'],
                      output_path = tica_output_path)
@@ -167,12 +180,16 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: Deep-TICA #
     #################
 
-    if configuration['cv']['model'] in ('DTICA', 'ALL'):
+    if 'dtica' in configuration['cvs']:
         deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
+
+        # Merge common and deep tica configurations
+        deep_tica_configuration = merge_configurations(configuration['common'], configuration.get('dtica',{}))
+
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
                           ref_labels = ref_labels,
-                          cv_settings = configuration['cv'],
+                          cv_settings = deep_tica_configuration,
                           figures_settings = configuration['figures'],
                           clustering_settings = configuration['clustering'],
                           output_path = deep_tica_output_path)
@@ -237,7 +254,7 @@ if __name__ == "__main__":
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', type=int, help='Dimension of the CV to train or compute', required=False)
-    parser.add_argument('-m', '-model', dest='model', type=str, help='Type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL)', required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, dtica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help='Path to the output folder', required=True)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Set the logging level to DEBUG', default=False)
 
@@ -271,7 +288,7 @@ if __name__ == "__main__":
         ref_colvars_path = ref_colvars_path,
         ref_labels = ref_labels,
         dimension = args.dimension, 
-        model = args.model, 
+        cvs = args.cvs, 
         output_folder = output_folder)
 
     # Move log file to output folder

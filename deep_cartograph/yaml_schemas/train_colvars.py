@@ -1,8 +1,32 @@
 from pydantic import BaseModel
-from typing import List, Union
+from typing import List, Union, Literal, Optional
 
-class TrainingsSchema(BaseModel):
-  
+# Schemas with default values, to validate CommonCollectiveVariable
+class LRScheduler(BaseModel):
+
+    # Name of the optimizer (see torch.optim.lr_scheduler Algorithms)
+    name: str = "ReduceLROnPlateau"
+    # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim.lr_scheduler Algorithms)
+    kwargs: dict = {'mode': 'min', 'factor': 0.5, 'patience': 5, 'threshold': 0.05, 'threshold_mode': 'rel', 'cooldown': 0, 'min_lr': 0.0001, 'eps': 1e-08}
+
+class Optimizer(BaseModel):
+
+    # Name of the optimizer (see torch.optim Algorithms)
+    name: str = "Adam"
+    # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim Algorithms)
+    kwargs: dict = {'lr': 0.01, 'weight_decay': 0.0}
+
+class Architecture(BaseModel):
+
+    # Fully connected hidden layers between the input and latent space, e.g. [15, 15]
+    hidden_layers: List[int] = [15, 15]
+    # Lag time for TICA and DeepTICA
+    lag_time: int = 10
+    # Slightly overestimated rank of the main trajectory data to compute the PCA more efficiently (see torch.pca_lowrank) - if None, q = num_features (n)
+    pca_lowrank_q: Union[int, None] = None
+
+class GeneralSettings(BaseModel):
+
     # Maximum number of tries for the training
     max_tries: int = 10
     # Seed for the PyTorch random number generator
@@ -13,39 +37,47 @@ class TrainingsSchema(BaseModel):
     batch_size: int = 32
     # Maximum number of epochs for the training
     max_epochs: int = 1000
-    # Fully connected hidden layers between the input and latent space, e.g. [15, 15]
-    hidden_layers: List[int] = [15, 15]
     # Dropout rate for the training
     dropout: float = 0.1
     # Shuffle the data before training
-    shuffle: bool = True
-    # Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
-    patience: int = 2
+    shuffle: bool = False
     # Do a validation check every n epochs
     check_val_every_n_epoch: int = 10
-    # Minimum change in the loss function to consider it an improvement
-    min_delta: float = 0.00001
     # Save the model every n epochs
     save_check_every_n_epoch: int = 10
-    # Lag time for TICA and DeepTICA
-    lag_time: int = 10
-    # Slightly overestimated rank of the main trajectory data to compute the PCA more efficiently (see torch.pca_lowrank) - if None, q = num_features (n)
-    pca_lowrank_q: Union[int, None] = None
+
+class EarlyStopping(BaseModel):
+
+    # Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
+    patience: int = 2
+    # Minimum change in the loss function to consider it an improvement
+    min_delta: float = 0.00001
+
+class Trainings(BaseModel):
+  
+    # General settings
+    general: GeneralSettings = GeneralSettings()
+    # Early stopping settings
+    early_stopping: EarlyStopping = EarlyStopping()
+    # Optimizer settings
+    optimizer: Optimizer = Optimizer()
+    # Learning rate scheduler settings
+    lr_scheduler: LRScheduler = LRScheduler()
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training
     plot_loss: bool = True
 
-class CVSchema(BaseModel):
+class CommonCollectiveVariable(BaseModel):
 
-    # Type of Collective Variable to calculate (PCA, AE, TICA, DTICA, ALL)
-    model: str = "ALL"
-    # Number of dimensions to calculate
-    dimension: int = 2
-    # Settings for the training of the Collective Variables (when applicable)
-    training: TrainingsSchema = TrainingsSchema()
+    # Number of dimensions
+    dimension: int = 1
+    # Architecture settings (used when applicable)
+    architecture: Architecture = Architecture()
+    # Training settings (used when applicable)
+    training: Trainings = Trainings()
 
-class FesFigureSchema(BaseModel):
+class FesFigure(BaseModel):
       
     # Calculate the Free Energy Surface
     compute: bool = True
@@ -62,7 +94,7 @@ class FesFigureSchema(BaseModel):
     # Maximum value for the Free Energy Surface (above which the value is set to NaN)
     max_fes: float = 30
 
-class ProjectedTrajectorySchema(BaseModel):
+class ProjectedTrajectory(BaseModel):
     
     # Plot the Projected Trajectory
     plot: bool = True
@@ -77,7 +109,7 @@ class ProjectedTrajectorySchema(BaseModel):
     # Size of the markers in the Projected Trajectory
     marker_size: int = 5
 
-class ProjectedClusteredTrajectorySchema(BaseModel):
+class ProjectedClusteredTrajectory(BaseModel):
     
     # Plot the Projected Clustered Trajectory
     plot: bool = True
@@ -94,25 +126,25 @@ class ProjectedClusteredTrajectorySchema(BaseModel):
     # Size of the markers in the Projected Clustered Trajectory
     marker_size: int = 5
 
-class FiguresSchema(BaseModel):
+class Figures(BaseModel):
       
     # Settings for the Free Energy Surface calculation
-    fes: FesFigureSchema = FesFigureSchema()
+    fes: FesFigure = FesFigure()
     # Settings for the Projected Trajectory
-    projected_trajectory: ProjectedTrajectorySchema = ProjectedTrajectorySchema()
+    projected_trajectory: ProjectedTrajectory = ProjectedTrajectory()
     # Settings for the Projected Clustered Trajectory
-    projected_clustered_trajectory: ProjectedClusteredTrajectorySchema = ProjectedClusteredTrajectorySchema()
+    projected_clustered_trajectory: ProjectedClusteredTrajectory = ProjectedClusteredTrajectory()
 
-class ClusteringSchema(BaseModel):
+class Clustering(BaseModel):
 
-#   Note that:
-#     min_cluster_size should be set to the smallest size grouping that you wish to consider a cluster.
-#     the larger the value of min_samples you provide, the more conservative the clustering (more points will be declared as noise) and clusters will be restricted to progressively more dense areas
+    # Note that:
+    #  min_cluster_size should be set to the smallest size grouping that you wish to consider a cluster.
+    #  the larger the value of min_samples you provide, the more conservative the clustering (more points will be declared as noise) and clusters will be restricted to progressively more dense areas
 
     # Whether to run the clustering or not
     run: bool = True
-    # Clustering algorithm to use (kmeans, hdbscan, hierarchical)
-    algorithm: str = "hdbscan"
+    # Clustering algorithm to use
+    algorithm: Literal["kmeans", "hdbscan", "hierarchical"] = "hierarchical"
     # Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)
     opt_num_clusters: bool = True
     # Range of number of clusters to search for the optimal number of clusters (only for hierarchical and kmeans)
@@ -130,12 +162,19 @@ class ClusteringSchema(BaseModel):
     # A distance threshold. Clusters below this value will be merged (only for hdbscan)
     cluster_selection_epsilon: float = 0
 
-  
-class TrainColvarsSchema(BaseModel):
+class TrainColvars(BaseModel):
     
-    # Settings for the Collective Variables calculations
-    cv: CVSchema = CVSchema()
+    # List of Collective Variables to train/calculate
+    cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = ['pca', 'ae', 'tica', 'dtica']
+    # Common settings for the Collective Variables
+    common: CommonCollectiveVariable = CommonCollectiveVariable()
     # Settings for additional figures
-    figures: FiguresSchema = FiguresSchema()
+    figures: Figures = Figures()
     # Settings for the clustering
-    clustering: ClusteringSchema = ClusteringSchema()
+    clustering: Clustering = Clustering()
+
+    # Add Configuration class for this model
+    class Config:
+        # Allow extra fields
+        extra = "allow"
+

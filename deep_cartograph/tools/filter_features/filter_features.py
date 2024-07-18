@@ -11,7 +11,7 @@ from typing import Dict
 from deep_cartograph.modules.amino import amino
 from deep_cartograph.tools.filter_features.filtering import Filter
 from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, save_list, find_feature_names, files_exist
-from deep_cartograph.yaml_schemas.filter_features_schema import FilterFeaturesSchema
+from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
 
 ########
 # TOOL #
@@ -56,7 +56,7 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
     create_output_folder(output_folder)
 
     # Validate configuration
-    configuration = validate_configuration(configuration, FilterFeaturesSchema, output_folder)
+    configuration = validate_configuration(configuration, FilterFeatures, output_folder)
 
     # Check the colvars file exists
     if not files_exist(colvars_path):

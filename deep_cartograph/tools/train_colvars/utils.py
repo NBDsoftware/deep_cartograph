@@ -31,7 +31,6 @@ from deep_cartograph.modules.md import md
 from deep_cartograph.modules.common import common
 from deep_cartograph.modules.figures import figures
 from deep_cartograph.modules.statistics import statistics
-from deep_cartograph.yaml_schemas.train_colvars_schema import  CVSchema, FiguresSchema, ClusteringSchema
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -60,10 +59,6 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
 
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
-
     # Find cv dimension
     cv_dimension = cv_settings['dimension']
 
@@ -74,7 +69,7 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[
     num_samples = features_dataframe.shape[0]
 
     # Find the user requested q for torch.pca_lowrank
-    pca_lowrank_q = cv_settings['training']['pca_lowrank_q']
+    pca_lowrank_q = cv_settings['architecture']['pca_lowrank_q']
     if pca_lowrank_q is None:
         pca_lowrank_q = num_features
 
@@ -160,26 +155,34 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
 
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-
     # Find the dimension of the CV
     cv_dimension = cv_settings['dimension']
 
-    # Training settings - already validated
+    # Training settings
     training_settings = cv_settings['training']
-    training_validation_lengths = training_settings['lengths']
-    batch_size = training_settings['batch_size']
-    shuffle = training_settings['shuffle']
-    seed = training_settings['seed']
-    patience = training_settings['patience']
-    min_delta = training_settings['min_delta']
-    max_epochs = training_settings['max_epochs']
-    dropout = training_settings['dropout']
-    hidden_layers = training_settings['hidden_layers']
-    check_val_every_n_epoch = training_settings['check_val_every_n_epoch']
-    save_check_every_n_epoch = training_settings['save_check_every_n_epoch']
-    max_tries = training_settings['max_tries']
+
+    general_settings = training_settings['general']
+    early_stopping_settings = training_settings['early_stopping']
+    optimizer_settings = training_settings['optimizer']
+    lr_scheduler_settings = training_settings['lr_scheduler']
+
+    max_tries = general_settings['max_tries']
+    seed = general_settings['seed']
+    training_validation_lengths = general_settings['lengths']
+    batch_size = general_settings['batch_size']
+    shuffle = general_settings['shuffle']
+    max_epochs = general_settings['max_epochs']
+    dropout = general_settings['dropout']
+    check_val_every_n_epoch = general_settings['check_val_every_n_epoch']
+    save_check_every_n_epoch = general_settings['save_check_every_n_epoch']
+
+    patience = early_stopping_settings['patience']
+    min_delta = early_stopping_settings['min_delta']
+
+    # Architecture settings
+    architecture_settings = cv_settings['architecture']
+    
+    hidden_layers = architecture_settings['hidden_layers']
 
     # Get the number of features and samples
     num_features = features_dataset["data"].shape[1]
@@ -203,8 +206,24 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
 
     # Autoencoder settings
     encoder_layers = [num_features] + hidden_layers + [cv_dimension]
-    nn_args = {'activation': 'shifted_softplus', 'dropout': dropout} 
-    options=  {'encoder': nn_args, 'decoder': nn_args}
+    nn_options = {'activation': 'shifted_softplus', 'dropout': dropout} 
+
+    # Optimizer
+    opt_name = optimizer_settings['name']
+    optimizer_options = optimizer_settings['kwargs']
+
+    # Learning rate scheduler
+    lr_scheduler_options = {'scheduler': getattr(torch.optim.lr_scheduler, lr_scheduler_settings['name'])}
+    lr_scheduler_options.update(lr_scheduler_settings['kwargs'])
+
+    # All options
+    options = {'encoder': nn_options, 
+               'decoder': nn_options, 
+               "optimizer": optimizer_options, 
+               "lr_scheduler": lr_scheduler_options, 
+               "lr_interval": "epoch", 
+               "lr_monitor": "valid_loss", 
+               "lr_frequency": 1}
 
     converged = False
     tries = 0
@@ -215,8 +234,17 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
         
             tries += 1
 
+            # Debug
+            logger.debug(f'Initializing Autoencoder object...')
+
             # Define model
-            model = AutoEncoderCV(encoder_layers, options=options)  
+            model = AutoEncoderCV(encoder_layers, options=options) 
+
+            # Set optimizer name
+            model._optimizer_name = opt_name
+
+            # Debug
+            logger.debug(f'Initializing metrics and callbacks...')
 
             # Define MetricsCallback to store the loss
             metrics = MetricsCallback()
@@ -224,8 +252,8 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
             # Define EarlyStopping callback to stop training if the loss does not decrease
             early_stopping = EarlyStopping(
                 monitor="valid_loss", 
-                min_delta=min_delta,                 # Minimum change in the monitored quantity to qualify as an improvement
-                patience=patience,                   # Number of checks with no improvement after which training will be stopped (see check_val_every_n_epoch) 
+                min_delta=min_delta,
+                patience=patience,
                 mode="min")
 
             # Define ModelCheckpoint callback to save the best model
@@ -239,25 +267,29 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
                 mode="min",                                # Best model is the one with the minimum monitored quantity
                 every_n_epochs=save_check_every_n_epoch)   # Number of epochs between checkpoints
 
+            # Debug
+            logger.debug(f'Initializing Trainer...')
+
             # Define trainer
-            trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
+            trainer = lightning.Trainer(                           # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
                 callbacks=[metrics, early_stopping, checkpoint], 
                 max_epochs=max_epochs,
                 logger=False, 
                 enable_checkpointing = True,
                 enable_progress_bar = False,
-                check_val_every_n_epoch=check_val_every_n_epoch)   # Check validation every n epochs  
+                check_val_every_n_epoch=check_val_every_n_epoch)
+
+            # Debug
+            logger.debug(f'Training...')
 
             trainer.fit(model, datamodule)
 
             # Get validation and training loss
             validation_loss = metrics.metrics['valid_loss']
-            training_loss = metrics.metrics['train_loss_epoch']
 
             # Check the evolution of the loss
-            if model_has_converged(validation_loss, training_loss, patience, check_val_every_n_epoch):
-                converged = True
-            else:
+            converged = model_has_converged(validation_loss, patience, check_val_every_n_epoch)
+            if not converged:
                 logger.warning('Autoencoder has not found a good solution. Re-starting training...')
         
         except Exception as e:
@@ -288,11 +320,9 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
                             keys=['train_loss', 'valid_loss'], 
                             linestyles=['-','-'], colors=['fessa1','fessa5'], 
                             yscale='log')
-        
-        plt.tight_layout()
 
         # Save figure
-        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
+        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
 
     except Exception as e:
@@ -368,16 +398,11 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
 
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
-
     # Find cv dimension
     cv_dimension = cv_settings['dimension']
 
-    # Training settings - already validated
-    training_settings = cv_settings['training']
-    lag_time = training_settings['lag_time']
+    # Lag time for TICA
+    lag_time = cv_settings['architecture']['lag_time']
 
     logger.info('Calculating TICA CV...')
 
@@ -460,28 +485,35 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     output_path = common.get_unique_path(output_path)
     common.create_output_folder(output_path)
 
-    # Validate accessed settings
-    cv_settings = CVSchema(**cv_settings).model_dump()
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
-
     # Find the dimension of the CV
     cv_dimension = cv_settings['dimension']
 
     # Training settings
     training_settings = cv_settings['training']
-    lag_time = training_settings['lag_time']
-    training_validation_lengths = training_settings['lengths']
-    batch_size = training_settings['batch_size']
-    shuffle = training_settings['shuffle']
-    seed = training_settings['seed']
-    patience = training_settings['patience']
-    min_delta = training_settings['min_delta']
-    max_epochs = training_settings['max_epochs']
-    dropout = training_settings['dropout']
-    hidden_layers = training_settings['hidden_layers']
-    check_val_every_n_epoch = training_settings['check_val_every_n_epoch']
-    save_check_every_n_epoch = training_settings['save_check_every_n_epoch']
-    max_tries = training_settings['max_tries']
+
+    general_settings = training_settings['general']
+    early_stopping_settings = training_settings['early_stopping']
+    optimizer_settings = training_settings['optimizer']
+    lr_scheduler_settings = training_settings['lr_scheduler']
+
+    max_tries = general_settings['max_tries']
+    seed = general_settings['seed']
+    training_validation_lengths = general_settings['lengths']
+    batch_size = general_settings['batch_size']
+    shuffle = general_settings['shuffle']
+    max_epochs = general_settings['max_epochs']
+    dropout = general_settings['dropout']
+    check_val_every_n_epoch = general_settings['check_val_every_n_epoch']
+    save_check_every_n_epoch = general_settings['save_check_every_n_epoch']
+
+    patience = early_stopping_settings['patience']
+    min_delta = early_stopping_settings['min_delta']
+
+    # Architecture settings
+    architecture_settings = cv_settings['architecture']
+
+    hidden_layers = architecture_settings['hidden_layers']
+    lag_time = architecture_settings['lag_time']
 
     # Build time-lagged dataset (composed by pairs of configs at time t, t+lag)
     timelagged_dataset = create_timelagged_dataset(features_dataframe, lag_time=lag_time)
@@ -508,8 +540,23 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
     # DeepTICA settings
     nn_layers = [num_features] + hidden_layers + [cv_dimension]
-    nn_args = {'activation': 'shifted_softplus', 'dropout': dropout} 
-    options= {'nn': nn_args}
+    nn_options = {'activation': 'shifted_softplus', 'dropout': dropout} 
+
+    # Optimizer
+    opt_name = optimizer_settings['name']
+    optimizer_options = optimizer_settings['kwargs']
+
+    # Learning rate scheduler
+    lr_scheduler_options = {'scheduler': getattr(torch.optim.lr_scheduler, lr_scheduler_settings['name'])}
+    lr_scheduler_options.update(lr_scheduler_settings['kwargs'])
+
+    # All options
+    options = {"nn": nn_options,
+               "optimizer": optimizer_options,
+               "lr_scheduler": lr_scheduler_options,
+               "lr_interval": "epoch",
+               "lr_monitor": "valid_loss",
+               "lr_frequency": 1}
 
     converged = False
     tries = 0
@@ -519,9 +566,18 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         try: 
 
             tries += 1
+
+            # Debug
+            logger.debug(f'Initializing DeepTICA object...')
             
             # Define model
             dtica_model = DeepTICA(nn_layers, options=options)
+
+            # Set optimizer name
+            dtica_model._optimizer_name = opt_name
+
+            # Debug
+            logger.debug(f'Initializing metrics and callbacks...')
 
             # Define MetricsCallback to store the loss
             metrics = MetricsCallback()
@@ -531,7 +587,6 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 monitor="valid_loss", 
                 min_delta=min_delta, 
                 patience=patience, 
-                verbose = True, 
                 mode = "min")
 
             # Define ModelCheckpoint callback to save the best model
@@ -545,6 +600,9 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 mode="min",                                # Best model is the one with the minimum monitored quantity
                 every_n_epochs=save_check_every_n_epoch)   # Number of epochs between checkpoints
             
+            # Debug
+            logger.debug(f'Initializing Trainer...')
+
             # Define trainer
             trainer = lightning.Trainer(            # accelerator="cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto"
                 callbacks=[metrics, early_stopping, checkpoint],
@@ -554,65 +612,67 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 enable_progress_bar = False, 
                 check_val_every_n_epoch=check_val_every_n_epoch)
 
+            # Debug
+            logger.debug(f'Training...')
+
             trainer.fit(dtica_model, timelagged_datamodule)
 
             # Get validation and training loss
             validation_loss = metrics.metrics['valid_loss']
-            training_loss = metrics.metrics['train_loss']
-            
-            # Evaluate DeepTICA
-            dtica_model.eval()
 
             # Check the evolution of the loss
-            if model_has_converged(validation_loss, training_loss, patience, check_val_every_n_epoch):
-                converged = True
-            else:
+            converged = model_has_converged(validation_loss, patience, check_val_every_n_epoch)
+            if not converged:
                 logger.warning('Deep TICA has not found a good solution. Re-starting training...')
 
         except Exception as e:
             logger.error(f'Deep TICA training failed. Error message: {e}')
             logger.info('Retrying Deep TICA training...')
 
+    try:
+        # Load best model from checkpoint
+        best_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
+        best_model_score = checkpoint.best_model_score
+
+        # Log score
+        logger.info(f'Best model score: {best_model_score}')
+
+        # Save the loss if requested
+        if training_settings.get('save_loss', False):
+            np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss']))
+            np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
+            np.save(os.path.join(output_path, 'epochs.npy'), np.array(metrics.metrics['epoch']))
+            np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
+
+        # Put model in evaluation mode
+        best_model.eval()
+
+        # Plot eigenvalues
+        ax = plot_metrics(metrics.metrics,
+                            labels=[f'Eigenvalue {i+1}' for i in range(cv_dimension)], 
+                            keys=[f'valid_eigval_{i+1}' for i in range(cv_dimension)],
+                            yscale=None)
+
+        # Save figure
+        ax.figure.savefig(os.path.join(output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
+        ax.figure.clf()
+
+        # Plot loss: squared sum of the eigenvalues
+        ax = plot_metrics(metrics.metrics,
+                            labels=['Training', 'Validation'], 
+                            keys=['train_loss', 'valid_loss'], 
+                            linestyles=['--','-'], colors=['fessa1','fessa5'], 
+                            yscale=None)
+
+        # Save figure
+        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+        ax.figure.clf()
+        
+    except Exception as e:
+        logger.error(f'Failed to save/plot the loss. Error message: {e}')
+
     if converged:
         try:
-            # Load best model from checkpoint
-            best_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
-            best_model_score = checkpoint.best_model_score
-
-            # Log score
-            logger.info(f'Best model score: {best_model_score}')
-
-            # Save the loss if requested
-            if training_settings.get('save_loss', False):
-                np.save(os.path.join(output_path, 'train_loss.npy'), np.array(metrics.metrics['train_loss']))
-                np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
-                np.save(os.path.join(output_path, 'epochs.npy'), np.array(metrics.metrics['epoch']))
-                np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
-
-            # Put model in evaluation mode
-            best_model.eval()
-
-            # Plot eigenvalues
-            ax = plot_metrics(metrics.metrics,
-                                labels=[f'Eigenvalue {i+1}' for i in range(cv_dimension)], 
-                                keys=[f'valid_eigval_{i+1}' for i in range(cv_dimension)],
-                                yscale='log')
-
-            # Save figure
-            ax.figure.savefig(os.path.join(output_path, f'eigenvalues.png'), dpi=300)
-            ax.figure.clf()
-
-            # Plot loss: squared sum of the eigenvalues
-            ax = plot_metrics(metrics.metrics,
-                                labels=['Training', 'Validation'], 
-                                keys=['train_loss', 'valid_loss'], 
-                                linestyles=['--','-'], colors=['fessa1','fessa5'], 
-                                yscale='log')
-            
-            # Save figure
-            ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
-            ax.figure.clf()
-
             # Data projected onto original latent space of the best model
             with torch.no_grad():
                 projected_features = best_model(torch.Tensor(timelagged_dataset[:]["data"]))
@@ -636,7 +696,11 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 projected_ref_features = None
 
             # Save model
-            best_model.to_torchscript(os.path.join(output_path,'model.ptc'), method='trace')
+            best_model.to_torchscript(os.path.join(output_path,'weights.ptc'), method='trace')
+
+            # Delete checkpoint file
+            if os.path.exists(checkpoint.best_model_path):
+                os.remove(checkpoint.best_model_path)
 
             # Create CV labels
             cv_labels = [f'DeepTIC {i+1}' for i in range(cv_dimension)]
@@ -653,15 +717,17 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
 
         except Exception as e:
-            logger.error(f'DeepTICA could not be computed. Error message: {e}')
-            logger.info('Skipping DeepTICA...')
+            logger.error(f'Failed to project the trajectory. Error message: {e}')
+    else:
+        logger.warning('Deep TICA training did not find a good solution after maximum tries.')
 
-def model_has_converged(validation_loss: List, training_loss: list, patience: int, check_val_every_n_epoch: int, val_train_ratio: float = 2.0):
+def model_has_converged(validation_loss: List, patience: int, check_val_every_n_epoch: int):
     """
     Check if there is any problem with the training of the model.
 
-    - Check if the validation loss has decreased in the last 'patience' x 'check_val_every_n_epoch' epochs.
-    - Check 
+    - Check if the validation loss has decreased by the end of the training.
+    - Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs.
+
     Inputs
     ------
 
@@ -670,27 +736,16 @@ def model_has_converged(validation_loss: List, training_loss: list, patience: in
         patience:                Number of checks with no improvement after which training will be stopped.
         check_val_every_n_epoch: Number of epochs between checks.
         min_delta:               Minimum change in the validation loss to qualify as an improvement.
-        val_train_ratio:         Threshold ratio between the validation and training loss at the end of the training.
     """
 
     # Check if the loss function at the end of the training has decreased wrt the initial value
     if validation_loss[-1] > validation_loss[0]:
-        logger.warning('Validation loss has increased at the end of the training.')
+        logger.warning('Validation loss has increased by the end of the training.')
         return False
 
     # Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs
     if len(validation_loss) < patience*check_val_every_n_epoch:
         logger.warning('The trainer did not run for enough epochs.')
-        return False
-
-    # Check if the validation loss has decreased overall in the last 'patience' x 'check_val_every_n_epoch' epochs
-    if not validation_loss[-1] < validation_loss[-patience*check_val_every_n_epoch]:
-        logger.warning(f'Validation loss has not decreased in the last patience x check_val_every_n_epoch = {patience*check_val_every_n_epoch} epochs.')
-        return False
-    
-    # Check if the training and validation loss are similar at the end
-    if validation_loss[-1] > val_train_ratio*training_loss[-1]:
-        logger.warning(f'The validation loss is {val_train_ratio} times larger than the training loss at the end of the training.')
         return False
 
     return True
@@ -710,24 +765,20 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         output_path:         Path to the output folder where the projected trajectory will be saved.   
     """
 
-    # Validate accessed settings
-    figures_settings = FiguresSchema(**figures_settings).model_dump()
-    clustering_settings = ClusteringSchema(**clustering_settings).model_dump()
-
     logger.info('Projecting trajectory...')
 
     # Create a pandas DataFrame from the data and the labels
     projected_traj_df = pd.DataFrame(projected_features, columns=cv_labels)
     
+    # Add a column with the order of the data points
+    projected_traj_df['order'] = np.arange(projected_traj_df.shape[0])
+
     if clustering_settings['run']:
 
         figure_settings = figures_settings['projected_clustered_trajectory']
     
         # Cluster the projected features
         cluster_labels, centroids = statistics.optimize_clustering(projected_features, clustering_settings)
-
-        # Add a column with the order of the data points
-        projected_traj_df['order'] = np.arange(projected_traj_df.shape[0])
 
         # Add cluster labels to the projected trajectory DataFrame
         projected_traj_df['cluster'] = cluster_labels

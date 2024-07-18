@@ -1,7 +1,7 @@
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Literal
 
-class DistanceGroupSchema(BaseModel):
+class DistanceGroup(BaseModel):
 
     # Selection of atoms to be included in the first selection of this group (MDAnalysis selection syntax)
     first_selection: str = "not name H*"
@@ -15,37 +15,37 @@ class DistanceGroupSchema(BaseModel):
     skip_neigh_residues: bool = False
     # If True, skip distances between atoms that are bonded
     skip_bonded_atoms: bool = True
-    # Format of the ATOMS field in the distance plumed command. Options: (atom_name or index)
-    atoms_format: str = "atom_name"
+    # Format of the ATOMS field in the distance plumed command
+    atoms_format: Literal["name", "index"] = "name"
 
-class DihedralGroupSchema(BaseModel):
+class DihedralGroup(BaseModel):
     
     # Selection of atoms to be included in this group (MDAnalysis selection syntax)
     selection: str = "not name H*"
     # If True, encode the dihedral angle into the sin and cos of the angle (to obtain smooth features as 0 and 360 degrees correspond to the same angle)
     periodic_encoding: bool = True
-    # Mode to search for the dihedrals. Options: (virtual, protein_backbone, real)
-    search_mode: str = "real"
-    # Format of the ATOMS field in the torsions plumed command. Options: (atom_name or index)
-    atoms_format: str = "atom_name"
+    # Mode to search for the dihedrals.
+    search_mode: Literal["virtual", "protein_backbone", "real"] = "real"
+    # Format of the ATOMS field in the torsions plumed command.
+    atoms_format: Literal["name", "index"] = "name"
 
-class DistanceToCenterGroupSchema(BaseModel):
+class DistanceToCenterGroup(BaseModel):
 
     # Selection of atoms to compute the distance to the geometric center to (MDAnalysis selection syntax)
     selection: str = "not name H*"
     # Selection of atoms to be included in geometric center calculation (MDAnalysis selection syntax)
     center_selection: str = "not name H*"
 
-class FeaturesSchema(BaseModel):
+class Features(BaseModel):
     
     # Groups of distance features. Dictionary with the group name as key and the group schema as value
-    distance_groups: Dict[str, DistanceGroupSchema] = {}
+    distance_groups: Dict[str, DistanceGroup] = {}
     # Groups of dihedral features. Dictionary with the group name as key and the group schema as value
-    dihedral_groups: Dict[str, DihedralGroupSchema] = {}
+    dihedral_groups: Dict[str, DihedralGroup] = {}
     # Groups of distances to a geometric center. Dictionary with the group name as key and the group schema as value
-    distance_to_center_groups: Dict[str, DistanceToCenterGroupSchema] = {}
+    distance_to_center_groups: Dict[str, DistanceToCenterGroup] = {}
 
-class PlumedSettingsSchema(BaseModel):
+class PlumedSettings(BaseModel):
 
     # Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
     traj_stride: int = 1
@@ -56,9 +56,9 @@ class PlumedSettingsSchema(BaseModel):
     # Selection of atoms that define the molecules that should be whole to compute the descriptors (MDAnalysis selection syntax)
     whole_molecule_selection: str = "all"
     # Definition of features to be included in the PLUMED input file
-    features: FeaturesSchema = FeaturesSchema()
+    features: Features = Features()
 
-class PlumedEnvironmentSchema(BaseModel):
+class PlumedEnvironment(BaseModel):
 
     # Path to the PLUMED binary
     bin_path: str = "plumed"
@@ -67,9 +67,9 @@ class PlumedEnvironmentSchema(BaseModel):
     # List of commands to run before running the plumed command
     env_commands: List[str] = []
 
-class ComputeFeaturesSchema(BaseModel):
+class ComputeFeatures(BaseModel):
     
     # Plumed settings
-    plumed_settings: PlumedSettingsSchema = PlumedSettingsSchema()
+    plumed_settings: PlumedSettings = PlumedSettings()
     # Plumed environment
-    plumed_environment: PlumedEnvironmentSchema = PlumedEnvironmentSchema()
+    plumed_environment: PlumedEnvironment = PlumedEnvironment()

@@ -13,8 +13,9 @@ setup(name='deep_cartograph',
         'seaborn',
         'matplotlib',
         'scikit-learn>=1.3',
-        'mlcolvar',
         'KDEpy',
         'diptest',
         'plumed'
     ])
+
+# 'mlcolvar'
