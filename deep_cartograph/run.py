@@ -5,20 +5,23 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Literal
 
 # Local imports
 from deep_cartograph.tools.compute_features import compute_features
 from deep_cartograph.tools.filter_features import filter_features
 from deep_cartograph.tools.train_colvars import train_colvars
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist
-from deep_cartograph.yaml_schemas.deep_cartograph_schema import DeepCartographSchema
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration
+from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 
 ########
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, use_reference_labels: bool = False, dimension: int = None, model: str = None, output_folder: str = 'deep_cartograph') -> None:
+def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, 
+                    use_reference_labels: bool = False, dimension: int = None, 
+                    cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
+                    output_folder: str = 'deep_cartograph') -> None:
     """
     Function that maps the trajectory onto the collective variables.
 
@@ -31,7 +34,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         reference_folder:     Path to the folder with reference data.
         use_reference_labels: Use labels for reference data (names of the files in the reference folder)
         dimension:            Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
-        model:                Type of collective variable model to train or compute (PCA, AE, TICA, DTICA, ALL), if None, the value in the configuration file is used
+        cvs:                  List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
         output_folder:        Path to the output folder
     """
 
@@ -125,7 +128,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         ref_colvars_path = ref_colvars_paths,
         ref_labels = ref_labels,
         dimension = dimension,
-        model = model,
+        cvs = cvs,
         output_folder = step3_output_folder)
             
     # End timer
@@ -187,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument('-ref', '-reference', dest='reference_folder', help="Path to folder with reference data. It should contain structures or trajectories.", required=False)
     parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
-    parser.add_argument('-m', '-model', dest='model', type=str, help="Type of CV model to train or compute (PCA, AE, TICA, DTICA, ALL)", required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, dtica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=True)
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
@@ -211,7 +214,7 @@ if __name__ == "__main__":
         reference_folder = args.reference_folder,
         use_reference_labels = args.use_reference_labels,
         dimension = args.dimension, 
-        model = args.model, 
+        cvs = args.cvs, 
         output_folder = output_folder)
 
     # Move log file to output folder
