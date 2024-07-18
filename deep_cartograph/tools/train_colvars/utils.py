@@ -304,11 +304,9 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
                             keys=['train_loss', 'valid_loss'], 
                             linestyles=['-','-'], colors=['fessa1','fessa5'], 
                             yscale='log')
-        
-        plt.tight_layout()
 
         # Save figure
-        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
+        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
 
     except Exception as e:
@@ -606,21 +604,26 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                                 keys=[f'valid_eigval_{i+1}' for i in range(cv_dimension)],
                                 yscale='log')
 
-            # Save figure
-            ax.figure.savefig(os.path.join(output_path, f'eigenvalues.png'), dpi=300)
-            ax.figure.clf()
+        # Save figure
+        ax.figure.savefig(os.path.join(output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
+        ax.figure.clf()
 
-            # Plot loss: squared sum of the eigenvalues
-            ax = plot_metrics(metrics.metrics,
-                                labels=['Training', 'Validation'], 
-                                keys=['train_loss', 'valid_loss'], 
-                                linestyles=['--','-'], colors=['fessa1','fessa5'], 
-                                yscale='log')
-            
-            # Save figure
-            ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300)
-            ax.figure.clf()
+        # Plot loss: squared sum of the eigenvalues
+        ax = plot_metrics(metrics.metrics,
+                            labels=['Training', 'Validation'], 
+                            keys=['train_loss', 'valid_loss'], 
+                            linestyles=['--','-'], colors=['fessa1','fessa5'], 
+                            yscale=None)
 
+        # Save figure
+        ax.figure.savefig(os.path.join(output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+        ax.figure.clf()
+        
+    except Exception as e:
+        logger.error(f'Failed to save/plot the loss. Error message: {e}')
+
+    if converged:
+        try:
             # Data projected onto original latent space of the best model
             with torch.no_grad():
                 projected_features = best_model(torch.Tensor(timelagged_dataset[:]["data"]))
