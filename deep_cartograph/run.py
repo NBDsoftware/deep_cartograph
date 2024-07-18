@@ -44,15 +44,9 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
     # Start timer
     start_time = time.time()
 
-    # If cv dimension and type are given, update the configuration accordingly
-    if dimension is not None:
-        configuration['train_colvars']['cv']['dimension'] = dimension
-    if model is not None:
-        configuration['train_colvars']['cv']['model'] = model
-
     # Validate configuration
-    configuration = validate_configuration(configuration, DeepCartographSchema, output_folder)
-
+    configuration = validate_configuration(configuration, DeepCartograph, output_folder)
+    
     # Check if trajectory file exists
     if not os.path.isfile(trajectory):
         logger.error("Trajectory file not found: %s", trajectory)
