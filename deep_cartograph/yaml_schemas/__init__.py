@@ -1,4 +1,4 @@
-# Export Tool and Main Schemas
-from .compute_features_schema import ComputeFeaturesSchema
-from .filter_features_schema import FilterFeaturesSchema
-from .train_colvars_schema import TrainColvarsSchema
+# Export Tool and Main schemas
+from .compute_features import ComputeFeatures
+from .filter_features import FilterFeatures
+from .train_colvars import TrainColvars
