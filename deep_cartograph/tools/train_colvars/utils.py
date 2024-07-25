@@ -646,10 +646,20 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     try:
         # Load best model from checkpoint
         best_model = DeepTICA.load_from_checkpoint(checkpoint.best_model_path)
+        
+        # Find the score of the best model
         best_model_score = checkpoint.best_model_score
-
-        # Log score
         logger.info(f'Best model score: {best_model_score}')
+
+        # Find the epoch where the best model was found
+        best_index = metrics.metrics['valid_loss'].index(best_model_score)
+        best_epoch = metrics.metrics['epoch'][best_index]
+        logger.info(f'Took {best_epoch} epochs')
+
+        # Find eigenvalues of the best model
+        best_eigvals = [metrics.metrics[f'valid_eigval_{i+1}'][best_index] for i in range(cv_dimension)]
+        for i in range(cv_dimension):
+            logger.info(f'Eigenvalue {i+1}: {best_eigvals[i]}')
 
         # Save the loss if requested
         if training_settings.get('save_loss', False):
@@ -657,6 +667,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             np.save(os.path.join(output_path, 'valid_loss.npy'), np.array(metrics.metrics['valid_loss']))
             np.save(os.path.join(output_path, 'epochs.npy'), np.array(metrics.metrics['epoch']))
             np.savetxt(os.path.join(output_path, 'model_score.txt'), np.array([best_model_score]))
+            np.savetxt(os.path.join(output_path, 'eigenvalues.txt'), np.array(best_eigvals))
 
         # Put model in evaluation mode
         best_model.eval()
