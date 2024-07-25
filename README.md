@@ -1,13 +1,13 @@
 # Deep Cartograph
 
-This package can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages a custom version of [mlcolvars](https://github.com/NBDsoftware/mlcolvar) to compute or train the different collective variables.
+This package can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages a custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar) to compute or train the different collective variables. See the original publication of the mlcolvar library [here](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
 
-Starting from a trajectory and topology files, the package will:
+Starting from a trajectory and topology files, deep cartograph can be used to:
 
 1. Compute a set of features to encode the trajectory in a lower dimensional space invariant to rotations and translations.
-2. Filter the features to keep only the most relevant ones.
+2. Filter and cluster the features to keep only the most relevant ones. Based on the standard deviation, the entropy, the Hartigan's dip test for unimodality and the mutual information between features.
 3. Compute and train different collective variables (CVs) using the filtered features.
-4. Cluster the trajectory using the collective variables.
+4. Project the trajectory onto the CV and cluster it using hierarchical, kmeans or hdbscan algorithms.
 
 ### Project structure
 
@@ -18,18 +18,28 @@ Starting from a trajectory and topology files, the package will:
 
 ## Installation
 
-Using conda, create the environment:
+Using conda, create the deep cartograph environment from the `environment.yml` file.
 
 ```
+git clone https://github.com/NBDsoftware/deep_cartograph.git
+cd deep_cartograph
 conda env create -f environment.yml
 ```
 
-Then install the custom version of [mlcolvars](https://github.com/NBDsoftware/mlcolvar) in the same environment.
+Activate the environment and install the custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar).
 
 ```
+cd ../
 conda activate deep_cartograph
 git clone https://github.com/NBDsoftware/mlcolvar.git
 cd mlcolvar
+pip install .
+```
+
+Finally install the deep cartograph package itself.
+
+```
+cd deep_cartograph
 pip install .
 ```
 
