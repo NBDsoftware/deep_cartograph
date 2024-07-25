@@ -5,10 +5,10 @@ compute_features:
     input_name: torsions
     whole_molecule_selection: all
     features:
-      dihedral_groups:         
-        tor:             
-          selection: "all"          
-          periodic_encoding: True   
+      dihedral_groups:
+        tor:
+          selection: "all"
+          periodic_encoding: True
           search_mode: virtual
           atoms_format: name
   plumed_environment:                                                               
@@ -37,11 +37,11 @@ filter_features:
     relaxation_time: 1                                   
 
 train_colvars:
-  cvs: ['dtica'] # 'pca', 'ae', 'tica',
+  cvs: ['pca', 'ae', 'tica', 'dtica']
   common:
     dimension: 2
     architecture:
-      hidden_layers: [15, 15]
+      hidden_layers: [10, 10]
       lag_time: 30
       pca_lowrank_q: null
     training: 
@@ -49,15 +49,15 @@ train_colvars:
         max_tries: 10
         seed: 42
         lengths: [0.8, 0.2]
-        batch_size: 128
+        batch_size: 256
         max_epochs: 1000
         dropout: 0.1
         shuffle: False
-        random_split: True
+        random_split: False
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 10
+        patience: 20
         min_delta: 1.0e-05
       optimizer:
         name: Adam
@@ -77,16 +77,13 @@ train_colvars:
           eps: 1.0e-09
       save_loss: True
       plot_loss: True
-  dtica:
-    arquitecture:
-      hidden_layers: [20, 20]
+  ae:           
+    architecture:
+      hidden_layers: [15, 15]     
     training:
-      general:
-        shuffle: False
-        random_split: True
-      optimizer:  
-        kwargs:
-          lr: 1.0e-4
+      optimizer:
+        kwargs: 
+          lr: 0.01
   figures:
     fes:
       compute: True  
@@ -102,7 +99,7 @@ train_colvars:
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 5
+      marker_size: 12
     projected_clustered_trajectory:
       plot: True
       num_bins: 100
@@ -110,12 +107,12 @@ train_colvars:
       alpha: 0.8
       cmap: turbo
       use_legend: False
-      marker_size: 5
+      marker_size: 12
   clustering:                        
-    run: False                        
-    algorithm: hdbscan               
+    run: True                        
+    algorithm: hierarchical               
     opt_num_clusters: True          
-    search_interval: [3, 8]          
+    search_interval: [5, 15]          
     num_clusters: 3                  
     linkage: complete                
     n_init: 20                       
