@@ -44,6 +44,9 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
     # Start timer
     start_time = time.time()
 
+    # Create output folder if it does not exist
+    create_output_folder(output_folder)
+
     # Validate configuration
     configuration = validate_configuration(configuration, DeepCartograph, output_folder)
     
