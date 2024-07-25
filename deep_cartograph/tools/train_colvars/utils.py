@@ -175,6 +175,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
     training_validation_lengths = general_settings['lengths']
     batch_size = general_settings['batch_size']
     shuffle = general_settings['shuffle']
+    random_split = general_settings['random_split']
     max_epochs = general_settings['max_epochs']
     dropout = general_settings['dropout']
     check_val_every_n_epoch = general_settings['check_val_every_n_epoch']
@@ -200,6 +201,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
         
     # Build datamodule, split the dataset into training and validation
     datamodule = DictModule(
+        random_split = random_split,
         dataset = features_dataset,
         lengths = training_validation_lengths,
         batch_size = batch_size,
@@ -509,6 +511,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     training_validation_lengths = general_settings['lengths']
     batch_size = general_settings['batch_size']
     shuffle = general_settings['shuffle']
+    random_split = general_settings['random_split']
     max_epochs = general_settings['max_epochs']
     dropout = general_settings['dropout']
     check_val_every_n_epoch = general_settings['check_val_every_n_epoch']
@@ -536,8 +539,10 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         batch_size = common.closest_power_of_two(num_samples*training_validation_lengths[0])
         logger.warning(f'The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: {batch_size}')
 
+    # NOTE: Deep TICA needs random_split and shuffle to be False
     # Build time-lagged datamodule, split the dataset into training and validation
     timelagged_datamodule = DictModule(
+        random_split = random_split,
         dataset = timelagged_dataset,
         lengths = training_validation_lengths,
         batch_size = batch_size,
