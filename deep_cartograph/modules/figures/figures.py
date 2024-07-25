@@ -30,6 +30,10 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
         output_path:  path where the outputs are saved
     """
 
+    # Find settings
+    font_size = 12
+    tick_size = 10
+
     # Validate the settings
     settings = FesFigure(**settings).model_dump()
 
@@ -103,7 +107,7 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
                     ax.hist(X_ref_i, bins=num_bins, color='red', alpha=0.5, density=True, label=label)
 
         # Set axis labels
-        ax.set_xlabel(cv_labels[0])
+        ax.set_xlabel(cv_labels[0], fontsize = font_size)
 
         if len(cv_labels) > 1:
             ax.set_ylabel(cv_labels[1]) 
@@ -119,7 +123,10 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
             ax.set_xlim(bounds[0])
             ax.set_ylim(bounds[1])
 
-        ax.legend()
+        ax.legend(fontsize = font_size)
+
+        # Set tick size
+        ax.tick_params(axis='both', which='major', labelsize=tick_size)
 
         # Save figure
         fig.savefig(os.path.join(output_path, 'fes.png'), dpi=300)
