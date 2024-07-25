@@ -21,7 +21,7 @@ class Architecture(BaseModel):
     # Fully connected hidden layers between the input and latent space
     hidden_layers: List[int] = [10, 10]
     # Lag time for TICA and DeepTICA
-    lag_time: int = 30
+    lag_time: int = 1
     # Slightly overestimated rank of the main trajectory data to compute the PCA more efficiently (see torch.pca_lowrank) - if None, q = num_features (n)
     pca_lowrank_q: Union[int, None] = None
 
