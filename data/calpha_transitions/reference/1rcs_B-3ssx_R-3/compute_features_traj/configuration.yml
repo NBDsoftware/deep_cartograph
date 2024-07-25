@@ -1,0 +1,20 @@
+plumed_environment:
+  bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed
+  env_commands:
+  - ml PLUMED/2.9.0-intel-2021b
+  - unset I_MPI_PMI_LIBRARY
+  kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so
+plumed_settings:
+  features:
+    dihedral_groups:
+      tor:
+        atoms_format: name
+        periodic_encoding: true
+        search_mode: virtual
+        selection: all
+    distance_groups: {}
+    distance_to_center_groups: {}
+  input_name: torsions
+  moltype: protein
+  traj_stride: 1
+  whole_molecule_selection: all

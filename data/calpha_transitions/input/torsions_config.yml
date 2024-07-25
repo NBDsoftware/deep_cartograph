@@ -1,0 +1,121 @@
+compute_features:
+  plumed_settings:
+    traj_stride: 1
+    moltype: protein
+    input_name: torsions
+    whole_molecule_selection: all
+    features:
+      dihedral_groups:
+        tor:
+          selection: "all"
+          periodic_encoding: True
+          search_mode: virtual
+          atoms_format: name
+  plumed_environment:                                                               
+    bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed                 
+    kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so  
+    env_commands: 
+      - "ml PLUMED/2.9.0-intel-2021b"                                                 
+      - "unset I_MPI_PMI_LIBRARY" 
+
+filter_features:       
+  filter_settings:
+    compute_diptest: True              
+    compute_entropy: False             
+    compute_std: False                
+    diptest_significance_level: 0.05   
+    entropy_quantile: 0                
+    std_quantile: 0                  
+  amino_settings:
+    run_amino: False           
+    max_independent_ops: 20     
+    min_independent_ops: 5     
+    ops_batch_size: null       
+    num_bins: 100               
+    bandwidth: 0.1           
+  sampling_settings:
+    relaxation_time: 1                                   
+
+train_colvars:
+  cvs: ['pca', 'ae', 'tica', 'dtica']
+  common:
+    dimension: 2
+    architecture:
+      hidden_layers: [10, 10]
+      lag_time: 30
+      pca_lowrank_q: null
+    training: 
+      general:
+        max_tries: 10
+        seed: 42
+        lengths: [0.8, 0.2]
+        batch_size: 256
+        max_epochs: 1000
+        dropout: 0.1
+        shuffle: False
+        random_split: False
+        check_val_every_n_epoch: 1
+        save_check_every_n_epoch: 1
+      early_stopping:
+        patience: 20
+        min_delta: 1.0e-05
+      optimizer:
+        name: Adam
+        kwargs: 
+          lr: 1.0e-03
+          weight_decay: 0.0
+      lr_scheduler:
+        name: ReduceLROnPlateau
+        kwargs:
+          mode: min
+          factor: 0.5
+          patience: 5
+          threshold: 0.05
+          threshold_mode: rel
+          cooldown: 0
+          min_lr: 1.0e-05
+          eps: 1.0e-09
+      save_loss: True
+      plot_loss: True
+  ae:           
+    architecture:
+      hidden_layers: [15, 15]     
+    training:
+      optimizer:
+        kwargs: 
+          lr: 0.01
+  figures:
+    fes:
+      compute: True  
+      save: True  
+      temperature: 300
+      bandwidth: 0.025
+      num_bins: 200
+      num_blocks: 1
+      max_fes: 18
+    projected_trajectory:
+      plot: True
+      num_bins: 100
+      bandwidth: 0.25
+      alpha: 0.6
+      cmap: turbo
+      marker_size: 12
+    projected_clustered_trajectory:
+      plot: True
+      num_bins: 100
+      bandwidth: 0.25
+      alpha: 0.8
+      cmap: turbo
+      use_legend: False
+      marker_size: 12
+  clustering:                        
+    run: True                        
+    algorithm: hierarchical               
+    opt_num_clusters: True          
+    search_interval: [5, 15]          
+    num_clusters: 3                  
+    linkage: complete                
+    n_init: 20                       
+    min_cluster_size: 50             
+    min_samples: 5                  
+    cluster_selection_epsilon: 0

@@ -1,0 +1,135 @@
+compute_features:
+  plumed_environment:
+    bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed
+    env_commands:
+    - ml PLUMED/2.9.0-intel-2021b
+    - unset I_MPI_PMI_LIBRARY
+    kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so
+  plumed_settings:
+    features:
+      dihedral_groups:
+        tor:
+          atoms_format: name
+          periodic_encoding: true
+          search_mode: virtual
+          selection: all
+      distance_groups: {}
+      distance_to_center_groups: {}
+    input_name: torsions
+    moltype: protein
+    traj_stride: 1
+    whole_molecule_selection: all
+filter_features:
+  amino_settings:
+    bandwidth: 0.1
+    features_batch_size: null
+    max_independent_features: 20
+    min_independent_features: 5
+    num_bins: 100
+    run_amino: false
+  filter_settings:
+    compute_diptest: true
+    compute_entropy: false
+    compute_std: false
+    diptest_significance_level: 0.05
+    entropy_quantile: 0.0
+    std_quantile: 0.0
+  sampling_settings:
+    num_samples: null
+    relaxation_time: 1
+    total_num_samples: null
+train_colvars:
+  ae:
+    architecture:
+      hidden_layers:
+      - 15
+      - 15
+    training:
+      optimizer:
+        kwargs:
+          lr: 0.01
+  clustering:
+    algorithm: hdbscan
+    cluster_selection_epsilon: 0.0
+    linkage: complete
+    min_cluster_size: 50
+    min_samples: 5
+    n_init: 20
+    num_clusters: 3
+    opt_num_clusters: true
+    run: true
+    search_interval:
+    - 3
+    - 8
+  common:
+    architecture:
+      hidden_layers:
+      - 10
+      - 10
+      lag_time: 30
+      pca_lowrank_q: null
+    dimension: 2
+    training:
+      early_stopping:
+        min_delta: 1.0e-05
+        patience: 20
+      general:
+        batch_size: 256
+        check_val_every_n_epoch: 1
+        dropout: 0.1
+        lengths:
+        - 0.8
+        - 0.2
+        max_epochs: 1000
+        max_tries: 10
+        random_split: false
+        save_check_every_n_epoch: 1
+        seed: 42
+        shuffle: false
+      lr_scheduler:
+        kwargs:
+          cooldown: 0
+          eps: 1.0e-09
+          factor: 0.5
+          min_lr: 1.0e-05
+          mode: min
+          patience: 5
+          threshold: 0.05
+          threshold_mode: rel
+        name: ReduceLROnPlateau
+      optimizer:
+        kwargs:
+          lr: 0.001
+          weight_decay: 0.0
+        name: Adam
+      plot_loss: true
+      save_loss: true
+  cvs:
+  - pca
+  - ae
+  - tica
+  - dtica
+  figures:
+    fes:
+      bandwidth: 0.025
+      compute: true
+      max_fes: 18.0
+      num_bins: 200
+      num_blocks: 1
+      save: true
+      temperature: 300
+    projected_clustered_trajectory:
+      alpha: 0.8
+      bandwidth: 0.25
+      cmap: turbo
+      marker_size: 5
+      num_bins: 100
+      plot: true
+      use_legend: false
+    projected_trajectory:
+      alpha: 0.6
+      bandwidth: 0.25
+      cmap: turbo
+      marker_size: 5
+      num_bins: 100
+      plot: true
