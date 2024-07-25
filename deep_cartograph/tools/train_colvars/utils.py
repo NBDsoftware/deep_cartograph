@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[List[pd.DataFrame], None], ref_labels: Union[List[str], None], 
-                cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+                cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, trajectory: str, topology: str, output_path: str):
     """
     Compute Principal Component Analysis (PCA) on the input features. 
     Compute the Free Energy Surface (FES) along the PCA CVs.
@@ -52,6 +52,8 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
+        trajectory:             Path to the trajectory file that will be clustered corresponding to the features dataframe.
+        topology:               Path to the topology file of the trajectory.
         output_path:            Path to the output folder where the PCA results will be saved.
     """
 
@@ -128,12 +130,12 @@ def compute_pca(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[
 
     try:
         # Project the trajectory onto the CV space
-        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
+        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, trajectory, topology, output_path)
     except Exception as e:
         logger.error(f'Failed to project the trajectory. Error message: {e}')
 
 def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[DictDataset], None], ref_labels: Union[List[str], None], 
-               cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+               cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, trajectory: str, topology: str, output_path: str):
     """
     Train Autoencoder on the input features. The CV is the latent space of the Autoencoder. 
     Compute the Free Energy Surface (FES) along the Autoencoder CVs.
@@ -148,6 +150,8 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
         cv_settings:           Dictionary containing the settings for the CVs.
         figures_settings:      Dictionary containing the settings for the figures.
         clustering_settings:   Dictionary containing the settings for clustering the projected features.
+        trajectory:             Path to the trajectory file that will be clustered corresponding to the features dataframe.
+        topology:               Path to the topology file of the trajectory.
         output_path:           Path to the output folder where the Autoencoder results will be saved.
     """
 
@@ -370,7 +374,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
                 settings=figures_settings['fes'], 
                 output_path=output_path)
 
-            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
+            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, trajectory, topology, output_path)
 
         except Exception as e:
             logger.error(f'Failed to project the trajectory. Error message: {e}')
@@ -378,7 +382,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
         logger.warning('Autoencoder training did not find a good solution after maximum tries.')
 
 def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[List[pd.DataFrame], None], ref_labels: Union[List[str], None], 
-                 cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+                 cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, trajectory: str, topology: str, output_path: str):
     """
     Compute Time-lagged Independent Component Analysis (TICA) on the input features. Also, compute the Free Energy Surface (FES) along the TICA CVs.
 
@@ -391,6 +395,8 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for figures.
         clustering_settings:    Dictionary containing the settings for clustering the projected features.
+        trajectory:             Path to the trajectory file that will be clustered corresponding to the features dataframe.
+        topology:               Path to the topology file of the trajectory.
         output_path:            Path to the output folder where the PCA results will be saved.
     """
 
@@ -460,12 +466,12 @@ def compute_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union
     
     try:
         # Project the trajectory onto the CV space
-        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
+        project_traj(projected_features, cv_labels, figures_settings, clustering_settings, trajectory, topology, output_path)
     except Exception as e:
         logger.error(f'Failed to project the trajectory. Error message: {e}')
 
 def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: Union[List[pd.DataFrame], None], ref_labels: Union[List[str], None], 
-                      cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, output_path: str):
+                      cv_settings: Dict, figures_settings: Dict, clustering_settings: Dict, trajectory: str, topology: str, output_path: str):
     """
     Train DeepTICA on the input features. The CV is the latent space of the DeepTICA model. Also, compute the Free Energy Surface (FES) along the DeepTICA CVs.
 
@@ -478,6 +484,8 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         cv_settings:            Dictionary containing the settings for the CVs.
         figures_settings:       Dictionary containing the settings for the figures.
         training_settings:      Dictionary containing the settings for training the DeepTICA model.
+        trajectory:             Path to the trajectory file that will be clustered corresponding to the features dataframe.
+        topology:               Path to the topology file of the trajectory.
         output_path:            Path to the output folder where the DeepTICA results will be saved.
     """
 
@@ -714,7 +722,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                 settings=figures_settings['fes'], 
                 output_path=output_path) 
 
-            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, output_path)
+            project_traj(projected_features, cv_labels, figures_settings, clustering_settings, trajectory, topology, output_path)
 
         except Exception as e:
             logger.error(f'Failed to project the trajectory. Error message: {e}')
@@ -751,7 +759,7 @@ def model_has_converged(validation_loss: List, patience: int, check_val_every_n_
     return True
 
 def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_settings: Dict, clustering_settings: Dict, 
-                 output_path: str):
+                 trajectory: str, topology: str, output_path: str):
     """
     Plot the trajectory projection onto the CV space and cluster the projected features if requested.
 
@@ -762,6 +770,8 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         cv_labels:           List of labels for the CVs.
         figures_settings:    Dictionary containing the settings for figures.
         clustering_settings: Dictionary containing the settings for clustering the projected features.
+        trajectory:          Path to the trajectory file that will be clustered corresponding to the features dataframe.
+        topology:            Path to the topology file of the trajectory.
         output_path:         Path to the output folder where the projected trajectory will be saved.   
     """
 
@@ -805,11 +815,9 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         figures.plot_clusters_size(cluster_labels, cmap, output_path)
 
         # Extract frames from the trajectory
-        trajectory_path = clustering_settings.get('traj_path')
-        topology_path = clustering_settings.get('top_path')
-        if None not in [trajectory_path, topology_path]:
-            md.extract_clusters_from_traj(trajectory_path = trajectory_path, 
-                                        topology_path = topology_path, 
+        if None not in [trajectory, topology] and len(centroids) > 0:
+            md.extract_clusters_from_traj(trajectory_path = trajectory, 
+                                        topology_path = topology, 
                                         traj_df = projected_traj_df, 
                                         centroids_df = centroids_df,
                                         cluster_label = 'cluster',
