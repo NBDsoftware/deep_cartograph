@@ -40,6 +40,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
         colvars_path         (str): path to the colvars file
         output_folder        (str): path to the output folder
     '''
+
     ############### 
     # Create file #
     ###############
@@ -48,11 +49,23 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     plumed_file_path = os.path.join(output_folder, f"{configuration['input_name']}.dat") 
     plumed_file = open(plumed_file_path, "w")
 
+    ###################
+    # Create topology #
+    ###################
+
     # Define new topology path
     plumed_topology_path = os.path.join(output_folder, "plumed_topology.pdb")
 
     # Create new topology file
     md.create_pdb(topology_path, plumed_topology_path)
+
+    ##################
+    # Absolute paths #
+    ##################
+
+    # Find absolute paths
+    plumed_topology_path = os.path.abspath(plumed_topology_path)
+    colvars_path = os.path.abspath(colvars_path)
 
     ################
     # WRITE HEADER #
