@@ -4,7 +4,7 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from typing import List, Dict
+from typing import Dict, Tuple
 from sklearn.cluster import HDBSCAN
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -47,8 +47,8 @@ def optimize_clustering(features: np.ndarray, settings: Dict):
     Outputs
     -------
 
-        cluster_labels: array with the cluster assignment for each sample
-        centroids:      array with the centroids of the clusters
+        cluster_labels:  array with the cluster assignment for each sample
+        centroids:       array with the centroids of the clusters
     """
 
     if settings['algorithm'] == 'kmeans' or settings['algorithm'] == 'hierarchical':
@@ -103,7 +103,10 @@ def optimize_clustering(features: np.ndarray, settings: Dict):
 
         # Cluster data
         cluster_labels, centroids = cluster_data(features, settings)
-    
+     
+    if len(centroids) == 0:
+        logger.warning("No clusters found using the provided settings. Try different settings or a different algorithm")
+
     return cluster_labels, centroids
 
 def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.ndarray = None) -> np.ndarray:
@@ -187,7 +190,7 @@ def kmeans_clustering(feature_matrix: np.ndarray, num_clusters: int, n_init: int
 
     return clusters, centroids
 
-def hdbscan_clustering(feature_matrix, min_cluster_size, min_samples, cluster_selection_epsilon):
+def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, min_samples: int, cluster_selection_epsilon: float) -> Tuple[np.array, np.array]:
     """
     Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
     using the HDBSCAN algorithm.
@@ -255,7 +258,7 @@ def hdbscan_clustering(feature_matrix, min_cluster_size, min_samples, cluster_se
     # Eliminate -1 (noise) from unique clusters
     unique_clusters = unique_clusters[unique_clusters != -1]
 
-    # pip install hdbscan version
+    # "pip install hdbscan" version
     # Initialize centroids
     # centroids = np.zeros((len(unique_clusters), feature_matrix.shape[1]))
     # Iterate over unique clusters
@@ -267,7 +270,7 @@ def hdbscan_clustering(feature_matrix, min_cluster_size, min_samples, cluster_se
 
     return clusters, centroids
 
-def hierarchical_clustering(feature_matrix, cutoff, num_clusters = None, linkage = 'complete'):
+def hierarchical_clustering(feature_matrix: np.array, cutoff: float, num_clusters: int = None, linkage: str = 'complete') -> Tuple[np.array, np.array]:
     """
     Cluster points based on the euclidian distance between features. The clustering is performed
     using the hierarchical clustering algorithm.

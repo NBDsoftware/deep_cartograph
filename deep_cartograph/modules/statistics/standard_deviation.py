@@ -1,71 +1,69 @@
 """
-Statistics related methods
+Standard deviation calculator
 """
 
-import numpy as np
-import pandas as pd
-
-# Local imports
-from deep_cartograph.modules.common import common
-
-
-# Standard deviation related methods
-def std_calculator(colvar_path: str, ops_names: list):
+def std_calculator(colvar_path: str, feature_names: list):
     """
-    Function that filters the order parameters in the colvar file based on the standard deviation 
-    of the distribution of each order parameter. To remove order parameters that 
+    Function that filters the features in the colvar file based on the standard deviation 
+    of the distribution of each feature. To remove features that 
     do not contain any information about the state of the system.
 
-    This filter should only be used when all the order parameters have the same units.
+    This filter should only be used when all the features have the same units.
 
     Inputs
     ------
 
-        colvar_path:       Path to the colvar file with the time series data of the order parameters
-        ops_names:         List of names of the order parameters to analyze
+        colvar_path:       Path to the colvar file with the time series data of the features
+        feature_names:         List of names of the features to analyze
     
     Outputs
     -------
 
-        ops_std_df: Dataframe with the order parameter names and their standard deviations
+        std_df: Dataframe with the feature names and their standard deviations
     """
 
-    # Compute the standard deviation of each order parameter
-    ops_stds = std(colvar_path, ops_names)
+    import pandas as pd
 
-    # Create a dataframe with the order parameter names and their entropies
-    ops_std_df = pd.DataFrame({'op_name': ops_names, 'std': ops_stds})
+    # Compute the standard deviation of each feature
+    feature_stds = std(colvar_path, feature_names)
+
+    # Create a dataframe with the feature names and their entropies
+    std_df = pd.DataFrame({'name': feature_names, 'std': feature_stds})
 
     # Return the dataframe
-    return ops_std_df
+    return std_df
 
-def std(colvar_path: str, ops_names: list) -> list:
+def std(colvar_path: str, feature_names: list) -> list:
     """
-    Function that computes the std of the distribution of each order parameter.
+    Function that computes the std of the distribution of each feature.
 
     Inputs
     ------
 
-        colvar_path: Path to the colvar file with the time series data of the order parameters
-        ops_names:   List of names of the order parameters to analyze
+        colvar_path:  Path to the colvar file with the time series data of the features
+        feature_names:   List of names of the features to analyze
     
     Outputs
     -------
 
-        ops_stds: List of stds of the order parameters
+        feature_stds: List of stds of the features
     """
 
-    # Iterate over the order parameters
-    ops_stds = []
+    import numpy as np
 
-    for op_name in ops_names:
+    from deep_cartograph.modules.common import common
 
-        # Read the order parameter time series
-        op_data = common.read_colvars_pandas(colvar_path, [op_name])
-        op_timeseries = op_data[op_name]
+    # Iterate over the features
+    feature_stds = []
+
+    for name in feature_names:
+
+        # Read the feature time series
+        feature_data = common.read_colvars_pandas(colvar_path, [name])
+        feature_timeseries = feature_data[name]
 
         # Compute and append the std to the list
-        ops_stds.append(round(np.std(op_timeseries), 3))
+        feature_stds.append(round(np.std(feature_timeseries), 3))
 
-    return ops_stds
+    return feature_stds
 
