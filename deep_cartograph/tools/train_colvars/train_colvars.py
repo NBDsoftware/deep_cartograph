@@ -9,11 +9,6 @@ from pathlib import Path
 from typing import Dict, List, Literal, Union
 from mlcolvar.utils.io import  create_dataset_from_files  
 
-# Import local modules
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist, get_filter_dict, read_feature_constraints, merge_configurations
-from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
-from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
-
 ########
 # TOOL #
 ########
@@ -46,6 +41,10 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
+
+    from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist, get_filter_dict, merge_configurations
+    from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
+    from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
 
     logger = logging.getLogger("deep_cartograph")
 
@@ -244,6 +243,8 @@ def set_logger(verbose: bool):
 ########
 
 if __name__ == "__main__":
+
+    from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, read_feature_constraints
 
     parser = argparse.ArgumentParser("Deep Cartograph: Train Collective Variables", description="Train collective variables using the mlcolvar library.")
 

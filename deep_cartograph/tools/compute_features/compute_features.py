@@ -2,16 +2,9 @@ import os
 import sys
 import time
 import shutil
-import argparse
 import logging.config
 from pathlib import Path
 from typing import Dict
-
-# Local imports
-from deep_cartograph.modules.plumed import utils as plumed_utils
-from deep_cartograph.modules.plumed.input_file import input_file as plumed_input
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, files_exist
-from deep_cartograph.yaml_schemas.compute_features import ComputeFeatures
 
 ########
 # TOOL #
@@ -30,6 +23,11 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
         colvars_path:        Path to the output colvars file with the time series of the features.
         output_folder:       Path to the output folder
     """
+
+    from deep_cartograph.modules.plumed import utils as plumed_utils
+    from deep_cartograph.modules.plumed.input_file import input_file as plumed_input
+    from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist
+    from deep_cartograph.yaml_schemas.compute_features import ComputeFeatures
 
     # Set logger
     logger = logging.getLogger("deep_cartograph")
@@ -124,6 +122,9 @@ def set_logger(verbose: bool):
 ########
 
 if __name__ == "__main__":
+
+    import argparse
+    from deep_cartograph.modules.common import create_output_folder, get_unique_path, read_configuration
 
     parser = argparse.ArgumentParser("Deep Cartograph: Compute features", description="Compute features from a trajectory using PLUMED.")
     

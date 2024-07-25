@@ -7,12 +7,6 @@ import logging.config
 from pathlib import Path
 from typing import Dict
 
-# Local imports
-from deep_cartograph.modules.amino import amino
-from deep_cartograph.tools.filter_features.filtering import Filter
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, save_list, find_feature_names, files_exist
-from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
-
 ########
 # TOOL #
 ########
@@ -35,6 +29,11 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
 
         filtered_features:   
     """
+
+    from deep_cartograph.modules.amino import amino
+    from deep_cartograph.tools.filter_features.filtering import Filter
+    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_list, find_feature_names, files_exist
+    from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
 
     logger = logging.getLogger("deep_cartograph")
     
@@ -136,6 +135,8 @@ def set_logger(verbose: bool):
 
 
 if __name__ == "__main__":
+
+    from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration
 
     parser = argparse.ArgumentParser("Deep Cartograph: Filter Features", description="Filter the features in the colvar file using different algorithms to select a subset of features that contains the most information about the system.")
     
