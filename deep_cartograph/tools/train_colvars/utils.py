@@ -338,6 +338,7 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
         try:
             # Data projected onto original latent space of the best model
             with torch.no_grad():
+                best_model.postprocessing = None
                 projected_features = best_model(torch.Tensor(features_dataset[:]["data"]))
 
             # Normalize the latent space
@@ -688,6 +689,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         try:
             # Data projected onto original latent space of the best model
             with torch.no_grad():
+                best_model.postprocessing = None
                 projected_features = best_model(torch.Tensor(timelagged_dataset[:]["data"]))
 
             # Normalize the latent space
