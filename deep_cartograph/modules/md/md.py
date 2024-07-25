@@ -140,11 +140,11 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
                 if atoms_format == "index":
                     atom_label = f"{first_atom.index + 1},{second_atom.index + 1}"
                     equivalent_atom_label = f"{second_atom.index + 1},{first_atom.index + 1}"
-                elif atoms_format == "atom_name":
+                elif atoms_format == "name":
                     atom_label = f"@{first_atom.name}-{first_atom.resid},@{second_atom.name}-{second_atom.resid}"
                     equivalent_atom_label = f"@{second_atom.name}-{second_atom.resid},@{first_atom.name}-{first_atom.resid}"
                 else:
-                    raise ValueError(f"atom_label_format {atoms_format} not supported.")
+                    raise ValueError(f"atoms_format {atoms_format} not supported.")
 
                 # Check distance is not repeated
                 if atom_label not in atomic_definitions and equivalent_atom_label not in atomic_definitions:
@@ -244,7 +244,7 @@ def get_virtual_dihedral_labels(topology_path: str, selection: str, atoms_format
     -----
 
         atoms            : list of atoms as an AtomGroup.
-        atom_label_format: format of the atom labels defining each dihedral. Options: (atom_name or index)
+        atoms_format: format of the atom labels defining each dihedral. Options: (name or index)
 
     Output
     ------
