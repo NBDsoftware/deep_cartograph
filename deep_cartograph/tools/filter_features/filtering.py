@@ -39,45 +39,45 @@ class Filter:
 
         # features to analyze
         self.feature_names = feature_names
-        self.features_data = pd.DataFrame({'op_name': feature_names, 'pass': True})
+        self.features_data = pd.DataFrame({'name': feature_names, 'pass': True})
 
 
     def calculate_entropy(self) -> None:
         """
-        Compute the entropy of each order parameter.
+        Compute the entropy of each feature.
         """
 
-        # Compute the entropy of each order parameter
+        # Compute the entropy of each feature
         entropy_df = entropy_calculator(self.colvar_path, self.feature_names)
 
         # Merge the dataframes
-        self.features_data = self.features_data.merge(entropy_df, on='op_name', how='inner')
+        self.features_data = self.features_data.merge(entropy_df, on='name', how='inner')
 
         return
     
     def calculate_std(self) -> None:
         """ 
-        Compute the standard deviation of each order parameter.
+        Compute the standard deviation of each feature.
         """
 
-        # Compute the standard deviation of each order parameter
+        # Compute the standard deviation of each feature
         std_df = std_calculator(self.colvar_path, self.feature_names)
 
         # Merge the dataframes
-        self.features_data = self.features_data.merge(std_df, on='op_name', how='inner')
+        self.features_data = self.features_data.merge(std_df, on='name', how='inner')
 
         return
     
     def dip_test(self) -> None:
         """
-        Compute the dip test for each order parameter.
+        Compute the dip test for each feature.
         """
 
-        # Compute the dip test p-value for each order parameter
+        # Compute the dip test p-value for each feature
         dip_df = diptest_calculator(self.colvar_path, self.feature_names)
 
         # Merge the dataframes
-        self.features_data = self.features_data.merge(dip_df, on='op_name', how='inner')
+        self.features_data = self.features_data.merge(dip_df, on='name', how='inner')
 
         return
 
@@ -146,4 +146,4 @@ class Filter:
         logger.info(f'Filtered {initial_num_features - final_num_features} features.')
 
         # Return a list with the features to analyze
-        return self.features_data['op_name'].tolist()
+        return self.features_data['name'].tolist()
