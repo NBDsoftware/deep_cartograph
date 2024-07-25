@@ -16,7 +16,7 @@ from mlcolvar.utils.io import  create_dataset_from_files
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
                   ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
                   dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
-                  output_folder: str = 'train_colvars'):
+                  trajectory: str = None, topology: str = None, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -39,6 +39,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
         dimension:           dimension of the CVs to train or compute, if None, the value in the configuration file is used
         cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
+        trajectory:          path to the trajectory file that will be analyzed
+        topology:            path to the topology file of the system
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
 
@@ -137,6 +139,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
                     cv_settings = pca_configuration, 
                     figures_settings = configuration['figures'], 
                     clustering_settings = configuration['clustering'],
+                    trajectory = trajectory,
+                    topology = topology,
                     output_path = pca_output_path)
 
     ###################
@@ -155,6 +159,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
                    cv_settings = ae_configuration,
                    figures_settings = configuration['figures'],
                    clustering_settings = configuration['clustering'],
+                   trajectory = trajectory,
+                   topology = topology,
                    output_path = ae_output_path)
 
     ############
@@ -173,6 +179,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
                      cv_settings = tica_configuration,
                      figures_settings = configuration['figures'],
                      clustering_settings = configuration['clustering'],
+                     trajectory = trajectory,
+                     topology = topology,
                      output_path = tica_output_path)
     
     #################
@@ -191,6 +199,8 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
                           cv_settings = deep_tica_configuration,
                           figures_settings = configuration['figures'],
                           clustering_settings = configuration['clustering'],
+                          trajectory = trajectory,
+                          topology = topology,
                           output_path = deep_tica_output_path)
     
     # End timer
@@ -250,6 +260,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help='Path to configuration file (.yml)', required=True)
     parser.add_argument('-colvars', dest='colvars_path', type=str, help='Path to the colvars file', required=True)
+    parser.add_argument('-trajectory', dest='trajectory', help="Path to trajectory file corresponding to the colvars file. Used to create clusters.", required=False)
+    parser.add_argument('-topology', dest='topology', help="Path to topology file.", required=False)
     parser.add_argument('-ref_colvars', dest='ref_colvars_path', type=str, help='Path to the colvars file with the reference data', required=False)
     parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
@@ -290,6 +302,8 @@ if __name__ == "__main__":
         ref_labels = ref_labels,
         dimension = args.dimension, 
         cvs = args.cvs, 
+        trajectory = args.trajectory,
+        topology = args.topology,
         output_folder = output_folder)
 
     # Move log file to output folder
