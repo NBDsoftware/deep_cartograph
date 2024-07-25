@@ -52,7 +52,7 @@ class PlumedSettings(BaseModel):
     # Molecule type: protein, dna or rna
     moltype: str = "protein"
     # Name of the input file to be used in the PLUMED input file (without the .dat extension)
-    input_name: str = "colvars"
+    input_name: str = "plumed_input"
     # Selection of atoms that define the molecules that should be whole to compute the descriptors (MDAnalysis selection syntax)
     whole_molecule_selection: str = "all"
     # Definition of features to be included in the PLUMED input file

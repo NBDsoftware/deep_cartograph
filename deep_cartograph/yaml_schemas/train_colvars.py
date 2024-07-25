@@ -7,21 +7,21 @@ class LRScheduler(BaseModel):
     # Name of the optimizer (see torch.optim.lr_scheduler Algorithms)
     name: str = "ReduceLROnPlateau"
     # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim.lr_scheduler Algorithms)
-    kwargs: dict = {'mode': 'min', 'factor': 0.5, 'patience': 5, 'threshold': 0.05, 'threshold_mode': 'rel', 'cooldown': 0, 'min_lr': 0.0001, 'eps': 1e-08}
+    kwargs: dict = {'mode': 'min', 'factor': 0.5, 'patience': 5, 'threshold': 0.05, 'threshold_mode': 'rel', 'cooldown': 0, 'min_lr': 1.0e-05, 'eps': 1.0e-09}
 
 class Optimizer(BaseModel):
 
     # Name of the optimizer (see torch.optim Algorithms)
     name: str = "Adam"
     # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim Algorithms)
-    kwargs: dict = {'lr': 0.01, 'weight_decay': 0.0}
+    kwargs: dict = {'lr': 1.0e-03, 'weight_decay': 0.0}
 
 class Architecture(BaseModel):
 
-    # Fully connected hidden layers between the input and latent space, e.g. [15, 15]
-    hidden_layers: List[int] = [15, 15]
+    # Fully connected hidden layers between the input and latent space
+    hidden_layers: List[int] = [10, 10]
     # Lag time for TICA and DeepTICA
-    lag_time: int = 10
+    lag_time: int = 30
     # Slightly overestimated rank of the main trajectory data to compute the PCA more efficiently (see torch.pca_lowrank) - if None, q = num_features (n)
     pca_lowrank_q: Union[int, None] = None
 
@@ -41,6 +41,8 @@ class GeneralSettings(BaseModel):
     dropout: float = 0.1
     # Shuffle the data before training
     shuffle: bool = False
+    # Randomly split the data into training and validation sets
+    random_split: bool = False
     # Do a validation check every n epochs
     check_val_every_n_epoch: int = 10
     # Save the model every n epochs
@@ -49,9 +51,9 @@ class GeneralSettings(BaseModel):
 class EarlyStopping(BaseModel):
 
     # Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
-    patience: int = 2
+    patience: int = 20
     # Minimum change in the loss function to consider it an improvement
-    min_delta: float = 0.00001
+    min_delta: float = 1.0e-05
 
 class Trainings(BaseModel):
   
@@ -71,7 +73,7 @@ class Trainings(BaseModel):
 class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
-    dimension: int = 1
+    dimension: int = 2
     # Architecture settings (used when applicable)
     architecture: Architecture = Architecture()
     # Training settings (used when applicable)
@@ -175,6 +177,6 @@ class TrainColvars(BaseModel):
 
     # Add Configuration class for this model
     class Config:
-        # Allow extra fields
+        # Allow extra fields - this is used to allow for model specific configurations that override common settings
         extra = "allow"
 
