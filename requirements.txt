@@ -3,6 +3,7 @@
   numpy
   dask
   pandas
+  pydantic
   torch
   lightning
   MDAnalysis
@@ -12,4 +13,5 @@
   KDEpy             # (Optional) Faster than scikit-learn for KDE
   diptest
   plumed
+  jupyter           # (Optional) For running the notebooks
   #mlcolvar

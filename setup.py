@@ -7,6 +7,7 @@ setup(name='deep_cartograph',
         'numpy',
         'dask',
         'pandas',
+        'pydantic',
         'torch',
         'lightning',
         'mdanalysis',
@@ -15,7 +16,8 @@ setup(name='deep_cartograph',
         'scikit-learn>=1.3',
         'KDEpy',
         'diptest',
-        'plumed'
+        'plumed',
+        'jupyter'   
     ])
 
 # 'mlcolvar'
