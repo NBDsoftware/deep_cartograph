@@ -793,8 +793,9 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         # Add cluster labels to the projected trajectory DataFrame
         projected_traj_df['cluster'] = cluster_labels
 
-        # Find centroids in data
-        centroids_df = statistics.find_centroids(projected_traj_df, centroids, cv_labels)
+        if len(centroids) > 0:
+            # Find centroids in data
+            centroids_df = statistics.find_centroids(projected_traj_df, centroids, cv_labels)
 
         # Generate color map for clusters
         num_clusters = len(np.unique(cluster_labels))
