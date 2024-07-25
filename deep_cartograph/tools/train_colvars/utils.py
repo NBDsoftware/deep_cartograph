@@ -793,10 +793,10 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         if len(cv_labels) == 2:
 
             # Create a 2D plot of the projected trajectory
-            figures.plot_projected_trajectory(
-                projected_traj_df, 
+            figures.plot_clustered_trajectory(
+                data_df = projected_traj_df, 
                 axis_labels = cv_labels,
-                cmap_label = 'cluster', 
+                cluster_label = 'cluster', 
                 settings = figure_settings, 
                 file_path = os.path.join(output_path,'trajectory_clustered.png'),
                 cmap = cmap)
@@ -820,9 +820,9 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
 
         # Create a 2D plot of the projected trajectory
         figures.plot_projected_trajectory(
-            projected_traj_df, 
+            data_df = projected_traj_df, 
             axis_labels = cv_labels, 
-            cmap_label = 'order',
+            frame_label = 'order',
             settings = figures_settings['projected_trajectory'], 
             file_path = os.path.join(output_path,'trajectory.png'))
     
