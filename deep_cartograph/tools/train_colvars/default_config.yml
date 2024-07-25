@@ -44,6 +44,7 @@ common:
       max_epochs: 1000
       dropout: 0.1
       shuffle: False
+      random_split: False
       check_val_every_n_epoch: 10
       save_check_every_n_epoch: 10
     early_stopping:
@@ -71,6 +72,7 @@ ae:
   training:
     general: 
       shuffle: True
+      random_split: True
     optimizer:
       kwargs: 
         lr: 0.01
