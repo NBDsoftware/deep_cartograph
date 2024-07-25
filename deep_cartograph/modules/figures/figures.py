@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Literal
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, rgb2hex
 from mlcolvar.utils.fes import compute_fes
@@ -131,6 +131,9 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
         # Save figure
         fig.savefig(os.path.join(output_path, 'fes.png'), dpi=300)
 
+        # Close figure
+        fig.clf()
+
     return
 
 def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
@@ -220,10 +223,10 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
 
     return
 
-def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cmap_label: str, settings: Dict, file_path: str, cmap: ListedColormap = None) -> None:
+def plot_clustered_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cluster_label: str, settings: Dict, file_path: str, cmap: ListedColormap = None) -> None:
     """
     Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
-    The color of the markers is given by the value of cmap_label
+    The color of the markers is given by the cluster.
     Adds the histograms of the data along each axis and save the figure to a file.
 
     Inputs
@@ -231,7 +234,7 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
 
         data_df:         data with the trajectory projected on the 2D space
         axis_labels:     labels of the CVs used to project the trajectory
-        cmap_label:      label of the data used to color the markers
+        cluster_label:   label of the data used to color the markers
         settings:        dictionary with the settings of the plot
         file_path:       path where the figure will be saved
         cmap:            ListedColormap with the colors to use for each cluster (to use the exact same colors as in other plots)
@@ -246,25 +249,20 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
         alpha = settings.get('alpha', 0.5)
         num_bins = settings.get('num_bins', 50)
         bw_adjust = settings.get('bandwidth', 0.5)
-        use_legend = settings.get('use_legend', False)
-        if use_legend:
-            legend = 'full' # Show all the labels, otherwise it will show only some representative labels
-        else:
-            legend = False
 
         # Create a JointGrid object with a colormap
         ax = sns.JointGrid(data=data_df, x=axis_labels[0], y=axis_labels[1])
 
-        # Create a scatter plot of the data, color-coded by the order of the data points, modify the markers size
+        # Create a scatter plot of the data, color-coded by the cluster
         scatter = ax.plot_joint(
             sns.scatterplot, 
             data=data_df,
-            hue=cmap_label, 
+            hue=cluster_label, 
             palette=cmap, 
             alpha=alpha, 
             edgecolor=".2", 
             linewidth=.5,
-            legend=legend,
+            legend='full',
             s=marker_size)
         
         scatter.set_axis_labels(axis_labels[0], axis_labels[1])
@@ -272,10 +270,65 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cma
         # Marginal histograms
         ax.plot_marginals(sns.histplot, kde=True, bins=num_bins, kde_kws = {'bw_adjust': bw_adjust})
 
+        # Apply tight layout
         plt.tight_layout()
 
         # Save the figure
         plt.savefig(file_path, dpi=300)
+
+        # Close the figure
+        plt.close()
+
+def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], frame_label: str, settings: Dict, file_path: str, cmap: ListedColormap = None) -> None:
+    """
+    Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
+    The color of the markers is given by the frame number.
+    Save the figure to a file.
+
+    Inputs
+    ------
+
+        data_df:         data with the trajectory projected on the 2D space
+        axis_labels:     labels of the CVs used to project the trajectory
+        frame_label:     label of the data used to color the markers
+        settings:        dictionary with the settings of the plot
+        file_path:       path where the figure will be saved
+        cmap:            ListedColormap with the colors to use for each cluster (to use the exact same colors as in other plots)
+    """
+
+    if settings.get('plot', True):
+
+        # If ListedColormap is not given, use the cmap in the settings
+        if cmap is None:
+            cmap = settings.get('cmap', 'viridis')
+        marker_size = settings.get('marker_size', 10)
+        alpha = settings.get('alpha', 0.5)
+
+        # Create a figure
+        fig, ax = plt.subplots()
+
+        # Create a scatter plot color-coded by the order
+        ax.scatter(data_df[axis_labels[0]], data_df[axis_labels[1]], c=data_df[frame_label], cmap=cmap, s=marker_size, alpha=alpha, edgecolor=".2", linewidth=.5)
+
+        # Add color bar
+        norm = plt.Normalize(data_df[frame_label].min(), data_df[frame_label].max())
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = ax.figure.colorbar(sm, ax=ax)
+        cbar.set_label('Frame num.')
+
+        # Set axis labels
+        ax.set_xlabel(axis_labels[0])
+        ax.set_ylabel(axis_labels[1])
+        
+        # Apply tight layout
+        plt.tight_layout()
+
+        # Save the figure
+        plt.savefig(file_path, dpi=300)
+
+        # Close the figure
+        plt.close()
 
 def find_limits(X: np.ndarray, X_ref: Union[List[np.ndarray], None]) -> List:
     """
@@ -419,6 +472,7 @@ def plot_clusters_size(cluster_labels: pd.Series, cmap: ListedColormap, output_f
     # Save the plot
     plt.savefig(os.path.join(output_folder, 'clusters_size.png'), dpi=300, bbox_inches='tight')
 
+    # Close the figure
     plt.close()
 
 def generate_cmap(num_colors: int, base_colormap: str):
