@@ -366,10 +366,10 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
     atoms = u.select_atoms(selection)
 
     # Keep only heavy atoms
-    heavy_atoms = atoms.select_atoms("not name H*")
+    heavy_atom_selection = atoms.select_atoms("not name H*")
 
     # Check the selection is not empty
-    if len(heavy_atoms) == 0:
+    if len(heavy_atom_selection) == 0:
         raise ValueError(f"Selection: '{selection}' is empty, please review the selection string.")
     
     # Check if bonds are present in the topology
@@ -377,28 +377,31 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
         logger.info(f"Topology does not contain bonds. Bonds will be guessed using a distance criterion (bond_length < {covalent_bond_threshold}).")
 
     # Find set with all indices for fast membership-to-heavy-atoms checking)
-    heavy_atom_indices = set(heavy_atoms.indices)
+    heavy_atom_indices = set(heavy_atom_selection.indices)
 
     # Dictionary to keep track of bonded atoms
-    bonded_dict = {atom.index: set() for atom in heavy_atoms}
-    
+    neighbors_dict = {atom.index: set() for atom in heavy_atom_selection}
+
+    # Dictionary to keep heavy track of heavy atoms
+    heavy_atom_dict = {atom.index: atom for atom in heavy_atom_selection}
+
     # Find bonds in the structure
-    if hasattr(heavy_atoms, 'bonds'):
+    if hasattr(heavy_atom_selection, 'bonds'):
 
         # Extract bonds from the topology
-        bonds = heavy_atoms.bonds
+        bonds = heavy_atom_selection.bonds
 
         # Use the topology to find the bonds
         logger.info(f"Topology contains bonds. Using bonds to find dihedrals.")
 
-        # Fill bonded_dict using the bonds in the topology
+        # Fill neighbors_dict using the bonds in the topology
         for bond in bonds:
 
             i, j = bond.indices
 
             if i in heavy_atom_indices and j in heavy_atom_indices:
-                bonded_dict[i].add(j)
-                bonded_dict[j].add(i)
+                neighbors_dict[i].add(j)
+                neighbors_dict[j].add(i)
 
     else:
 
@@ -408,9 +411,9 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
         # Initialize set to save all bonds
         bonds_indices = set()
 
-        # Fill bonded_dict using a distance criterion
-        for i, atom_i in enumerate(heavy_atoms):
-            for j, atom_j in enumerate(heavy_atoms):
+        # Fill neighbors_dict using a distance criterion
+        for i, atom_i in enumerate(heavy_atom_selection):
+            for j, atom_j in enumerate(heavy_atom_selection):
 
                 # Check atoms are different
                 if i != j:
@@ -423,44 +426,51 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
                             # Add bond to set
                             bonds_indices.add((atom_i.index, atom_j.index))
 
-                            # Add bond to bonded_dict
-                            bonded_dict[atom_i.index].add(atom_j.index)
-                            bonded_dict[atom_j.index].add(atom_i.index)
+                            # Add bond to neighbors_dict
+                            neighbors_dict[atom_i.index].add(atom_j.index)
+                            neighbors_dict[atom_j.index].add(atom_i.index)
 
         # Add bonds to the Universe
         u.add_TopologyAttr('bonds', bonds_indices)
 
         # Extract bonds from the topology
-        bonds = u.bonds
+        all_bonds = u.bonds
 
     atomic_definitions = []
 
     # Iterate over all bonds 
-    for bond in bonds:
+    for bond in all_bonds:
         
         # Get indices of the bonded atoms
-        i, j = bond.indices
+        i_index, j_index = bond.indices
 
         # Check if both atoms are heavy atoms
-        if i in heavy_atom_indices and j in heavy_atom_indices:
+        if i_index in heavy_atom_indices and j_index in heavy_atom_indices:
+
+            # Debug:
+            logger.debug(f"Bond atom index i: {i_index}, atom index j: {j_index}")
 
             # Get neighbors of each atom
-            i_neighbors = bonded_dict[i]
-            j_neighbors = bonded_dict[j]
+            i_neighbors = neighbors_dict[i_index]
+            j_neighbors = neighbors_dict[j_index]
+
+            # Debug:
+            logger.debug(f"Neighbors of atom i: {i_neighbors}")
+            logger.debug(f"Neighbors of atom j: {j_neighbors}")
 
             # For each possible set of 4 bonded atoms around the bond (i, j)
             for i_neighbor in i_neighbors:
-                if i_neighbor != j:
+                if i_neighbor != j_index:
                     for j_neighbor in j_neighbors:
-                        if j_neighbor != i and j_neighbor != i_neighbor:
+                        if j_neighbor != i_index and j_neighbor != i_neighbor:
 
-                            # Create dihedral label
+                            # Create dihedral label for atoms with indices i_neighbor, i_index, j_index, j_neighbor
                             if atoms_format == "index":
-                                dihedral_label = f"{i_neighbor},{i},{j},{j_neighbor}"
-                                equivalent_dihedral_label = f"{j_neighbor},{j},{i},{i_neighbor}"
+                                dihedral_label = f"{i_neighbor},{i_index},{j_index},{j_neighbor}"
+                                equivalent_dihedral_label = f"{j_neighbor},{j_index},{i_index},{i_neighbor}"
                             elif atoms_format == "name":
-                                dihedral_label = f"@{heavy_atoms[i_neighbor].name}-{heavy_atoms[i_neighbor].resid},@{heavy_atoms[i].name}-{heavy_atoms[i].resid},@{heavy_atoms[j].name}-{heavy_atoms[j].resid},@{heavy_atoms[j_neighbor].name}-{heavy_atoms[j_neighbor].resid}"
-                                equivalent_dihedral_label = f"@{heavy_atoms[j_neighbor].name}-{heavy_atoms[j_neighbor].resid},@{heavy_atoms[j].name}-{heavy_atoms[j].resid},@{heavy_atoms[i].name}-{heavy_atoms[i].resid},@{heavy_atoms[i_neighbor].name}-{heavy_atoms[i_neighbor].resid}"
+                                dihedral_label = f"@{heavy_atom_dict[i_neighbor].name}-{heavy_atom_dict[i_neighbor].resid},@{heavy_atom_dict[i_index].name}-{heavy_atom_dict[i_index].resid},@{heavy_atom_dict[j_index].name}-{heavy_atom_dict[j_index].resid},@{heavy_atom_dict[j_neighbor].name}-{heavy_atom_dict[j_neighbor].resid}"
+                                equivalent_dihedral_label = f"@{heavy_atom_dict[j_neighbor].name}-{heavy_atom_dict[j_neighbor].resid},@{heavy_atom_dict[j_index].name}-{heavy_atom_dict[j_index].resid},@{heavy_atom_dict[i_index].name}-{heavy_atom_dict[i_index].resid},@{heavy_atom_dict[i_neighbor].name}-{heavy_atom_dict[i_neighbor].resid}"
                             else:
                                 raise ValueError(f"atoms_format {atoms_format} not supported. Options for real dihedrals: (name, index)")
                             
@@ -498,7 +508,6 @@ def get_number_atoms(topology: str, selection: str = None) -> int:
     num_atoms = len(atoms)
 
     return num_atoms
-
 
 # Working with trajectories
 def extract_frames(trajectory_path: str, topology_path: str, frames: list, new_traj_path: str, file_format: str = 'XTC'):
