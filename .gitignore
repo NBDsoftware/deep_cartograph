@@ -1,4 +1,5 @@
 venv/
+build/
 venvps/
 _pycache_/
 *.pyc
