@@ -126,6 +126,8 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         ref_labels = ref_labels,
         dimension = dimension,
         cvs = cvs,
+        trajectory = trajectory,
+        topology = topology,
         output_folder = step3_output_folder)
             
     # End timer
