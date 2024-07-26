@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, List, Literal
 
 # Local imports
-from deep_cartograph.tools.compute_features import compute_features
-from deep_cartograph.tools.filter_features import filter_features
-from deep_cartograph.tools.train_colvars import train_colvars
+from deep_cartograph import compute_features
+from deep_cartograph import filter_features
+from deep_cartograph import train_colvars
 from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration
 from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 
