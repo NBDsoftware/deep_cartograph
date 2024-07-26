@@ -13,8 +13,8 @@ Starting from a trajectory and topology files, deep cartograph can be used to:
 
 - **data**: contains the data used for the tests and the examples.
 - **deep_cartograph**: contains all the tools and modules that form part of the deep_cartograph package.
-- **examples**: contains examples of how to use the package.
-- **tests**: contains the tests of the package.
+- **examples**: contains examples of how to use the package (work in progress).
+- **tests**: contains the tests of the package (to do).
 
 ## Installation
 
