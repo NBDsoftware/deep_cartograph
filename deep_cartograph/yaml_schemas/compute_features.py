@@ -47,6 +47,8 @@ class Features(BaseModel):
 
 class PlumedSettings(BaseModel):
 
+    # Time out for the plumed command to run (in seconds)
+    timeout: int = 172800
     # Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
     traj_stride: int = 1
     # Molecule type: protein, dna or rna

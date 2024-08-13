@@ -1,5 +1,6 @@
 compute_features:
   plumed_settings:
+    timeout: 172800
     traj_stride: 1
     moltype: protein
     input_name: torsions

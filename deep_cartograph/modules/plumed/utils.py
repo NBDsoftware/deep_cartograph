@@ -190,7 +190,7 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
 
     return driver_command 
 
-def run_driver_command(driver_command: str, plumed_settings: dict = None, plumed_timeout: int = 3600) -> None:
+def run_driver_command(driver_command: str, plumed_settings: dict, plumed_timeout: int) -> None:
     """
     Function that runs a PLUMED DRIVER command. It adds the necessary environment variables and modules
     before calling the plumed binary with the PLUMED DRIVER command.

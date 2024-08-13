@@ -1,4 +1,5 @@
 # plumed_settings:
+#   timeout:                    Time out for the PLUMED calculation in seconds
 #   traj_stride:                Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
 #   moltype:                    Molecule type: protein, dna or rna
 #   whole_molecule_selection:   Selection of atoms that define the molecules that should be whole to compute the descriptors.
@@ -27,6 +28,7 @@
 # NOTE: It's the user's responsibility to make sure that the selections are correct and that the groups do not overlap (the selections may or not overlap)
 
 plumed_settings:
+  timeout: 172800 
   traj_stride: 1
   moltype: protein
   input_name: distances
