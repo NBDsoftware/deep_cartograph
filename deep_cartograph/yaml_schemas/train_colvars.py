@@ -64,7 +64,7 @@ class Trainings(BaseModel):
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
     # Learning rate scheduler settings
-    lr_scheduler: LRScheduler = LRScheduler()
+    lr_scheduler: Union[LRScheduler, None] = None
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training

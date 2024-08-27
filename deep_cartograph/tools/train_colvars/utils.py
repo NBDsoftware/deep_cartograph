@@ -218,18 +218,22 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
     opt_name = optimizer_settings['name']
     optimizer_options = optimizer_settings['kwargs']
 
-    # Learning rate scheduler
-    lr_scheduler_options = {'scheduler': getattr(torch.optim.lr_scheduler, lr_scheduler_settings['name'])}
-    lr_scheduler_options.update(lr_scheduler_settings['kwargs'])
+    # Create options
+    options = {'encoder': nn_options,
+                'decoder': nn_options,
+                "optimizer": optimizer_options}
 
-    # All options
-    options = {'encoder': nn_options, 
-               'decoder': nn_options, 
-               "optimizer": optimizer_options, 
-               "lr_scheduler": lr_scheduler_options, 
-               "lr_interval": "epoch", 
-               "lr_monitor": "valid_loss", 
-               "lr_frequency": 1}
+    # Learning rate scheduler
+    if lr_scheduler_settings is not None:
+
+        lr_scheduler = {'scheduler': getattr(torch.optim.lr_scheduler, lr_scheduler_settings['name'])}
+        lr_scheduler.update(lr_scheduler_settings['kwargs'])
+
+        # Update options
+        options.update({"lr_scheduler": lr_scheduler, 
+                        "lr_interval": "epoch", 
+                        "lr_monitor": "valid_loss", 
+                        "lr_frequency": check_val_every_n_epoch})
 
     converged = False
     tries = 0
@@ -560,17 +564,21 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
     opt_name = optimizer_settings['name']
     optimizer_options = optimizer_settings['kwargs']
 
-    # Learning rate scheduler
-    lr_scheduler_options = {'scheduler': getattr(torch.optim.lr_scheduler, lr_scheduler_settings['name'])}
-    lr_scheduler_options.update(lr_scheduler_settings['kwargs'])
-
-    # All options
+    # Create options
     options = {"nn": nn_options,
-               "optimizer": optimizer_options,
-               "lr_scheduler": lr_scheduler_options,
-               "lr_interval": "epoch",
-               "lr_monitor": "valid_loss",
-               "lr_frequency": 1}
+               "optimizer": optimizer_options}
+
+    # Learning rate scheduler
+    if lr_scheduler_settings is not None:
+
+        lr_scheduler = {'scheduler': getattr(torch.optim.lr_scheduler, lr_scheduler_settings['name'])}
+        lr_scheduler.update(lr_scheduler_settings['kwargs'])
+
+        # Update options
+        options.update({"lr_scheduler": lr_scheduler, 
+                        "lr_interval": "epoch", 
+                        "lr_monitor": "valid_loss", 
+                        "lr_frequency": check_val_every_n_epoch})
 
     converged = False
     tries = 0
