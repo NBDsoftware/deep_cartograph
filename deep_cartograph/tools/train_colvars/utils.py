@@ -544,7 +544,6 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         batch_size = common.closest_power_of_two(num_samples*training_validation_lengths[0])
         logger.warning(f'The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: {batch_size}')
 
-    # NOTE: Deep TICA needs random_split and shuffle to be False
     # Build time-lagged datamodule, split the dataset into training and validation
     timelagged_datamodule = DictModule(
         random_split = random_split,
