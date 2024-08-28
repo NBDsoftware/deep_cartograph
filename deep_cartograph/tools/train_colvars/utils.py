@@ -684,6 +684,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         ax = plot_metrics(metrics.metrics,
                             labels=[f'Eigenvalue {i+1}' for i in range(cv_dimension)], 
                             keys=[f'valid_eigval_{i+1}' for i in range(cv_dimension)],
+                            ylabel='Eigenvalue',
                             yscale=None)
 
         # Save figure
