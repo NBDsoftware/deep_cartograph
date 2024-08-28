@@ -512,7 +512,8 @@ def get_number_atoms(topology: str, selection: str = None) -> int:
 # Working with trajectories
 def extract_frames(trajectory_path: str, topology_path: str, frames: list, new_traj_path: str, file_format: str = 'XTC'):
     """ 
-    Extract frames from a trajectory and save them in a new trajectory file.
+    Extract frames from a trajectory and save them in a new trajectory file. By default the frames will be ordered
+    such that earlier frames come first.
 
     Input
     -----
@@ -523,6 +524,9 @@ def extract_frames(trajectory_path: str, topology_path: str, frames: list, new_t
         new_traj_path   (str): path to the new trajectory file.
         file_format     (str): format of the new trajectory file.
     """
+
+    # Order the list of frames by default
+    frames.sort()
 
     # Try to load trajectory
     try:
