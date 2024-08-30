@@ -783,9 +783,9 @@ def model_has_converged(validation_loss: List, patience: int, check_val_every_n_
         min_delta:               Minimum change in the validation loss to qualify as an improvement.
     """
 
-    # Check if the loss function at the end of the training has decreased wrt the initial value
-    if validation_loss[-1] > validation_loss[0]:
-        logger.warning('Validation loss has increased by the end of the training.')
+    # Soft convergence condition: Check if the minimum of the validation loss is lower than the initial value
+    if min(validation_loss) > validation_loss[0]:
+        logger.warning('Validation loss has not decreased by the end of the training.')
         return False
 
     # Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs
