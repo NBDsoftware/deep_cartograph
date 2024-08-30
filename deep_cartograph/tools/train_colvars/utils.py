@@ -225,6 +225,9 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
                         "lr_monitor": "valid_loss", 
                         "lr_frequency": check_val_every_n_epoch})
 
+        # Make early stopping patience larger than learning rate scheduler patience
+        patience = max(patience, lr_scheduler_settings['kwargs']['patience']*2)
+
     converged = False
     tries = 0
 
@@ -571,6 +574,9 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
                         "lr_interval": "epoch", 
                         "lr_monitor": "valid_loss", 
                         "lr_frequency": check_val_every_n_epoch})
+        
+        # Make early stopping patience larger than learning rate scheduler patience
+        patience = max(patience, lr_scheduler_settings['kwargs']['patience']*2)
 
     converged = False
     tries = 0
