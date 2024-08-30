@@ -525,6 +525,10 @@ def extract_frames(trajectory_path: str, topology_path: str, frames: list, new_t
         file_format     (str): format of the new trajectory file.
     """
 
+    # Make sure frames is a list
+    if not isinstance(frames, list):
+        frames = list(frames)
+
     # Order the list of frames by default
     frames.sort()
 
@@ -605,6 +609,7 @@ def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df
 
         # Find frames for this cluster
         cluster_frames = traj_df[traj_df[cluster_label] == cluster][frame_label]
+        cluster_frames = list(cluster_frames)
 
         # Find topology frame
         if centroids_df is not None:
@@ -613,7 +618,6 @@ def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df
         else:
             # Pick the first frame from the cluster is centroids are not available
             topology_frame = [cluster_frames.values[0]]
-
 
         # Create file name
         cluster_traj_name = f"cluster_{cluster}.xtc"
