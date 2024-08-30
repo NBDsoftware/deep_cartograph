@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import torch, lightning
 from typing import List, Dict, Union
-import matplotlib.pyplot as plt
 
 from mlcolvar.data import DictModule, DictDataset
 from mlcolvar.cvs import AutoEncoderCV, DeepTICA
