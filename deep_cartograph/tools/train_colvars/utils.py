@@ -198,15 +198,6 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
     if batch_size >= num_training_samples:
         batch_size = common.closest_power_of_two(num_samples*training_validation_lengths[0])
         logger.warning(f'The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: {batch_size}')
-        
-    # Build datamodule, split the dataset into training and validation
-    datamodule = DictModule(
-        random_split = random_split,
-        dataset = features_dataset,
-        lengths = training_validation_lengths,
-        batch_size = batch_size,
-        shuffle = shuffle, 
-        generator = torch.manual_seed(seed))
 
     logger.info('Training Autoencoder CV...')
 
@@ -244,6 +235,18 @@ def compute_ae(features_dataset: DictDataset, ref_features_dataset: Union[List[D
         
             tries += 1
 
+            # Debug
+            logger.debug(f'Splitting the dataset...')
+
+            # Build datamodule, split the dataset into training and validation
+            datamodule = DictModule(
+                random_split = random_split,
+                dataset = features_dataset,
+                lengths = training_validation_lengths,
+                batch_size = batch_size,
+                shuffle = shuffle, 
+                generator = torch.manual_seed(seed))
+    
             # Debug
             logger.debug(f'Initializing Autoencoder object...')
 
@@ -544,15 +547,6 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
         batch_size = common.closest_power_of_two(num_samples*training_validation_lengths[0])
         logger.warning(f'The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: {batch_size}')
 
-    # Build time-lagged datamodule, split the dataset into training and validation
-    timelagged_datamodule = DictModule(
-        random_split = random_split,
-        dataset = timelagged_dataset,
-        lengths = training_validation_lengths,
-        batch_size = batch_size,
-        shuffle = shuffle, 
-        generator = torch.manual_seed(seed))
-
     logger.info('Calculating DeepTICA CV...')
 
     # DeepTICA settings
@@ -588,6 +582,18 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
 
             tries += 1
 
+            # Debug
+            logger.debug(f'Splitting the dataset...')
+
+            # Build time-lagged datamodule, split the dataset into training and validation
+            timelagged_datamodule = DictModule(
+                random_split = random_split,
+                dataset = timelagged_dataset,
+                lengths = training_validation_lengths,
+                batch_size = batch_size,
+                shuffle = shuffle, 
+                generator = torch.manual_seed(seed))
+    
             # Debug
             logger.debug(f'Initializing DeepTICA object...')
             
