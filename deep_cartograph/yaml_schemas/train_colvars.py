@@ -42,7 +42,7 @@ class GeneralSettings(BaseModel):
     # Shuffle the data before training
     shuffle: bool = False
     # Randomly split the data into training and validation sets
-    random_split: bool = False
+    random_split: bool = True
     # Do a validation check every n epochs
     check_val_every_n_epoch: int = 10
     # Save the model every n epochs
