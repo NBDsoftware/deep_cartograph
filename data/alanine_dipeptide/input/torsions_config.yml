@@ -7,9 +7,9 @@ compute_features:
     features:
       dihedral_groups:
         tor:
-          selection: "all"
+          selection: "not name H*"
           periodic_encoding: True
-          search_mode: virtual
+          search_mode: real
           atoms_format: name
   plumed_environment:                                                               
     bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed                 
@@ -77,17 +77,10 @@ train_colvars:
           eps: 1.0e-09
       save_loss: True
       plot_loss: True
-  ae:           
-    architecture:
-      hidden_layers: [15, 15]     
-    training:
-      optimizer:
-        kwargs: 
-          lr: 0.01
   figures:
     fes:
-      compute: True  
-      save: True  
+      compute: False  
+      save: False  
       temperature: 300
       bandwidth: 0.025
       num_bins: 200
@@ -109,7 +102,7 @@ train_colvars:
       use_legend: False
       marker_size: 12
   clustering:                        
-    run: True                        
+    run: False                        
     algorithm: hierarchical               
     opt_num_clusters: True          
     search_interval: [5, 15]          
