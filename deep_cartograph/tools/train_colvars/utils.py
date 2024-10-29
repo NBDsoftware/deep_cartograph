@@ -853,7 +853,7 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
         figures.plot_clusters_size(cluster_labels, cmap, output_path)
 
         # Extract frames from the trajectory
-        if None not in [trajectory, topology] and len(centroids) > 0:
+        if (None not in [trajectory, topology]) and (len(centroids) > 0):
             md.extract_clusters_from_traj(trajectory_path = trajectory, 
                                         topology_path = topology, 
                                         traj_df = projected_traj_df, 
@@ -861,7 +861,13 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
                                         cluster_label = 'cluster',
                                         frame_label = 'order', 
                                         output_folder = os.path.join(output_path, 'clustered_traj'))
-
+        elif len(centroids) == 0:
+            logger.warning('No centroids found. Skipping the extraction of clusters from the trajectory.')
+        else:
+            logger.warning('Trajectory and/or topology files are missing. Skipping the extraction of clusters from the trajectory.')
+            logger.info(f"Trajectory: {trajectory}")
+            logger.info(f"Topology: {topology}")
+            
     if len(cv_labels) == 2:
 
         # Create a 2D plot of the projected trajectory
