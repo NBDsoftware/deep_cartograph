@@ -14,12 +14,6 @@ compute_features:
           skip_neigh_residues: False
           skip_bonded_atoms: True
           atoms_format: name
-  plumed_environment:                                                               
-    bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed                 
-    kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so  
-    env_commands: 
-      - "ml PLUMED/2.9.0-intel-2021b"                                                 
-      - "unset I_MPI_PMI_LIBRARY" 
 
 filter_features:       
   filter_settings:
@@ -49,19 +43,19 @@ train_colvars:
       pca_lowrank_q: null
     training: 
       general:
-        max_tries: 10        # fixed
-        seed: 42             # fixed
-        lengths: [0.8, 0.2]  # fixed
-        batch_size: 512      # fixed
-        max_epochs: 1000     # fixed
-        dropout: 0.1         # fixed
+        max_tries: 10       
+        seed: 42            
+        lengths: [0.8, 0.2]  
+        batch_size: 512      
+        max_epochs: 1000     
+        dropout: 0.1         
         shuffle: True
         random_split: True
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 10         # fixed
-        min_delta: 1.0e-05   # fixed
+        patience: 10         
+        min_delta: 1.0e-05   
       optimizer:
         name: Adam
         kwargs: 

@@ -11,12 +11,6 @@ compute_features:
           periodic_encoding: True
           search_mode: real
           atoms_format: name
-  plumed_environment:                                                               
-    bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed                 
-    kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so  
-    env_commands: 
-      - "ml PLUMED/2.9.0-intel-2021b"                                                 
-      - "unset I_MPI_PMI_LIBRARY" 
 
 filter_features:       
   filter_settings:
