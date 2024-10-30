@@ -12,7 +12,7 @@ from typing import Dict
 
 def compute_features(configuration: Dict, trajectory: str, topology: str, colvars_path: str = None, output_folder: str = 'compute_features') -> str:
     """
-    Function that 
+    Function that computes features from a trajectory using PLUMED.
 
     Parameters
     ----------
@@ -45,7 +45,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeatures, output_folder)
-
+    
     # Check if files exist
     if not files_exist(trajectory):
         logger.error(f"Trajectory file {trajectory} does not exist. Exiting...")

@@ -13,7 +13,7 @@ from typing import Dict
 
 def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = False, filtered_features_path: str = None, output_folder: str = 'filter_features'):
     """
-    Function that filters the features in the colvars file using different algorithms to select a subset of features that contains the most information about the system.
+    Function that filters the features in the colvars file using different algorithms to select a subset that contains the most information about the system.
 
     Parameters
     ----------
