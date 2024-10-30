@@ -25,8 +25,9 @@ dependencies:
    
   # Pip-only installs
   - pip:   
-    - KDEpy            # (Optional) Faster than scikit-learn for KDE
+    - KDEpy                                                        # (Optional) Faster than scikit-learn for KDE
     - diptest
-    - plumed==2.9.0     # (Optional) Otherwise use an external installation
-  # - hdbscan          # Alternative to installing scikit-learn - note that the corresponding imports would have to be changed
-  # - mlcolvar         # Use the custom mlcolvar version with lr scheduler support from https://github.com/NBDsoftware/mlcolvar.git
+    - plumed==2.9.0                                                # (Optional) Otherwise use an external installation
+    - git+https://github.com/NBDsoftware/mlcolvar.git@main         # Custom mlcolvar version with lr scheduler support
+    - git+https://github.com/NBDsoftware/deep_cartograph.git@master 
+  # - hdbscan                                                      # Alternative to installing scikit-learn - note that the corresponding imports would have to be changed
