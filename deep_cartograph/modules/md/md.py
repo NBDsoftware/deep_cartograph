@@ -433,8 +433,8 @@ def get_all_real_dihedrals(topology_path: str, selection: str, atoms_format: str
         # Add bonds to the Universe
         u.add_TopologyAttr('bonds', bonds_indices)
 
-        # Extract bonds from the topology
-        all_bonds = u.bonds
+    # Extract bonds from the topology
+    all_bonds = u.bonds
 
     atomic_definitions = []
 
