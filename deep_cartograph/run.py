@@ -20,7 +20,7 @@ from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 
 def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, 
                     use_reference_labels: bool = False, dimension: int = None, 
-                    cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
+                    cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, 
                     output_folder: str = 'deep_cartograph') -> None:
     """
     Function that maps the trajectory onto the collective variables.
@@ -34,7 +34,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         reference_folder:     Path to the folder with reference data.
         use_reference_labels: Use labels for reference data (names of the files in the reference folder)
         dimension:            Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
-        cvs:                  List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
+        cvs:                  List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
         output_folder:        Path to the output folder
     """
 
@@ -189,7 +189,7 @@ if __name__ == "__main__":
     parser.add_argument('-ref', '-reference', dest='reference_folder', help="Path to folder with reference data. It should contain structures or trajectories.", required=False)
     parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, dtica)', required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=True)
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 

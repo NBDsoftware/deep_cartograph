@@ -108,7 +108,7 @@ train_colvars:
   - pca
   - ae
   - tica
-  - dtica
+  - deep_tica
   figures:
     fes:
       bandwidth: 0.025

@@ -167,7 +167,7 @@ class Clustering(BaseModel):
 class TrainColvars(BaseModel):
     
     # List of Collective Variables to train/calculate
-    cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = ['pca', 'ae', 'tica', 'dtica']
+    cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = ['pca', 'ae', 'tica', 'deep_tica']
     # Common settings for the Collective Variables
     common: CommonCollectiveVariable = CommonCollectiveVariable()
     # Settings for additional figures

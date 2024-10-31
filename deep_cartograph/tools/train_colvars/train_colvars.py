@@ -15,7 +15,7 @@ from mlcolvar.utils.io import  create_dataset_from_files
 
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
                   ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
-                  dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
+                  dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, 
                   trajectory: str = None, topology: str = None, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
@@ -25,7 +25,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         - pca (Principal Component Analysis) 
         - ae (Autoencoder)
         - tica (Time Independent Component Analysis)
-        - dtica (Deep Time Independent Component Analysis)
+        - deep_tica (Deep Time Independent Component Analysis)
 
     It also plots an estimate of the Free Energy Surface (FES) along the CVs from the trajectory data.
 
@@ -38,7 +38,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         ref_colvars_path:    list of paths to colvars files with reference data. If None, no reference data is used
         ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
         dimension:           dimension of the CVs to train or compute, if None, the value in the configuration file is used
-        cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
+        cvs:                 List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
         trajectory:          path to the trajectory file that will be analyzed
         topology:            path to the topology file of the system
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
@@ -187,11 +187,11 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     # CV: Deep-TICA #
     #################
 
-    if 'dtica' in configuration['cvs']:
+    if 'deep_tica' in configuration['cvs']:
         deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
 
         # Merge common and deep tica configurations
-        deep_tica_configuration = merge_configurations(configuration['common'], configuration.get('dtica',{}))
+        deep_tica_configuration = merge_configurations(configuration['common'], configuration.get('deep_tica',{}))
 
         compute_deep_tica(features_dataframe = features_dataframe,
                           ref_features_dataframe = ref_features_dataframe,
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', type=int, help='Dimension of the CV to train or compute', required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, dtica)', required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help='Path to the output folder', required=True)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Set the logging level to DEBUG', default=False)
 

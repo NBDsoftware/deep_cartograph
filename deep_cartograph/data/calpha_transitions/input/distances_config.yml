@@ -2,7 +2,7 @@ compute_features:
   plumed_settings:
     traj_stride: 1
     moltype: protein
-    input_name: torsions
+    input_name: distances
     whole_molecule_selection: all
     features:
       distance_groups:
@@ -34,7 +34,7 @@ filter_features:
     relaxation_time: 1                                   
 
 train_colvars:
-  cvs: ['pca', 'dtica', 'tica', 'ae']
+  cvs: ['pca', 'deep_tica', 'tica', 'ae']
   common:
     dimension: 2
     architecture:

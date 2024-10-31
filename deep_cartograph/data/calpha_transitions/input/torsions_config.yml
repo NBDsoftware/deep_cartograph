@@ -31,7 +31,7 @@ filter_features:
     relaxation_time: 1                                   
 
 train_colvars:
-  cvs: ['pca', 'dtica', 'tica', 'ae']
+  cvs: ['pca', 'deep_tica', 'tica', 'ae']
   common:
     dimension: 2
     architecture:

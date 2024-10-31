@@ -28,7 +28,7 @@
 #     save_loss:                    (bool) Wether to save the training and validation losses after training 
 #     plot_loss:                    (bool) Wether to plot the loss after training
 
-cvs: ['pca', 'ae', 'tica', 'dtica']
+cvs: ['pca', 'ae', 'tica', 'deep_tica']
 common:
   dimension: 1
   architecture:

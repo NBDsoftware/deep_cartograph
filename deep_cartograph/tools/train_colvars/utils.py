@@ -603,10 +603,10 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             logger.debug(f'Initializing DeepTICA object...')
             
             # Define model
-            dtica_model = DeepTICA(nn_layers, options=options)
+            deep_tica_model = DeepTICA(nn_layers, options=options)
 
             # Set optimizer name
-            dtica_model._optimizer_name = opt_name
+            deep_tica_model._optimizer_name = opt_name
 
             # Debug
             logger.debug(f'Initializing metrics and callbacks...')
@@ -647,7 +647,7 @@ def compute_deep_tica(features_dataframe: pd.DataFrame, ref_features_dataframe: 
             # Debug
             logger.debug(f'Training...')
 
-            trainer.fit(dtica_model, timelagged_datamodule)
+            trainer.fit(deep_tica_model, timelagged_datamodule)
 
             # Get validation and training loss
             validation_loss = metrics.metrics['valid_loss']
