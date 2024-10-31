@@ -14,9 +14,9 @@ from mlcolvar.utils.io import  create_dataset_from_files
 ########
 
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
-                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
-                  dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, 
-                  trajectory: str = None, topology: str = None, output_folder: str = 'train_colvars'):
+                  ref_colvars_path: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, 
+                  dimension: Union[int, None] = None, cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, 
+                  trajectory: Union[str, None] = None, topology: Union[str, None] = None, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -32,16 +32,16 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see default_config.yml for more information)
-        colvars_path:        path to the colvars file with the input data (samples of features)
-        feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
-        ref_colvars_path:    list of paths to colvars files with reference data. If None, no reference data is used
-        ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
-        dimension:           dimension of the CVs to train or compute, if None, the value in the configuration file is used
-        cvs:                 List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
-        trajectory:          path to the trajectory file that will be analyzed
-        topology:            path to the topology file of the system
-        output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
+        configuration:       Configuration dictionary (see default_config.yml for more information)
+        colvars_path:        Path to the colvars file with the input data (samples of features)
+        feature_constraints: (Optional) List with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
+        ref_colvars_path:    (Optional) List of paths to colvars files with reference data. If None, no reference data is used
+        ref_labels:          (Optional) List of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
+        dimension:           (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
+        cvs:                 (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
+        trajectory:          (Optional) Path to the trajectory file corresponding to the colvars file to be clustered
+        topology:            (Optional) Path to the topology file of the system
+        output_folder:       (Optional) Path to the output folder, if not given, a folder named 'train_colvars' is created
     """
 
     from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist, get_filter_dict, merge_configurations
