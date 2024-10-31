@@ -881,5 +881,5 @@ def project_traj(projected_features: np.ndarray, cv_labels: List[str], figures_s
     # Erase the order column
     projected_traj_df.drop('order', axis=1, inplace=True)
     
-    # Save the projected trajectory DataFrame
-    projected_traj_df.to_csv(os.path.join(output_path,'projected_trajectory.csv'), index=False)
+    # Save the projected trajectory DataFrame # NOTE: Include Header in csv with details about the CV, then as column names a standard name for the components "CV1", "CV2", etc.
+    projected_traj_df.to_csv(os.path.join(output_path,'projected_trajectory.csv'), index=False, float_format='%.4f')
