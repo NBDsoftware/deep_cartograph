@@ -41,14 +41,16 @@ def test_filter_features():
     
     # Output files
     output_path = os.path.join(tests_path, "output_compute_features")
-    output_features_path = os.path.join(output_path, "filtered_features.txt")
     
+    # Remove output folder if it exists
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
+        
     # Call API
     output_features = filter_features(
         configuration = get_config(),
         colvars_path = colvars_path,
         csv_summary = True,
-        filtered_features_path = output_features_path,
         output_folder = output_path)
     
     # Read the all reference filtered features into a list
@@ -59,7 +61,9 @@ def test_filter_features():
     reference_features = [line.strip() for line in reference_features]
     
     # Compare the reference and output features
-    assert output_features == reference_features
+    test_passed = output_features == reference_features
+    assert test_passed
     
     # If the test passed, clean the output folder
-    shutil.rmtree(output_path)
+    if test_passed:
+        shutil.rmtree(output_path)

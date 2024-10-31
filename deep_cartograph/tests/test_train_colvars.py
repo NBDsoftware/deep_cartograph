@@ -116,6 +116,10 @@ def test_train_colvars():
         
     # Remove the newline characters
     filtered_features = [line.strip() for line in filtered_features]
+
+    # Remove output folder if it exists
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
         
     # Call API
     train_colvars(
@@ -126,7 +130,10 @@ def test_train_colvars():
         trajectory = trajectory_path,
         topology = topology_path)
     
+    test_passed = True
     for cv in get_config()['cvs']:
+      
+        print(f"Testing {cv}...")
         
         # Path to projected trajectory
         projected_trajectory_path = os.path.join(output_path, cv, "projected_trajectory.csv")
@@ -145,7 +152,10 @@ def test_train_colvars():
         reference_projected_trajectory_df = pd.read_csv(reference_projected_trajectory_path)
         
         # Check if the computed and reference dataframes are equal
-        assert projected_trajectory_df.equals(reference_projected_trajectory_df)
+        test_passed = projected_trajectory_df.equals(reference_projected_trajectory_df) and test_passed
+    
+    assert test_passed
         
     # If the test passed, clean the output folder
-    shutil.rmtree(output_path)
+    if test_passed:
+      shutil.rmtree(output_path)

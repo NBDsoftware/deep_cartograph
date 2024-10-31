@@ -60,7 +60,7 @@ def test_compute_features():
     reference_colvars_path = os.path.join(data_path, "reference", "compute_features", "virtual_dihedrals.dat")
     
     # Output files
-    output_path = os.path.join(tests_path, "output_compute_features")
+    output_path = os.path.join(tests_path, "output_compute_features_1")
     
     print("Testing compute_features with virtual dihedrals ...")
     
@@ -71,6 +71,10 @@ def test_compute_features():
         raise FileNotFoundError(f"Topology file {topology_path} does not exist.")
     if not os.path.exists(reference_colvars_path):
         raise FileNotFoundError(f"Reference colvars file {reference_colvars_path} does not exist.")
+      
+    # Remove output folder if it exists
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
     
     # Call API
     colvars_path = compute_features(
@@ -86,10 +90,15 @@ def test_compute_features():
     reference_df = read_as_pandas(reference_colvars_path)
     
     # Check if the computed and reference dataframes are equal
-    assert computed_df.equals(reference_df)
+    test_passed = computed_df.equals(reference_df)
+    assert test_passed
     
     # If the test passed, clean the output folder
-    shutil.rmtree(output_path)
+    if test_passed:
+      shutil.rmtree(output_path)
+      
+    # Output files
+    output_path = os.path.join(tests_path, "output_compute_features_2")
     
     print("Testing compute_features with distances ...")
     
@@ -110,8 +119,10 @@ def test_compute_features():
     reference_df = read_as_pandas(reference_colvars_path)
     
     # Check if the computed and reference dataframes are equal
-    assert computed_df.equals(reference_df)
+    test_passed = computed_df.equals(reference_df)
+    assert test_passed
     
     # If the test passed, clean the output folder
-    shutil.rmtree(output_path)
+    if test_passed:
+      shutil.rmtree(output_path)
     
