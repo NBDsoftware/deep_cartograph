@@ -15,6 +15,7 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
     """
     Function that filters the features in the colvars file using different algorithms to select a subset that contains the most information about the system.
 
+    # NOTE: do we need to specify the filtered_features_path? If not, we can remove it from the API.
     Parameters
     ----------
 
