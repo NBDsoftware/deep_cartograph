@@ -15,8 +15,7 @@ from deep_cartograph.modules.statistics import statistics
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
 from deep_cartograph.modules.common import validate_configuration, create_output_folder, files_exist, merge_configurations 
 
-from cv_calculator import CVCalculator
-from cv_mapping import cv_classes, cv_labels
+from deep_cartograph.tools.train_colvars.cv_calculator import CVCalculator, cv_calculators_map
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -51,9 +50,13 @@ class TrainColvarsWorkflow:
             6. Extracting clusters from the trajectory.
         """
         
+        # Set output folder
+        self.output_folder: str = output_folder
+        create_output_folder(output_folder)
+        
         # Configuration related attributes
         self.configuration: Dict = validate_configuration(configuration, TrainColvarsSchema, output_folder)
-        self.figures_configuration: Dict = self.configuration['figures']         # NOTE: Extract, not just find
+        self.figures_configuration: Dict = self.configuration['figures']
         self.clustering_configuration: Dict = self.configuration['clustering']
                 
         # Input related attributes
@@ -66,10 +69,6 @@ class TrainColvarsWorkflow:
         
         # Validate inputs existence
         self._validate_files()
-        
-        # Set output folder
-        self.output_folder: str = output_folder
-        create_output_folder(output_folder)
 
         # CV related attributes
         self.cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
@@ -114,11 +113,11 @@ class TrainColvarsWorkflow:
         
         # Merge common and cv-specific configuration for this cv 
         common_configuration = self.configuration['common']
-        cv_specific_configuration = self.configuration.get(self.cv_name, {})
+        cv_specific_configuration = self.configuration.get(cv, {})
         cv_configuration = merge_configurations(common_configuration, cv_specific_configuration)
         
         # Construct the corresponding CV calculator
-        calculator = cv_classes[cv](self.colvars_path, 
+        calculator = cv_calculators_map[cv](self.colvars_path, 
                                     self.feature_constraints, 
                                     self.ref_colvars_path, 
                                     cv_configuration,
@@ -134,8 +133,12 @@ class TrainColvarsWorkflow:
         Run the train_colvars workflow.
         """
         
+        logger.info(f"Collective variables to compute: {self.cvs}")
+        
         # For each requested collective variable
         for cv in self.cvs:
+            
+            cv_output_folder = os.path.join(self.output_folder, cv)
             
             # Compute collective variable and project features onto the CV space
             cv_calculator = self.calculate_cv(cv)
@@ -147,11 +150,14 @@ class TrainColvarsWorkflow:
                 X_ref = cv_calculator.get_projected_ref(),
                 X_ref_labels = self.ref_labels,
                 settings = self.figures_configuration,
-                output_path = self.output_folder)
+                output_path = cv_output_folder)
             
             # Create a dataframe with the projected input data
             projected_input_df = pd.DataFrame(cv_calculator.get_projected_input(), 
                                                    columns=cv_calculator.get_labels())
+            
+            # Add a column with the order of the data points
+            projected_input_df['order'] = np.arange(projected_input_df.shape[0])
 
             # If clustering is enabled
             if self.clustering_configuration['run']:
@@ -165,14 +171,15 @@ class TrainColvarsWorkflow:
                 
                 # Find centroids among input samples
                 if len(centroids) > 0:
-                    centroids_df = statistics.find_centroids(projected_input_df, centroids, cv_labels)
+                
+                    centroids_df = statistics.find_centroids(projected_input_df, centroids, cv_calculator.get_labels())
                     
                 # Generate color map for clusters
                 num_clusters = len(np.unique(cluster_labels))
-                cmap = figures.generate_cmap(num_clusters, self.figures_configuration['cmap'])
+                cmap = figures.generate_cmap(num_clusters, self.figures_configuration['projected_clustered_trajectory']['cmap'])
 
                 # Plot cluster sizes 
-                figures.plot_clusters_size(cluster_labels, cmap, self.output_folder)
+                figures.plot_clusters_size(cluster_labels, cmap, cv_output_folder)
                 
                 # Extract clusters from the trajectory
                 if (None not in [self.trajectory_path, self.topology_path]) and (len(centroids) > 0):
@@ -182,7 +189,7 @@ class TrainColvarsWorkflow:
                                                 centroids_df = centroids_df,
                                                 cluster_label = 'cluster',
                                                 frame_label = 'order', 
-                                                output_folder = os.path.join(self.output_folder, 'clustered_traj'))
+                                                output_folder = os.path.join(cv_output_folder, 'clustered_traj'))
                 elif len(centroids) == 0:
                     logger.warning("No centroids found. Skipping extraction of clusters from the trajectory.")
                 else:
@@ -199,7 +206,7 @@ class TrainColvarsWorkflow:
                     axis_labels = cv_calculator.get_labels(),
                     frame_label = 'order',
                     settings = self.figures_configuration['projected_trajectory'],
-                    file_path = os.path.join(self.output_folder,'trajectory.png'))
+                    file_path = os.path.join(cv_output_folder,'trajectory.png'))
             
                 # If clustering is enabled
                 if self.clustering_configuration['run']:
@@ -210,43 +217,13 @@ class TrainColvarsWorkflow:
                         axis_labels = cv_calculator.get_labels(),
                         cluster_label = 'cluster', 
                         settings = self.figures_configuration['projected_clustered_trajectory'], 
-                        file_path = os.path.join(self.output_folder,'trajectory_clustered.png'),
+                        file_path = os.path.join(cv_output_folder,'trajectory_clustered.png'),
                         cmap = cmap)
             
             # Erase the order column
             projected_input_df.drop('order', axis=1, inplace=True)
             
             # Save the projected input data
-            projected_input_df.to_csv(os.path.join(self.output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
-            
-    @staticmethod
-    def train_colvars(configuration: Dict, 
-                      colvars_path: str, 
-                      feature_constraints: Union[List[str], str], 
-                      ref_colvars_path: Union[List[str], None] = None, 
-                      ref_labels: Union[List[str], None] = None, 
-                      cv_dimension: Union[int, None] = None, 
-                      cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, 
-                      trajectory_path: Union[str, None] = None, 
-                      topology_path: Union[str, None] = None, 
-                      output_folder: str = 'train_colvars'):
-        
-        """This instantiates the Train Colvars class and runs the train_colvars workflow."""
-    
-        # Instantiate class 
-        workflow = TrainColvarsWorkflow(
-            configuration=configuration,
-            colvars_path=colvars_path,
-            feature_constraints=feature_constraints,
-            ref_colvars_path=ref_colvars_path,
-            ref_labels=ref_labels,
-            cv_dimension=cv_dimension,
-            cvs=cvs,
-            trajectory_path=trajectory_path,
-            topology_path=topology_path,
-            output_folder=output_folder
-        )
-        
-        workflow.run()
+            projected_input_df.to_csv(os.path.join(cv_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
         
         

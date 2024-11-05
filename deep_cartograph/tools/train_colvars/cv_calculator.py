@@ -23,9 +23,6 @@ from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 from deep_cartograph.modules.common import (files_exist, get_filter_dict, closest_power_of_two, create_output_folder)
 
-from deep_cartograph.tools.train_colvars import cv_mapping 
-from cv_mapping import cv_classes, cv_labels
-
 # Set logger
 logger = logging.getLogger(__name__)
 
@@ -34,13 +31,10 @@ class CVCalculator:
     """
     Base class for collective variables calculators.
     """
-    def __init__(self, colvars_path: str,            # NOTE: Include name as input to simplify sub-classes
-                 feature_constraints: Union[List[str], str], 
-                 ref_colvars_path: Union[List[str], None],
-                 configuration: Dict, 
-                 output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
         """
-        Initializes the CV calculator.
+        Initializes the base CV calculator.
         
         Parameters
         ----------
@@ -113,6 +107,7 @@ class CVCalculator:
         
         # Number of features
         self.num_features = self.input_dataframe.shape[1]
+        logger.info(f'Number of features: {self.num_features}')
 
         # Reference data (if provided)
         if ref_colvars_path:
@@ -123,8 +118,8 @@ class CVCalculator:
                 
                 # Check if the number of features is the same
                 if ref_dataframe.shape[1] != self.num_features:
-                    logger.error(f"Number of features in reference dataset {path} is {ref_dataframe.shape[1]} and does not 
-                                 match the number of features in the main dataset ({self.num_features}). Exiting...")
+                    logger.error(f"""Number of features in reference dataset {path} is {ref_dataframe.shape[1]} and does 
+                                 not match the number of features in the main dataset ({self.num_features}). Exiting...""")
                     sys.exit(1)
                 
                 # Append to lists # NOTE: we need just one of the two?
@@ -135,9 +130,9 @@ class CVCalculator:
         """
         Initializes the specific CV calculator:
         
-            - Sets the number of samples
-            - Creates the output folder for the CV
-            - Logs the start of the calculation
+            - Finds the number of samples from the input dataset
+            - Creates the output folder for the CV using the cv_name
+            - Logs the start of the calculation using the cv_name
         """
         
         # Get the number of samples - input_dataset depends on the specific CV calculator
@@ -148,7 +143,7 @@ class CVCalculator:
         self.output_path = os.path.join(self.output_path, self.cv_name)
         create_output_folder(self.output_path)
         
-        logger.info(f'Calculating {self.cv_name} ...') 
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
     
     def compute_cv(self):
         """
@@ -201,7 +196,7 @@ class CVCalculator:
         Sets the labels of the features.
         """
         
-        self.cv_labels = [f'{cv_labels[self.cv_name]} {i+1}' for i in range(self.cv_dimension)]
+        self.cv_labels = [f'{cv_components_map[self.cv_name]} {i+1}' for i in range(self.cv_dimension)]
     
     def get_projected_input(self) -> np.ndarray:
         """
@@ -237,10 +232,13 @@ class LinearCVCalculator(CVCalculator):
     Linear collective variables calculator (e.g. PCA)
     """
     
-    def __init__(self, input_features: Union[pd.DataFrame, DictDataset], ref_features: Union[List[pd.DataFrame], List[DictDataset], None],
-        configuration: Dict, output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
+        """ 
+        Initializes a linear CV calculator.
+        """
         
-        super().__init__(input_features, ref_features, configuration, output_path)
+        super().__init__(colvars_path, feature_constraints, ref_colvars_path, configuration, output_path)
                 
         # Main attributes
         self.cv: Union[np.array, None] = None
@@ -249,6 +247,8 @@ class LinearCVCalculator(CVCalculator):
         """
         Projects the features onto a linear CV space.
         """
+        
+        logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
         
         # Find a numpy array of features
         features_array = self.input_dataframe.to_numpy(dtype=np.float32)
@@ -272,7 +272,7 @@ class LinearCVCalculator(CVCalculator):
         cv_path = os.path.join(self.output_path, f'weights.txt')
         np.savetxt(cv_path, self.cv)
         
-        logger.info(f'Collective variables saved to {cv_path}')
+        logger.info(f'Collective variable saved to {cv_path}')
        
 # Subclass for non-linear collective variables calculators
 class NonLinearCVCalculator(CVCalculator):
@@ -280,10 +280,13 @@ class NonLinearCVCalculator(CVCalculator):
     Non-linear collective variables calculator (e.g. Autoencoder)
     """
     
-    def __init__(self, input_features: Union[pd.DataFrame, DictDataset], ref_features: Union[List[pd.DataFrame], List[DictDataset], None],
-        configuration: Dict, output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
+        """ 
+        Initializes a non-linear CV calculator.
+        """
         
-        super().__init__(input_features, ref_features, configuration, output_path)
+        super().__init__(colvars_path, feature_constraints, ref_colvars_path, configuration, output_path)
         
         # Main attributes
         self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
@@ -351,10 +354,12 @@ class NonLinearCVCalculator(CVCalculator):
         # Check the batch size is not larger than the number of samples in the training set
         if self.batch_size >= self.num_training_samples:
             self.batch_size = closest_power_of_two(self.num_samples*self.training_validation_lengths[0])
-            logger.warning(f'The batch size is larger than the number of samples in the training set. 
-                           Setting the batch size to the closest power of two: {self.batch_size}')
+            logger.warning(f"""The batch size is larger than the number of samples in the training set. 
+                           Setting the batch size to the closest power of two: {self.batch_size}""")
             
     def train(self):
+        
+        logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
         # Train until model finds a good solution
         while not self.converged and self.tries < self.max_tries:
@@ -375,10 +380,10 @@ class NonLinearCVCalculator(CVCalculator):
                     generator = torch.manual_seed(self.seed))
         
                 # Debug
-                logger.debug(f'Initializing {self.cv_name} object...')
+                logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
-                model = cv_mapping[self.cv_name](self.nn_layers, options=self.cv_options)
+                model = cv_classes_map[self.cv_name](self.nn_layers, options=self.cv_options)
 
                 # Set optimizer name
                 model._optimizer_name = self.opt_name
@@ -428,22 +433,27 @@ class NonLinearCVCalculator(CVCalculator):
                 validation_loss = self.metrics.metrics['valid_loss']
 
                 # Check the evolution of the loss
-                converged = self.model_has_converged(validation_loss)
-                if not converged:
-                    logger.warning(f'{self.cv_name} has not found a good solution. Re-starting training...')
+                self.converged = self.model_has_converged(validation_loss)
+                if not self.converged:
+                    logger.warning(f'{cv_names_map[self.cv_name]} has not found a good solution. Re-starting training...')
 
             except Exception as e:
-                logger.error(f'{self.cv_name} training failed. Error message: {e}')
-                logger.info(f'Retrying {self.cv_name} training...')
+                logger.error(f'{cv_names_map[self.cv_name]} training failed. Error message: {e}')
+                logger.info(f'Retrying {cv_names_map[self.cv_name]} training...')
         
         # Check if the checkpoint exists
-        if os.path.exists(self.checkpoint.best_model_path):
+        if self.converged:
             
-            # Load the best model
-            self.cv = cv_classes[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
-            
-            # Delete the checkpoint
-            os.remove(self.checkpoint.best_model_path)
+            if os.path.exists(self.checkpoint.best_model_path):
+                # Load the best model
+                self.cv = cv_classes_map[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
+                os.remove(self.checkpoint.best_model_path)
+                
+                # Find the score of the best model
+                self.best_model_score = self.checkpoint.best_model_score
+                logger.info(f'Best model score: {self.best_model_score}')
+            else:
+                logger.error('The best model checkpoint does not exist.')
         
     def model_has_converged(self, validation_loss: List):
         """
@@ -469,17 +479,13 @@ class NonLinearCVCalculator(CVCalculator):
             return False
 
         return True
-        
+    
     def save_loss(self):
         """
         Saves the loss of the training.
         """
         
         try:        
-            # Find the score of the best model
-            self.best_model_score = self.checkpoint.best_model_score
-            logger.info(f'Best model score: {self.best_model_score}')
-
             # Save the loss if requested
             if self.training_config['save_loss']:
                 np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
@@ -500,6 +506,17 @@ class NonLinearCVCalculator(CVCalculator):
 
         except Exception as e:
             logger.error(f'Failed to save/plot the loss. Error message: {e}')
+
+    def compute_cv(self):
+        """
+        Compute Non-linear CV.
+        """
+
+        # Train the non-linear model
+        self.train()  
+        
+        # Save the loss 
+        self.save_loss()
         
     def save_cv(self):
         """
@@ -513,20 +530,25 @@ class NonLinearCVCalculator(CVCalculator):
         cv_path = os.path.join(self.output_path, f'weights.ptc')
         self.cv.to_torchscript(file_path = cv_path, method='trace')
         
-        logger.info(f'Collective variables saved to {cv_path}')
+        logger.info(f'Collective variable saved to {cv_path}')
 
     def project_features(self):
         """
         Projects the features onto a non-linear CV space.
         """
+        
+        logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
 
+        # Put model in evaluation mode
+        self.cv.eval()
+        
         # Data projected onto original latent space of the best model
         with torch.no_grad():
             self.cv.postprocessing = None
-            projected_features = self.cv(torch.Tensor(self.input_dataset[:]["data"]))
+            projected_input = self.cv(torch.Tensor(self.input_dataset[:]["data"]))
 
         # Normalize the latent space
-        norm =  Normalization(self.cv_dimension, mode='min_max', stats = Statistics(projected_features) )
+        norm =  Normalization(self.cv_dimension, mode='min_max', stats = Statistics(projected_input) )
         self.cv.postprocessing = norm
         
         # Data projected onto normalized latent space
@@ -542,37 +564,20 @@ class NonLinearCVCalculator(CVCalculator):
    
         
 # Collective variables calculators
-class PCA(LinearCVCalculator):
+class PCACalculator(LinearCVCalculator):
     """
     Principal component analysis calculator.
     """
 
-    def __init__(self, colvars_path: str, 
-                 feature_constraints: Union[List[str], str], 
-                 ref_colvars_path: Union[List[str], None],
-                 configuration: Dict, 
-                 output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the PCA calculator.
-        
-        Parameters
-        ----------
-        
-        colvars_path : str
-            Path to the colvars file
-        feature_constraints : Union[List[str], str]
-            List with the features to use for the training or str with regex to filter feature names.
-        ref_colvars_path : Union[List[str], None]
-            List of paths to colvars files with reference data
-        configuration : Dict
-            Configuration dictionary for the CV
-        output_path : str
-            Output path where the CV results folder will be created
         """
         
-        self.cv_name = 'pca'
-        
         super().__init__(colvars_path, feature_constraints, ref_colvars_path, configuration, output_path)
+        
+        self.cv_name = 'pca'
         
         self.initialize()
         
@@ -588,11 +593,11 @@ class PCA(LinearCVCalculator):
         
         # Use PCA to compute high variance linear combinations of the input features
         # out_features is q in torch.pca_lowrank -> Controls the dimensionality of the random projection in the randomized SVD algorithm (trade-off between speed and accuracy)
-        pca_calculator = PCA(in_features = self.num_features, out_features=min(pca_lowrank_q, self.num_features, self.num_samples))
+        pca_cv = PCA(in_features = self.num_features, out_features=min(pca_lowrank_q, self.num_features, self.num_samples))
         
         # Compute PCA
         try:
-            pca_eigvals, pca_eigvecs = pca_calculator.compute(X=torch.tensor(self.input_dataframe.to_numpy()), center = True)
+            pca_eigvals, pca_eigvecs = pca_cv.compute(X=torch.tensor(self.input_dataframe.to_numpy()), center = True)
         except Exception as e:
             logger.error(f'PCA could not be computed. Error message: {e}')
             return
@@ -605,38 +610,20 @@ class PCA(LinearCVCalculator):
             if self.cv[0,i] < 0:
                 self.cv[:,i] = -self.cv[:,i]
                 
-class TICA(LinearCVCalculator):
+class TICACalculator(LinearCVCalculator):
     """ 
     Time-lagged independent component analysis calculator.
     """
     
-    def __init__(self, 
-                 colvars_path: str, 
-                 feature_constraints: Union[List[str], str], 
-                 ref_colvars_path: Union[List[str], None],
-                 configuration: Dict, 
-                 output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the TICA calculator.
-        
-        Parameters
-        ----------
-        
-        colvars_path : str
-            Path to the colvars file
-        feature_constraints : Union[List[str], str]
-            List with the features to use for the training or str with regex to filter feature names.
-        ref_colvars_path : Union[List[str], None]
-            List of paths to colvars files with reference data
-        configuration : Dict
-            Configuration dictionary for the CV
-        output_path : str
-            Output path where the CV results folder will be created
         """
         
-        self.cv_name = 'tica'
-        
         super().__init__(colvars_path, feature_constraints, ref_colvars_path, configuration, output_path)
+        
+        self.cv_name = 'tica'
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         self.input_dataset = create_timelagged_dataset(self.input_dataframe, lag_time=self.architecture_config['lag_time'])
@@ -650,11 +637,11 @@ class TICA(LinearCVCalculator):
 
         # Use TICA to compute slow linear combinations of the input features
         # Here out_features is the number of eigenvectors to keep
-        tica_calculator = TICA(in_features = self.num_features, out_features=self.cv_dimension)
+        tica_cv = TICA(in_features = self.num_features, out_features=self.cv_dimension)
 
         try:
             # Compute TICA
-            tica_eigvals, tica_eigvecs = tica_calculator.compute(data=[self.input_dataset['data'], self.input_dataset['data_lag']], save_params = True, remove_average = True)
+            tica_eigvals, tica_eigvecs = tica_cv.compute(data=[self.input_dataset['data'], self.input_dataset['data_lag']], save_params = True, remove_average = True)
         except Exception as e:
             logger.error(f'TICA could not be computed. Error message: {e}')
             return
@@ -662,37 +649,19 @@ class TICA(LinearCVCalculator):
         # Save the first cv_dimension eigenvectors as CVs
         self.cv = tica_eigvecs.numpy()
         
-class AE(NonLinearCVCalculator):
+class AECalculator(NonLinearCVCalculator):
     """
     Autoencoder calculator.
     """
-    def __init__(self, 
-                 colvars_path: str, 
-                 feature_constraints: Union[List[str], str], 
-                 ref_colvars_path: Union[List[str], None],
-                 configuration: Dict, 
-                 output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the Autoencoder calculator.
-        
-        Parameters
-        ----------
-        
-        colvars_path : str
-            Path to the colvars file
-        feature_constraints : Union[List[str], str]
-            List with the features to use for the training or str with regex to filter feature names.
-        ref_colvars_path : Union[List[str], None]
-            List of paths to colvars files with reference data
-        configuration : Dict
-            Configuration dictionary for the CV
-        output_path : str
-            Output path where the CV results folder will be created
         """
         
-        self.cv_name = 'ae'
-        
         super().__init__(colvars_path, feature_constraints, ref_colvars_path, configuration, output_path)
+        
+        self.cv_name = 'ae'
         
         self.initialize()
         
@@ -703,48 +672,19 @@ class AE(NonLinearCVCalculator):
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
         
-    def compute_cv(self):
-        """
-        Compute Autoencoder CV.
-        """
-        
-        # Train the non-linear model
-        self.train()    
-        
-        # Save the loss 
-        self.save_loss()
-        
-class DeepTICA(NonLinearCVCalculator):
+class DeepTICACalculator(NonLinearCVCalculator):
     """
     DeepTICA calculator.
     """
-    def __init__(self, 
-                 colvars_path: str, 
-                 feature_constraints: Union[List[str], str], 
-                 ref_colvars_path: Union[List[str], None],
-                 configuration: Dict, 
-                 output_path: str):
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_path: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the DeepTICA calculator.
-        
-        Parameters
-        ----------
-        
-        colvars_path : str
-            Path to the colvars file
-        feature_constraints : Union[List[str], str]
-            List with the features to use for the training or str with regex to filter feature names.
-        ref_colvars_path : Union[List[str], None]
-            List of paths to colvars files with reference data
-        configuration : Dict
-            Configuration dictionary for the CV
-        output_path : str
-            Output path where the CV results folder will be created
-        """
-        
-        self.cv_name = 'deep_tica'
+        """      
         
         super().__init__(colvars_path, feature_constraints, ref_colvars_path, configuration, output_path)
+        
+        self.cv_name = 'deep_tica'
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         self.input_dataset = create_timelagged_dataset(self.input_dataframe, lag_time=self.architecture_config['lag_time'])
@@ -756,17 +696,6 @@ class DeepTICA(NonLinearCVCalculator):
         # Update options
         self.cv_options.update({"nn": self.nn_options,
                                 "optimizer": self.optimizer_options})
-        
-    def compute_cv(self):
-        """
-        Compute DeepTICA CV.
-        """
-
-        # Train the non-linear model
-        self.train()  
-        
-        # Save the loss 
-        self.save_loss()
         
     def cv_specific_tasks(self):
         """
@@ -796,4 +725,31 @@ class DeepTICA(NonLinearCVCalculator):
         ax.figure.savefig(os.path.join(self.output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
 
-        
+# Mappings
+cv_calculators_map = {
+    'pca': PCACalculator,
+    'ae': AECalculator,
+    'tica': TICACalculator,
+    'deep_tica': DeepTICACalculator
+}
+
+cv_classes_map = {
+    'pca': PCA,
+    'ae': AutoEncoderCV,
+    'tica': TICA,
+    'deep_tica': DeepTICA
+}
+
+cv_names_map = {
+    'pca': 'PCA',
+    'ae': 'AE',
+    'tica': 'TICA',
+    'deep_tica': 'DeepTICA'
+}
+
+cv_components_map = {
+    'pca': 'PC',
+    'ae': 'AE',
+    'tica': 'TIC',
+    'deep_tica': 'DeepTIC'
+}

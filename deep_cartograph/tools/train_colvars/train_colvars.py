@@ -1,11 +1,13 @@
 # Import modules
 import os
+import time
 import shutil
 import argparse
 import logging.config
 from pathlib import Path
+from typing import Dict, List, Literal, Union
 
-from train_colvars_workflow import TrainColvarsWorkflow
+from deep_cartograph.tools.train_colvars.train_colvars_workflow import TrainColvarsWorkflow
 
 ########
 # TOOL #
@@ -56,6 +58,69 @@ def set_logger(verbose: bool):
 # MAIN #
 ########
 
+def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
+                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
+                  dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
+                  trajectory: str = None, topology: str = None, output_folder: str = 'train_colvars'):
+    """
+    Function that trains collective variables using the mlcolvar library. 
+
+    The following CVs can be computed: 
+
+        - pca (Principal Component Analysis) 
+        - ae (Autoencoder)
+        - tica (Time Independent Component Analysis)
+        - dtica (Deep Time Independent Component Analysis)
+
+    It also plots an estimate of the Free Energy Surface (FES) along the CVs from the trajectory data.
+
+    Parameters
+    ----------
+
+        configuration:       configuration dictionary (see default_config.yml for more information)
+        colvars_path:        path to the colvars file with the input data (samples of features)
+        feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
+        ref_colvars_path:    list of paths to colvars files with reference data. If None, no reference data is used
+        ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
+        cv_dimension:        dimension of the CVs to train or compute, if None, the value in the configuration file is used
+        cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
+        trajectory_path:     path to the trajectory file that will be analyzed
+        topology_path:       path to the topology file of the system
+        output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
+    """
+    
+    logger = logging.getLogger("deep_cartograph")
+
+    # Title
+    logger.info("================================")
+    logger.info("Training of Collective Variables")
+    logger.info("================================")
+    logger.info("Training of collective variables using the mlcolvar library.")
+
+    # Start timer
+    start_time = time.time()
+    
+    # Create a TrainColvarsWorkflow object 
+    workflow = TrainColvarsWorkflow(
+        configuration=configuration,
+        colvars_path=colvars_path,
+        feature_constraints=feature_constraints,
+        ref_colvars_path=ref_colvars_path,
+        ref_labels=ref_labels,
+        cv_dimension=dimension,
+        cvs=cvs,
+        trajectory_path=trajectory,
+        topology_path=topology,
+        output_folder=output_folder
+    )
+        
+    # Run the workflow
+    workflow.run()
+    
+    # End timer
+    elapsed_time = time.time() - start_time
+    logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
+
 if __name__ == "__main__":
 
     from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, read_feature_constraints
@@ -98,7 +163,7 @@ if __name__ == "__main__":
             ref_labels = [Path(args.ref_colvars_path).stem]
             
     # Create a TrainColvarsWorkflow object and run the workflow
-    TrainColvarsWorkflow.train_colvars(
+    train_colvars(
         configuration = configuration,
         colvars_path = args.colvars_path,
         feature_constraints = feature_constraints,

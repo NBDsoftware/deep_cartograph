@@ -40,7 +40,7 @@ def test_filter_features():
     reference_features_path = os.path.join(data_path, "reference", "filter_features", "filtered_virtual_dihedrals.txt")
     
     # Output files
-    output_path = os.path.join(tests_path, "output_compute_features")
+    output_path = os.path.join(tests_path, "output_filter_features")
     
     # Remove output folder if it exists
     if os.path.exists(output_path):
