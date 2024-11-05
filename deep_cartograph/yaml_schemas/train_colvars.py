@@ -164,7 +164,7 @@ class Clustering(BaseModel):
     # A distance threshold. Clusters below this value will be merged (only for hdbscan)
     cluster_selection_epsilon: float = 0
 
-class TrainColvars(BaseModel):
+class TrainColvarsSchema(BaseModel):
     
     # List of Collective Variables to train/calculate
     cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = ['pca', 'ae', 'tica', 'deep_tica']

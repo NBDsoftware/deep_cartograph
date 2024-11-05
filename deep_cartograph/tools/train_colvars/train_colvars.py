@@ -1,211 +1,15 @@
 # Import modules
 import os
-import sys
-import time
 import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Literal, Union
-from mlcolvar.utils.io import  create_dataset_from_files  
+
+from train_colvars_workflow import TrainColvarsWorkflow
 
 ########
 # TOOL #
 ########
-
-def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
-                  ref_colvars_path: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, 
-                  dimension: Union[int, None] = None, cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, 
-                  trajectory: Union[str, None] = None, topology: Union[str, None] = None, output_folder: str = 'train_colvars'):
-    """
-    Function that trains collective variables using the mlcolvar library. 
-
-    The following CVs can be computed: 
-
-        - pca (Principal Component Analysis) 
-        - ae (Autoencoder)
-        - tica (Time Independent Component Analysis)
-        - deep_tica (Deep Time Independent Component Analysis)
-
-    It also plots an estimate of the Free Energy Surface (FES) along the CVs from the trajectory data.
-
-    Parameters
-    ----------
-
-        configuration:       Configuration dictionary (see default_config.yml for more information)
-        colvars_path:        Path to the colvars file with the input data (samples of features)
-        feature_constraints: (Optional) List with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
-        ref_colvars_path:    (Optional) List of paths to colvars files with reference data. If None, no reference data is used
-        ref_labels:          (Optional) List of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
-        dimension:           (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
-        cvs:                 (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
-        trajectory:          (Optional) Path to the trajectory file corresponding to the colvars file to be clustered
-        topology:            (Optional) Path to the topology file of the system
-        output_folder:       (Optional) Path to the output folder, if not given, a folder named 'train_colvars' is created
-    """
-
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist, get_filter_dict, merge_configurations
-    from deep_cartograph.tools.train_colvars.utils import compute_pca, compute_ae, compute_tica, compute_deep_tica
-    from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
-
-    logger = logging.getLogger("deep_cartograph")
-
-    # Title
-    logger.info("================================")
-    logger.info("Training of Collective Variables")
-    logger.info("================================")
-    logger.info("Training of collective variables using the mlcolvar library.")
-
-    # Start timer
-    start_time = time.time()
-
-    # Create output folder if it does not exist
-    create_output_folder(output_folder)
-    
-    # Validate configuration
-    configuration = validate_configuration(configuration, TrainColvars, output_folder)
-
-    # Check if files exist
-    if not files_exist(colvars_path):
-        logger.error(f"Colvars file {colvars_path} does not exist. Exiting...")
-        sys.exit(1)
-    if ref_colvars_path is not None:
-        if not files_exist(*ref_colvars_path):
-            logger.error(f"Reference colvars file {ref_colvars_path} does not exist. Exiting...")
-            sys.exit(1)
-
-
-    ###############
-    # PREPARATION #
-    ###############
-
-    # Enforce CLI arguments if any
-    if cvs:
-        configuration['cvs']= cvs
-    if dimension:
-        configuration['common']['dimension'] = dimension
-
-    logger.info('Creating datasets from colvars...')
-
-    # Create feature filter dictionary from feature constraints
-    filter_dict = get_filter_dict(feature_constraints)
-
-    # Check if the colvars file exists
-    if not files_exist(colvars_path):
-        return 
-
-    # Build dataset from colvars file with the selected features
-    features_dataset, colvars_dataframe = create_dataset_from_files(file_names=[colvars_path], filter_args=filter_dict, verbose = False, return_dataframe=True)  
-
-    # Filter dataframe to keep just the selected features
-    features_dataframe = colvars_dataframe.filter(**filter_dict)
-
-    # If reference data is given
-    if ref_colvars_path:
-
-        ref_features_dataset = []
-        ref_features_dataframe = []
-
-        for path in ref_colvars_path:
-
-            # Build dataset from colvars file with the selected features
-            ref_features_dataset_i, ref_colvars_dataframe_i = create_dataset_from_files(file_names=[path], filter_args=filter_dict, verbose = False, return_dataframe=True)     
-            # Filter dataframe to keep just the selected features
-            ref_features_dataframe_i = ref_colvars_dataframe_i.filter(**filter_dict)
-
-            ref_features_dataset.append(ref_features_dataset_i)
-            ref_features_dataframe.append(ref_features_dataframe_i)
-    else:
-        ref_features_dataset = None
-        ref_features_dataframe = None
-
-    # Log number of features and samples
-    logger.info(f'Number of samples: {features_dataframe.shape[0]}')
-    logger.info(f'Number of features: {features_dataframe.shape[1]}')
-
-    ###########
-    # CV: PCA #
-    ###########
-
-    if 'pca' in configuration['cvs']:
-        pca_output_path = os.path.join(output_folder, 'pca')
-
-        # Merge common and pca configurations
-        pca_configuration = merge_configurations(configuration['common'], configuration.get('pca',{}))
-
-        compute_pca(features_dataframe = features_dataframe, 
-                    ref_features_dataframe = ref_features_dataframe,
-                    ref_labels = ref_labels,
-                    cv_settings = pca_configuration, 
-                    figures_settings = configuration['figures'], 
-                    clustering_settings = configuration['clustering'],
-                    trajectory = trajectory,
-                    topology = topology,
-                    output_path = pca_output_path)
-
-    ###################
-    # CV: Autoencoder #
-    ###################
-
-    if 'ae' in configuration['cvs']:
-        ae_output_path = os.path.join(output_folder, 'ae')
-
-        # Merge common and ae configurations
-        ae_configuration = merge_configurations(configuration['common'], configuration.get('ae',{}))
-
-        compute_ae(features_dataset = features_dataset, 
-                   ref_features_dataset = ref_features_dataset,
-                   ref_labels = ref_labels,
-                   cv_settings = ae_configuration,
-                   figures_settings = configuration['figures'],
-                   clustering_settings = configuration['clustering'],
-                   trajectory = trajectory,
-                   topology = topology,
-                   output_path = ae_output_path)
-
-    ############
-    # CV: TICA #
-    ############
-
-    if 'tica' in configuration['cvs']:
-        tica_output_path = os.path.join(output_folder, 'tica')
-
-        # Merge common and tica configurations
-        tica_configuration = merge_configurations(configuration['common'], configuration.get('tica',{}))
-
-        compute_tica(features_dataframe = features_dataframe,
-                     ref_features_dataframe = ref_features_dataframe,
-                     ref_labels = ref_labels,
-                     cv_settings = tica_configuration,
-                     figures_settings = configuration['figures'],
-                     clustering_settings = configuration['clustering'],
-                     trajectory = trajectory,
-                     topology = topology,
-                     output_path = tica_output_path)
-    
-    #################
-    # CV: Deep-TICA #
-    #################
-
-    if 'deep_tica' in configuration['cvs']:
-        deep_tica_output_path = os.path.join(output_folder, 'deep_tica')
-
-        # Merge common and deep tica configurations
-        deep_tica_configuration = merge_configurations(configuration['common'], configuration.get('deep_tica',{}))
-
-        compute_deep_tica(features_dataframe = features_dataframe,
-                          ref_features_dataframe = ref_features_dataframe,
-                          ref_labels = ref_labels,
-                          cv_settings = deep_tica_configuration,
-                          figures_settings = configuration['figures'],
-                          clustering_settings = configuration['clustering'],
-                          trajectory = trajectory,
-                          topology = topology,
-                          output_path = deep_tica_output_path)
-    
-    # End timer
-    elapsed_time = time.time() - start_time
-    logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
 def set_logger(verbose: bool):
     """
@@ -293,17 +97,17 @@ if __name__ == "__main__":
         if args.use_reference_labels:
             ref_labels = [Path(args.ref_colvars_path).stem]
             
-    # Run tool
-    train_colvars(
-        configuration = configuration, 
-        colvars_path = args.colvars_path, 
-        feature_constraints = feature_constraints, 
+    # Create a TrainColvarsWorkflow object and run the workflow
+    TrainColvarsWorkflow.train_colvars(
+        configuration = configuration,
+        colvars_path = args.colvars_path,
+        feature_constraints = feature_constraints,
         ref_colvars_path = ref_colvars_path,
         ref_labels = ref_labels,
-        dimension = args.dimension, 
-        cvs = args.cvs, 
-        trajectory = args.trajectory,
-        topology = args.topology,
+        cv_dimension = args.dimension,
+        cvs = args.cvs,
+        trajectory_path = args.trajectory,
+        topology_path = args.topology,
         output_folder = output_folder)
 
     # Move log file to output folder

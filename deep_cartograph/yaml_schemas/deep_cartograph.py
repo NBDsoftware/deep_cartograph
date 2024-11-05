@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 from deep_cartograph.yaml_schemas.compute_features import ComputeFeatures
 from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
-from deep_cartograph.yaml_schemas.train_colvars import TrainColvars
+from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
 
 class DeepCartograph(BaseModel):
     
@@ -13,4 +13,4 @@ class DeepCartograph(BaseModel):
     filter_features: FilterFeatures = FilterFeatures()
 
     # Schema for the training of the colvars file
-    train_colvars: TrainColvars = TrainColvars()
+    train_colvars: TrainColvarsSchema = TrainColvarsSchema()
