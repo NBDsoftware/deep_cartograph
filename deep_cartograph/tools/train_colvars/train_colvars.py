@@ -60,7 +60,7 @@ def set_logger(verbose: bool):
 
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str, None] = None, 
                   ref_colvars_path: List[str] = None, ref_labels: List[str] = None, dimension: int = None, 
-                  cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, trajectory: str = None, 
+                  cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, trajectory: str = None, 
                   topology: str = None, samples_per_frame: float = 1, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
@@ -83,7 +83,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         ref_colvars_path:    list of paths to colvars files with reference data. If None, no reference data is used
         ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
         cv_dimension:        dimension of the CVs to train or compute, if None, the value in the configuration file is used
-        cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
+        cvs:                 List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
         trajectory_path:     path to the trajectory file that will be clustered
         topology_path:       path to the topology file of the system
         samples_per_frame:   samples in the colvars file for each frame in the trajectory file. Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)
