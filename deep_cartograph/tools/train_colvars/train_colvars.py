@@ -59,9 +59,9 @@ def set_logger(verbose: bool):
 ########
 
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str, None] = None, 
-                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, dimension: int = None, 
-                  cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None, trajectory: str = None, 
-                  topology: str = None, samples_per_frame: float = 1, output_folder: str = 'train_colvars'):
+                  ref_colvars_path: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
+                  cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, trajectory: Union[str, None] = None, 
+                  topology: Union[str, None] = None, samples_per_frame: Union[float, None] = 1, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
-    parser.add_argument('-dim', '-dimension', type=int, help='Dimension of the CV to train or compute', required=False)
+    parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help='Dimension of the CV to train or compute', required=False)
     parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help='Path to the output folder', required=True)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Set the logging level to DEBUG', default=False)
@@ -162,6 +162,7 @@ if __name__ == "__main__":
 
     # Reference data should be list or None - see train_colvars API
     ref_labels = None
+    ref_colvars_path = None
     if args.ref_colvars_path:
         ref_colvars_path = [args.ref_colvars_path]
         if args.label_reference:
@@ -174,10 +175,10 @@ if __name__ == "__main__":
         feature_constraints = feature_constraints,
         ref_colvars_path = ref_colvars_path,
         ref_labels = ref_labels,
-        cv_dimension = args.dimension,
+        dimension = args.dimension,
         cvs = args.cvs,
-        trajectory_path = args.trajectory,
-        topology_path = args.topology,
+        trajectory = args.trajectory,
+        topology = args.topology,
         samples_per_frame = args.samples_per_frame,
         output_folder = output_folder)
 

@@ -351,7 +351,7 @@ class NonLinearCVCalculator(CVCalculator):
                                     "lr_frequency": self.check_val_every_n_epoch})
 
             # Make early stopping patience larger than learning rate scheduler patience
-            patience = max(patience, self.lr_scheduler_config['kwargs']['patience']*2)
+            self.patience = max(self.patience, self.lr_scheduler_config['kwargs']['patience']*2)
     
     def check_batch_size(self):
         
