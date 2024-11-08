@@ -162,6 +162,7 @@ if __name__ == "__main__":
 
     # Reference data should be list or None - see train_colvars API
     ref_labels = None
+    ref_colvars_path = None
     if args.ref_colvars_path:
         ref_colvars_path = [args.ref_colvars_path]
         if args.use_reference_labels:
