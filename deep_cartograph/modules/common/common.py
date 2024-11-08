@@ -314,6 +314,29 @@ def save_list(list_to_save: list, path_to_save: str) -> None:
 
     return
 
+def read_list(path_to_read: str) -> list:
+    """
+    Function that reads a list from a file.
+
+    Inputs
+    ------
+
+        path_to_read: Path to the file where the list is saved
+    
+    Returns
+    -------
+
+        list_read: List read from the file
+    """
+
+    # Open the file
+    with open(path_to_read, 'r') as file_to_read:
+
+        # Read the lines
+        list_read = file_to_read.readlines()
+
+    return list_read
+
 def get_unique_path(path: str):
     """
     Returns a unique path. 

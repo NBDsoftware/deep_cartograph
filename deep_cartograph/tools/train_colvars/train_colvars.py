@@ -137,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument('-samples_per_frame', dest='samples_per_frame', type=float, help="""Samples in the colvars file for each frame in the trajectory file. 
                         Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency).""", required=False)
     parser.add_argument('-ref_colvars', dest='ref_colvars_path', type=str, help='Path to the colvars file with the reference data', required=False)
-    parser.add_argument('-use_rl', '-use_ref_labels', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
+    parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', type=int, help='Dimension of the CV to train or compute', required=False)
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     ref_labels = None
     if args.ref_colvars_path:
         ref_colvars_path = [args.ref_colvars_path]
-        if args.use_reference_labels:
+        if args.label_reference:
             ref_labels = [Path(args.ref_colvars_path).stem]
             
     # Create a TrainColvarsWorkflow object and run the workflow

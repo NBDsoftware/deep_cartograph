@@ -5,14 +5,14 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Union
 
 ########
 # TOOL #
 ########
 
-def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = False,
-                    output_folder: str = 'filter_features'):
+def filter_features(configuration: Dict, colvars_path: str, output_features_path: Union[str, None] = None, 
+                    csv_summary: bool = False, output_folder: str = 'filter_features'):
     """
     Function that filters the features in the colvars file using different algorithms to select a subset that contains 
     the most information about the system.
@@ -22,13 +22,14 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
 
         configuration:             Configuration dictionary (see default_config.yml for more information)
         colvars_path:              Path to the input colvars file with the time series of features.
+        output_features_path       (Optional) Path to the output file with the filtered features.
         csv_summary:               (Optional) If True, saves a CSV summary with the filter values for each collective variable
         output_folder:             (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
 
     Returns
     -------
 
-        filtered_features:   
+        output_features_path:      Path to the output file with the filtered features.
     """
 
     from deep_cartograph.modules.amino import amino
@@ -79,14 +80,14 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
     filtered_features = amino(filtered_features, colvars_path, output_folder, configuration['amino_settings'], configuration['sampling_settings'])
 
     # Save the filtered features
-    filtered_features_path = os.path.join(output_folder, 'filtered_features.txt')
-    save_list(filtered_features, filtered_features_path)
+    output_features_path = os.path.join(output_folder, 'filtered_features.txt')
+    save_list(filtered_features, output_features_path)
 
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Filter features): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
             
-    return filtered_features
+    return output_features_path
 
 def set_logger(verbose: bool):
     """
