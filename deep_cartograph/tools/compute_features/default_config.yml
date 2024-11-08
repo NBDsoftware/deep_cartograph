@@ -1,6 +1,6 @@
 # plumed_settings:
 #   timeout:                    Time out for the PLUMED calculation in seconds
-#   traj_stride:                Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
+#   traj_stride:                Trajectory stride for the calculation of features
 #   moltype:                    Molecule type: protein, dna or rna
 #   whole_molecule_selection:   Selection of atoms that define the molecules that should be whole to compute the descriptors.
 #   input_name:                 Name of the input file to be used in the PLUMED input file (without the .dat extension)

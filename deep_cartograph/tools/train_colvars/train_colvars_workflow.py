@@ -36,6 +36,7 @@ class TrainColvarsWorkflow:
                  cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None,
                  trajectory_path: Union[str, None] = None,
                  topology_path: Union[str, None] = None, 
+                 samples_per_frame: float = 1,
                  output_folder: str = 'train_colvars'):
         """
         Initializes the TrainColvarsWorkflow class.
@@ -65,6 +66,7 @@ class TrainColvarsWorkflow:
         self.ref_colvars_path: Union[List[str], None] = ref_colvars_path
         self.trajectory_path: Union[str, None] = trajectory_path
         self.topology_path: Union[str, None] = topology_path
+        self.samples_per_frame: float = samples_per_frame
         self.ref_labels: Union[List[str], None] = ref_labels
         
         # Validate inputs existence
@@ -184,8 +186,9 @@ class TrainColvarsWorkflow:
                 # Extract clusters from the trajectory
                 if (None not in [self.trajectory_path, self.topology_path]) and (len(centroids) > 0):
                     md.extract_clusters_from_traj(trajectory_path = self.trajectory_path, 
-                                                topology_path = self.topology_path, 
-                                                traj_df = projected_input_df, 
+                                                topology_path = self.topology_path,
+                                                traj_df = projected_input_df,
+                                                samples_per_frame = self.samples_per_frame, 
                                                 centroids_df = centroids_df,
                                                 cluster_label = 'cluster',
                                                 frame_label = 'order', 

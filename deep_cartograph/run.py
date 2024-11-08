@@ -128,6 +128,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         cvs = cvs,
         trajectory = trajectory,
         topology = topology,
+        samples_per_frame = 1/configuration['compute_features']['plumed_settings']['traj_stride'],
         output_folder = step3_output_folder)
             
     # End timer

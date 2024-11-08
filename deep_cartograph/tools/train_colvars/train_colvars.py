@@ -58,10 +58,10 @@ def set_logger(verbose: bool):
 # MAIN #
 ########
 
-def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str], 
-                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, 
-                  dimension: int = None, cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
-                  trajectory: str = None, topology: str = None, output_folder: str = 'train_colvars'):
+def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str, None] = None, 
+                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, dimension: int = None, 
+                  cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, trajectory: str = None, 
+                  topology: str = None, samples_per_frame: float = 1, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -86,6 +86,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         cvs:                 List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
         trajectory_path:     path to the trajectory file that will be analyzed
         topology_path:       path to the topology file of the system
+        samples_per_frame:   samples in the colvars file for each frame in the trajectory file. Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
     
@@ -111,6 +112,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         cvs=cvs,
         trajectory_path=trajectory,
         topology_path=topology,
+        samples_per_frame=samples_per_frame,
         output_folder=output_folder
     )
         
@@ -128,9 +130,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Deep Cartograph: Train Collective Variables", description="Train collective variables using the mlcolvar library.")
 
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help='Path to configuration file (.yml)', required=True)
-    parser.add_argument('-colvars', dest='colvars_path', type=str, help='Path to the colvars file', required=True)
-    parser.add_argument('-trajectory', dest='trajectory', help="Path to trajectory file corresponding to the colvars file. Used to create clusters.", required=False)
-    parser.add_argument('-topology', dest='topology', help="Path to topology file.", required=False)
+    parser.add_argument('-colvars', dest='colvars_path', type=str, help='Path to the colvars file with feature samples.', required=True)
+    parser.add_argument('-trajectory', dest='trajectory', help="""Path to trajectory file corresponding to the colvars file. The feature samples in the 
+                        colvars file must correspond to frames of this trajectory. Used to create structure clusters.""", required=False)
+    parser.add_argument('-topology', dest='topology', help="Path to topology file of the trajectory.", required=False)
+    parser.add_argument('-samples_per_frame', dest='samples_per_frame', type=float, help="""Samples in the colvars file for each frame in the trajectory file. 
+                        Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency).""", required=False)
     parser.add_argument('-ref_colvars', dest='ref_colvars_path', type=str, help='Path to the colvars file with the reference data', required=False)
     parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
@@ -173,6 +178,7 @@ if __name__ == "__main__":
         cvs = args.cvs,
         trajectory_path = args.trajectory,
         topology_path = args.topology,
+        samples_per_frame = args.samples_per_frame,
         output_folder = output_folder)
 
     # Move log file to output folder
