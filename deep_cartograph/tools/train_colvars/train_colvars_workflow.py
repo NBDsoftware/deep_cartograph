@@ -36,7 +36,7 @@ class TrainColvarsWorkflow:
                  cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None,
                  trajectory_path: Union[str, None] = None,
                  topology_path: Union[str, None] = None, 
-                 samples_per_frame: float = 1,
+                 samples_per_frame: Union[float, None] = 1,
                  output_folder: str = 'train_colvars'):
         """
         Initializes the TrainColvarsWorkflow class.

@@ -59,9 +59,9 @@ def set_logger(verbose: bool):
 ########
 
 def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: Union[List[str], str, None] = None, 
-                  ref_colvars_path: List[str] = None, ref_labels: List[str] = None, dimension: int = None, 
-                  cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, trajectory: str = None, 
-                  topology: str = None, samples_per_frame: float = 1, output_folder: str = 'train_colvars'):
+                  ref_colvars_path: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
+                  cvs: Union[List[Literal['pca', 'ae', 'tica', 'dtica']], None] = None, trajectory: Union[str, None] = None, 
+                  topology: Union[str, None] = None, samples_per_frame: Union[float, None] = 1, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
