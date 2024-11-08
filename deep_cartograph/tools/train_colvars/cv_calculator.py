@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Union
 
-from mlcolvar.utils.timelagged import create_timelagged_dataset
+from mlcolvar.utils.timelagged import create_timelagged_dataset # NOTE: this function returns less samples than expected: N-lag_time-2
 from mlcolvar.utils.io import create_dataset_from_files
 from mlcolvar.data import DictModule, DictDataset
 from mlcolvar.cvs import AutoEncoderCV, DeepTICA
@@ -21,7 +21,7 @@ from mlcolvar.core.transform.utils import Statistics
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
-from deep_cartograph.modules.common import (files_exist, get_filter_dict, closest_power_of_two, create_output_folder)
+from deep_cartograph.modules.common import (get_filter_dict, closest_power_of_two, create_output_folder)
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -52,20 +52,21 @@ class CVCalculator:
         """
         
         # Input data
-        self.input_dataset: DictDataset = None
-        self.input_dataframe: pd.DataFrame = None
+        self.training_input_dtset: DictDataset = None     # Used to train / compute the CVs, contains just the samples defined in input_colvars_settings
+        self.projection_input_df: pd.DataFrame = None  # Used to project the feature samples onto the CV space, contains all samples
         
-        self.ref_datasets: List[DictDataset] = []
-        self.ref_dataframes: List[pd.DataFrame] = []
+        self.ref_dtsets: List[DictDataset] = []
+        self.ref_dfs: List[pd.DataFrame] = []
         
         self.num_features: int = None
         self.num_samples: int = None
         
-        self.read_data(colvars_path, feature_constraints, ref_colvars_path)
-        
         # Configuration
         self.configuration: Dict = configuration
         self.architecture_config: Dict = configuration['architecture']
+        self.input_colvars_settings: Dict = configuration['input_colvars']
+        
+        self.read_data(colvars_path, feature_constraints, ref_colvars_path)
         
         # General CV attributes
         self.cv_dimension: int = configuration['dimension']
@@ -78,8 +79,7 @@ class CVCalculator:
     
         self.output_path: str =  output_path
 
-    def read_data(self, colvars_path: str, 
-                      feature_constraints: Union[List[str], str],
+    def read_data(self, colvars_path: str, feature_constraints: Union[List[str], str],
                       ref_colvars_path: Union[List[str], None]):
         """
         Creates datasets and dataframes from input colvars and filters them.
@@ -98,22 +98,29 @@ class CVCalculator:
         logger.info('Reading data from colvars files...')
         
         filter_dict = get_filter_dict(feature_constraints)
-
+            
         # Main data
-        self.input_dataset, self.input_dataframe = create_dataset_from_files(
-            file_names=[colvars_path], filter_args=filter_dict, verbose=False, return_dataframe=True
+        self.training_input_dtset, self.projection_input_df = create_dataset_from_files(
+            file_names=[colvars_path],
+            load_args=[self.input_colvars_settings],       # NOTE: only training should use input_colvars_settings, otherwise remove it
+            filter_args=filter_dict, 
+            verbose=False, 
+            return_dataframe=True
         )
-        self.input_dataframe = self.input_dataframe.filter(**filter_dict)
+        self.projection_input_df = self.projection_input_df.filter(**filter_dict)
         
         # Number of features
-        self.num_features = self.input_dataframe.shape[1]
+        self.num_features = self.projection_input_df.shape[1]
         logger.info(f'Number of features: {self.num_features}')
 
         # Reference data (if provided)
         if ref_colvars_path:
             for path in ref_colvars_path:
                 ref_dataset, ref_dataframe = create_dataset_from_files(
-                    file_names=[path], filter_args=filter_dict, verbose=False, return_dataframe=True
+                    file_names=[path], 
+                    filter_args=filter_dict, 
+                    verbose=False, 
+                    return_dataframe=True
                 )
                 
                 # Check if the number of features is the same
@@ -123,8 +130,8 @@ class CVCalculator:
                     sys.exit(1)
                 
                 # Append to lists # NOTE: we need just one of the two?
-                self.ref_datasets.append(ref_dataset)
-                self.ref_dataframes.append(ref_dataframe.filter(**filter_dict)) 
+                self.ref_dtsets.append(ref_dataset)
+                self.ref_dfs.append(ref_dataframe.filter(**filter_dict)) 
                 
     def initialize(self):
         """
@@ -136,7 +143,7 @@ class CVCalculator:
         """
         
         # Get the number of samples - input_dataset depends on the specific CV calculator
-        self.num_samples = self.input_dataset["data"].shape[0]
+        self.num_samples = self.training_input_dtset["data"].shape[0]
         logger.info(f'Number of samples: {self.num_samples}')
         
         # Create output folder for this CV
@@ -243,23 +250,6 @@ class LinearCVCalculator(CVCalculator):
         # Main attributes
         self.cv: Union[np.array, None] = None
         
-    def project_features(self):
-        """
-        Projects the features onto a linear CV space.
-        """
-        
-        logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
-        
-        # Find a numpy array of features
-        features_array = self.input_dataframe.to_numpy(dtype=np.float32)
-        
-        # Project the input dataframe onto the CV space
-        self.projected_input = np.matmul(features_array, self.cv)
-        
-        # Project the reference dataframe onto the CV space
-        if self.ref_dataframes:
-            self.projected_ref = [np.matmul(df.to_numpy(dtype=np.float32), self.cv) for df in self.ref_dataframes]
-    
     def save_cv(self):
         """
         Saves the collective variable linear weights to a text file.
@@ -273,6 +263,23 @@ class LinearCVCalculator(CVCalculator):
         np.savetxt(cv_path, self.cv)
         
         logger.info(f'Collective variable saved to {cv_path}')
+        
+    def project_features(self):
+        """
+        Projects the features onto a linear CV space.
+        """
+        
+        logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
+        
+        # Find a numpy array of features
+        features_array = self.projection_input_df.to_numpy(dtype=np.float32)
+        
+        # Project the input dataframe onto the CV space
+        self.projected_input = np.matmul(features_array, self.cv)
+        
+        # Project the reference dataframe onto the CV space
+        if self.ref_dfs:
+            self.projected_ref = [np.matmul(df.to_numpy(dtype=np.float32), self.cv) for df in self.ref_dfs]
        
 # Subclass for non-linear collective variables calculators
 class NonLinearCVCalculator(CVCalculator):
@@ -373,7 +380,7 @@ class NonLinearCVCalculator(CVCalculator):
                 # Build datamodule, split the dataset into training and validation
                 datamodule = DictModule(
                     random_split = self.random_split,
-                    dataset = self.input_dataset,
+                    dataset = self.training_input_dtset,
                     lengths = self.training_validation_lengths,
                     batch_size = self.batch_size,
                     shuffle = self.shuffle, 
@@ -545,7 +552,7 @@ class NonLinearCVCalculator(CVCalculator):
         # Data projected onto original latent space of the best model
         with torch.no_grad():
             self.cv.postprocessing = None
-            projected_input = self.cv(torch.Tensor(self.input_dataset[:]["data"]))
+            projected_input = self.cv(torch.Tensor(self.projection_input_df.values))
 
         # Normalize the latent space
         norm =  Normalization(self.cv_dimension, mode='min_max', stats = Statistics(projected_input) )
@@ -553,11 +560,11 @@ class NonLinearCVCalculator(CVCalculator):
         
         # Data projected onto normalized latent space
         with torch.no_grad():
-            self.projected_input = self.cv(torch.Tensor(self.input_dataset[:]["data"])).numpy()
+            self.projected_input = self.cv(torch.Tensor(self.projection_input_df.values)).numpy()
 
         # If reference data is provided, project it as well
-        if self.ref_dataframes:
-            for df in self.ref_dataframes:
+        if self.ref_dfs:
+            for df in self.ref_dfs:
                 ref_features_array = df.to_numpy(dtype=np.float32)
                 with torch.no_grad():
                     self.projected_ref.append(self.cv(torch.Tensor(ref_features_array)).numpy())
@@ -597,7 +604,7 @@ class PCACalculator(LinearCVCalculator):
         
         # Compute PCA
         try:
-            pca_eigvals, pca_eigvecs = pca_cv.compute(X=torch.tensor(self.input_dataframe.to_numpy()), center = True)
+            pca_eigvals, pca_eigvecs = pca_cv.compute(X=torch.tensor(self.training_input_dtset[:]['data'].numpy()), center = True)
         except Exception as e:
             logger.error(f'PCA could not be computed. Error message: {e}')
             return
@@ -626,7 +633,7 @@ class TICACalculator(LinearCVCalculator):
         self.cv_name = 'tica'
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.input_dataset = create_timelagged_dataset(self.input_dataframe, lag_time=self.architecture_config['lag_time'])
+        self.training_input_dtset = create_timelagged_dataset(self.training_input_dtset[:]['data'].numpy(), lag_time=self.architecture_config['lag_time'])
         
         self.initialize()
         
@@ -641,7 +648,7 @@ class TICACalculator(LinearCVCalculator):
 
         try:
             # Compute TICA
-            tica_eigvals, tica_eigvecs = tica_cv.compute(data=[self.input_dataset['data'], self.input_dataset['data_lag']], save_params = True, remove_average = True)
+            tica_eigvals, tica_eigvecs = tica_cv.compute(data=[self.training_input_dtset['data'], self.training_input_dtset['data_lag']], save_params = True, remove_average = True)
         except Exception as e:
             logger.error(f'TICA could not be computed. Error message: {e}')
             return
@@ -687,7 +694,7 @@ class DeepTICACalculator(NonLinearCVCalculator):
         self.cv_name = 'deep_tica'
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.input_dataset = create_timelagged_dataset(self.input_dataframe, lag_time=self.architecture_config['lag_time'])
+        self.training_input_dtset = create_timelagged_dataset(self.training_input_dtset[:]['data'].numpy(), lag_time=self.architecture_config['lag_time'])
         
         self.initialize()
         

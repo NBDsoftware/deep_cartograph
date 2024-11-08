@@ -29,7 +29,7 @@ class TrainColvarsWorkflow:
     def __init__(self, 
                  configuration: Dict, 
                  colvars_path: str, 
-                 feature_constraints: Union[List[str], str],
+                 feature_constraints: Union[List[str], str] = None,
                  ref_colvars_path: Union[List[str], None] = None, 
                  ref_labels: Union[List[str], None] = None,
                  cv_dimension: Union[int, None] = None,
@@ -155,8 +155,7 @@ class TrainColvarsWorkflow:
                 output_path = cv_output_folder)
             
             # Create a dataframe with the projected input data
-            projected_input_df = pd.DataFrame(cv_calculator.get_projected_input(), 
-                                                   columns=cv_calculator.get_labels())
+            projected_input_df = pd.DataFrame(cv_calculator.get_projected_input(), columns=cv_calculator.get_labels())
             
             # Add a column with the order of the data points
             projected_input_df['order'] = np.arange(projected_input_df.shape[0])
@@ -173,10 +172,9 @@ class TrainColvarsWorkflow:
                 
                 # Find centroids among input samples
                 if len(centroids) > 0:
-                
                     centroids_df = statistics.find_centroids(projected_input_df, centroids, cv_calculator.get_labels())
                     
-                # Generate color map for clusters
+                # Generate color map for the clusters
                 num_clusters = len(np.unique(cluster_labels))
                 cmap = figures.generate_cmap(num_clusters, self.figures_configuration['projected_clustered_trajectory']['cmap'])
 

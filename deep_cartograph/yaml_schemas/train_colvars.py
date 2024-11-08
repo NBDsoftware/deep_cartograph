@@ -48,6 +48,15 @@ class GeneralSettings(BaseModel):
     # Save the model every n epochs
     save_check_every_n_epoch: int = 10
 
+class InputColvars(BaseModel):
+    
+    # Start index to read the colvars file
+    start: int = 0
+    # Stop index to read the colvars file
+    stop: Union[int, None] = None         # If None -> Read until the end
+    # Step index to read the colvars file
+    stride: int = 1
+
 class EarlyStopping(BaseModel):
 
     # Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
@@ -56,7 +65,7 @@ class EarlyStopping(BaseModel):
     min_delta: float = 1.0e-05
 
 class Trainings(BaseModel):
-  
+    
     # General settings
     general: GeneralSettings = GeneralSettings()
     # Early stopping settings
@@ -74,6 +83,8 @@ class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
     dimension: int = 2
+    # Input colvars
+    input_colvars: InputColvars = InputColvars()
     # Architecture settings (used when applicable)
     architecture: Architecture = Architecture()
     # Training settings (used when applicable)

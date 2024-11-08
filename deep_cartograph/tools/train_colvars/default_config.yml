@@ -1,6 +1,10 @@
 # cvs:                           List of Collective Variables to calculate
 # common:                        Common settings for the Collective Variables
 #   dimension:                    (int) Number of dimensions to calculate
+#   input_colvars:              Settings for the input colvars file reading with the time series of the input features
+#     start:                      (int) Start index to read the input features (df.iloc[start:stop:stride])
+#     stop:                       (int) Stop index to read the input features (df.iloc[start:stop:stride])
+#     stride:                     (int) Stride to read the input features (df.iloc[start:stop:stride])
 #   architecture:                 Settings for the architecture of the Collective Variables
 #     hidden_layers:              (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
 #     lag_time:                   (int) Lag time for the Collective Variables
@@ -31,11 +35,15 @@
 cvs: ['pca', 'ae', 'tica', 'deep_tica']
 common:
   dimension: 1
+  input_colvars: 
+    start: 0
+    stop: null
+    stride: 1 
   architecture:
     hidden_layers: [15, 15]
     lag_time: 10
     pca_lowrank_q: null
-  training: 
+  training:
     general:
       max_tries: 10
       seed: 42
