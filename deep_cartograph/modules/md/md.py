@@ -625,6 +625,13 @@ def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df
 
     # Find the different clusters from the trajectory
     clusters = np.unique(traj_df[cluster_label])
+    
+    # Print the number of clusters
+    logger.info(f"Number of clusters: {len(clusters)}")
+    
+    # Print the number of centroids
+    if centroids_df is not None:
+        logger.info(f"Number of centroids: {len(centroids_df)}")
 
     # Extract frames for each cluster
     for cluster in clusters:
@@ -640,10 +647,15 @@ def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df
         # Find topology frame
         if centroids_df is not None:
             # Make it the centroid frame if available
-            topology_samples = centroids_df[centroids_df[cluster_label] == cluster][frame_label].values[0]
+            topology_samples_df = centroids_df[centroids_df[cluster_label] == cluster][frame_label]
+            if len(topology_samples_df) > 0:
+                topology_samples = topology_samples_df.values[0]
+            else:
+                # Pick the first frame from the cluster if centroids are not available
+                topology_samples = cluster_samples[0]
         else:
             # Pick the first frame from the cluster if centroids are not available
-            topology_samples = cluster_samples.values[0]
+            topology_samples = cluster_samples[0]
 
         # Create file name
         cluster_traj_name = f"cluster_{cluster}.xtc"
