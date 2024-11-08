@@ -10,16 +10,17 @@ from typing import Dict
 # TOOL #
 ########
 
-def compute_features(configuration: Dict, trajectory: str, topology: str, colvars_path: str = None, output_folder: str = 'compute_features') -> str:
+def compute_features(configuration: Dict, trajectory: str, topology: str, colvars_path: str = None, 
+                     output_folder: str = 'compute_features') -> str:
     """
-    Function that 
+    Function that computes features from a trajectory using PLUMED.
 
     Parameters
     ----------
 
         configuration:       configuration dictionary (see default_config.yml for more information)
         trajectory:          Path to the trajectory file that will be analyzed.
-        topology:            Path to the topology file of the system.
+        topology:            Path to the topology file of the trajectory.
         colvars_path:        Path to the output colvars file with the time series of the features.
         output_folder:       Path to the output folder
     """
@@ -45,7 +46,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeatures, output_folder)
-
+    
     # Check if files exist
     if not files_exist(trajectory):
         logger.error(f"Trajectory file {trajectory} does not exist. Exiting...")

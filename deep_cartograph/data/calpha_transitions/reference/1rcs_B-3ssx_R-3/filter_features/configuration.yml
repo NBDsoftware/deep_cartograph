@@ -1,0 +1,18 @@
+amino_settings:
+  bandwidth: 0.1
+  features_batch_size: null
+  max_independent_features: 20
+  min_independent_features: 5
+  num_bins: 100
+  run_amino: false
+filter_settings:
+  compute_diptest: true
+  compute_entropy: false
+  compute_std: false
+  diptest_significance_level: 0.05
+  entropy_quantile: 0.0
+  std_quantile: 0.0
+sampling_settings:
+  num_samples: null
+  relaxation_time: 1
+  total_num_samples: null

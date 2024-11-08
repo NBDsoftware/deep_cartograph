@@ -11,18 +11,19 @@ from typing import Dict
 # TOOL #
 ########
 
-def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = False, filtered_features_path: str = None, output_folder: str = 'filter_features'):
+def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = False,
+                    output_folder: str = 'filter_features'):
     """
-    Function that filters the features in the colvars file using different algorithms to select a subset of features that contains the most information about the system.
+    Function that filters the features in the colvars file using different algorithms to select a subset that contains 
+    the most information about the system.
 
     Parameters
     ----------
 
-        configuration:             configuration dictionary (see default_config.yml for more information)
-        colvars_path:              Path to the input colvars file with the time series of features / collective variables
-        csv_summary:               If True, saves a CSV summary with the filter values for each collective variable
-        filtered_features_path:    Path to the output file with the set of filtered collective variables
-        output_folder:             Path to the output folder
+        configuration:             Configuration dictionary (see default_config.yml for more information)
+        colvars_path:              Path to the input colvars file with the time series of features.
+        csv_summary:               (Optional) If True, saves a CSV summary with the filter values for each collective variable
+        output_folder:             (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
 
     Returns
     -------
@@ -77,11 +78,8 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
     # Apply AMINO to the filtered subset of features
     filtered_features = amino(filtered_features, colvars_path, output_folder, configuration['amino_settings'], configuration['sampling_settings'])
 
-    if filtered_features_path is None:
-        # Default path
-        filtered_features_path = os.path.join(output_folder, 'filtered_features.txt')
-    
     # Save the filtered features
+    filtered_features_path = os.path.join(output_folder, 'filtered_features.txt')
     save_list(filtered_features, filtered_features_path)
 
     # End timer
@@ -144,7 +142,6 @@ if __name__ == "__main__":
     parser.add_argument("-conf", dest='configuration_path', help="Path to the YAML configuration file with the settings of the filtering task", required=True)
     parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the input colvars file", required=True)
     parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=True)
-    parser.add_argument("-out_features", dest='filtered_features_path', help="Path to the output file with the set of filtered features", required=False)
     parser.add_argument("-csv_summary", action='store_true', help="Save a CSV summary with the values of the different metrics for each feature", required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
     
@@ -164,7 +161,6 @@ if __name__ == "__main__":
     _ = filter_features(
         configuration = configuration,
         colvars_path = args.colvars_path,
-        filtered_features_path = args.filtered_features_path,
         csv_summary = args.csv_summary,
         output_folder = output_folder)
 

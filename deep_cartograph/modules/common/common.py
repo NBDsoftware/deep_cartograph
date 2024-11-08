@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Constants
 default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
 
+
 # General utils
 def create_output_folder(output_path: str) -> None:
     """
@@ -59,6 +60,8 @@ def files_exist(*file_path):
             
     return all_exist
 
+
+# Related to configuration
 def read_configuration(configuration_path: str) -> Dict[str, Any]:
     """
     Function to read the YAML configuration file. Exits if configuration file is not found.
@@ -120,42 +123,35 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, out
 
     return validated_configuration
 
-def merge_configurations(default_config: Dict, specific_config: Union[Dict, None]) -> Dict:
-    """
-    Merge the default configuration with the specific configuration recursively.
+def merge_configurations(common_config: Dict, specific_config: Union[Dict, None]) -> Dict:
+        """
+        Merge the common configuration with the cv-specific configuration recursively.
 
-    It preserves all key and value pairs in default_config that are not in specific_config.
+        It preserves all key and value pairs in the common configuration that are not in 
+        the cv-specific configuration 
+        
+        Returns
+        -------
 
-    Parameters
-    ----------
+        merged_config : Dict
+            Merged configuration dictionary
+        """
+        
+        merged_config = common_config.copy()
 
-    default_config : Dict   
-        Default configuration dictionary
-
-    specific_config : Dict
-        Specific configuration dictionary
-    
-    Returns
-    -------
-
-    merged_config : Dict
-        Merged configuration dictionary
-    """
-    
-    merged_config = default_config.copy()
-
-    if specific_config is None:
+        if specific_config:
+            for key, value in specific_config.items():
+                if key in merged_config and isinstance(merged_config[key], dict) and isinstance(value, dict):
+                    # if both values are dictionaries, merge them recursively
+                    merged_config[key] = merge_configurations(merged_config[key], value)
+                else:
+                    # otherwise, use the value from the specific configuration
+                    merged_config[key] = value
+        else:
+            merged_config = common_config
+            
         return merged_config
-    else:
-        for key, value in specific_config.items():
-            if key in merged_config and isinstance(merged_config[key], dict) and isinstance(value, dict):
-                # if both values are dictionaries, merge them recursively
-                merged_config[key] = merge_configurations(merged_config[key], value)
-            else:
-                # otherwise, use the value from the specific configuration
-                merged_config[key] = value
-    
-    return merged_config
+
 
 # Features utils
 def find_feature_names(colvars_path: str) -> list:
@@ -428,6 +424,7 @@ def read_colvars_pandas(colvars_path: str, feature_names: list, stratified_sampl
     features_data = colvars_df.to_dict('list')
 
     return features_data
+
 
 # Related to training
 def closest_power_of_two(n: int) -> int:

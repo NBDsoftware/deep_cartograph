@@ -5,7 +5,7 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Union
 
 # Local imports
 from deep_cartograph import compute_features
@@ -18,9 +18,9 @@ from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: str = None, 
-                    use_reference_labels: bool = False, dimension: int = None, 
-                    cvs: List[Literal['pca', 'ae', 'tica', 'dtica']] = None, 
+def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: Union[str, None] = None, 
+                    use_reference_labels: bool = False, dimension: Union[int, None] = None, 
+                    cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, 
                     output_folder: str = 'deep_cartograph') -> None:
     """
     Function that maps the trajectory onto the collective variables.
@@ -28,14 +28,14 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
     Parameters
     ----------
 
-        configuration:        configuration dictionary (see default_config.yml for more information)
+        configuration:        Configuration dictionary (see default_config.yml for more information)
         trajectory:           Path to the trajectory file that will be analyzed.
         topology:             Path to the topology file of the system.
-        reference_folder:     Path to the folder with reference data.
-        use_reference_labels: Use labels for reference data (names of the files in the reference folder)
-        dimension:            Dimension of the collective variables to train or compute, if None, the value in the configuration file is used
-        cvs:                  List of collective variables to train or compute (pca, ae, tica, dtica), if None, the ones in the configuration file are used
-        output_folder:        Path to the output folder
+        reference_folder:     (Optional) Path to the folder with reference data.
+        use_reference_labels: (Optional) Use labels for reference data (names of the files in the reference folder)
+        dimension:            (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
+        cvs:                  (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
+        output_folder:        (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
     """
 
     # Set logger
@@ -128,6 +128,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
         cvs = cvs,
         trajectory = trajectory,
         topology = topology,
+        samples_per_frame = 1/configuration['compute_features']['plumed_settings']['traj_stride'],
         output_folder = step3_output_folder)
             
     # End timer
@@ -189,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument('-ref', '-reference', dest='reference_folder', help="Path to folder with reference data. It should contain structures or trajectories.", required=False)
     parser.add_argument('-use_rl', '-use_reference_lab', dest='use_reference_labels', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, dtica)', required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=True)
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 

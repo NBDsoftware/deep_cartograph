@@ -294,7 +294,7 @@ def combine(command_label: str, arguments: list, coefficients: np.array, periodi
     
     return combine_command
 
-def print(arguments, file_path, stride = 1):
+def print(arguments, file_path, stride = 1, fmt = "%.4f"):
     '''
     Function that creates a PLUMED PRINT command.
 
@@ -326,6 +326,9 @@ def print(arguments, file_path, stride = 1):
 
     # Add stride
     print_command += " STRIDE=" + str(stride)
+    
+    # Add FMT
+    print_command += f" FMT={fmt}"
 
     # Add newline
     print_command += "\n"

@@ -66,7 +66,7 @@ options:
                         Use labels for reference data (names of the files in the reference folder)
   -dim DIMENSION, -dimension DIMENSION
                         Dimension of the CV to train or compute
-  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, dtica)
+  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, deep_tica)
   -out OUTPUT_FOLDER, -output OUTPUT_FOLDER
                         Path to the output folder
   -v, -verbose          Set the logging level to DEBUG

@@ -18,6 +18,5 @@ setup(name='deep_cartograph',
         'diptest',
         'plumed',
         'jupyter'   
-    ])
-
-# 'mlcolvar'
+    ],
+    include_package_data=True)

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Union
 
 class DistanceGroup(BaseModel):
 
@@ -65,7 +65,7 @@ class PlumedEnvironment(BaseModel):
     # Path to the PLUMED binary
     bin_path: str = "plumed"
     # Path to the PLUMED kernel library
-    kernel_path: str = None
+    kernel_path: Union[str, None] = None
     # List of commands to run before running the plumed command
     env_commands: List[str] = []
 

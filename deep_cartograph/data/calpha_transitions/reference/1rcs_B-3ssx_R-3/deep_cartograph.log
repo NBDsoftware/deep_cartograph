@@ -1,0 +1,947 @@
+deep_cartograph [INFO]: Deep Cartograph: package for projecting and clustering trajectories using collective variables.
+deep_cartograph [INFO]: ================
+deep_cartograph [INFO]: Compute features
+deep_cartograph [INFO]: ================
+deep_cartograph [INFO]: Trajectory file: /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/2.trajectory_conversion/1rcs_B-3ssx_R-3.dcd
+deep_cartograph.modules.plumed.input_file.input_file [INFO]: Found 202 features for tor
+deep_cartograph.modules.plumed.utils [INFO]: Executing PLUMED driver command: ml PLUMED/2.9.0-intel-2021b && unset I_MPI_PMI_LIBRARY && /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed driver --plumed /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/torsions.dat --mf_dcd /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/2.trajectory_conversion/1rcs_B-3ssx_R-3.dcd --natoms 104
+deep_cartograph.modules.plumed.utils [INFO]: 
+DRIVER: Found molfile format trajectory dcd with name /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/2.trajectory_conversion/1rcs_B-3ssx_R-3.dcd
+dcdplugin) detected standard 32-bit DCD file of native endianness
+dcdplugin) CHARMM format DCD file (also NAMD 2.1 and later)
+PLUMED: PLUMED is starting
+PLUMED: Version: 2.9.0 (git: Unknown) compiled on Feb 28 2024 at 12:49:51
+PLUMED: Please cite these papers when using PLUMED [1][2]
+PLUMED: For further information see the PLUMED web page at http://www.plumed.org
+PLUMED: Root: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/plumed
+PLUMED: For installed feature, see /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/plumed/src/config/config.txt
+PLUMED: Molecular dynamics engine: driver
+PLUMED: Precision of reals: 8
+PLUMED: Running over 1 node
+PLUMED: Number of threads: 1
+PLUMED: Cache line size: 512
+PLUMED: Number of atoms: 104
+PLUMED: File suffix: 
+PLUMED: FILE: /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/torsions.dat
+PLUMED: Action MOLINFO
+PLUMED:   with label @0
+PLUMED:   pdb file named /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/plumed_topology.pdb contains 1 chains 
+PLUMED:   chain named B contains residues 504 to 607 and atoms 1 to 104 
+PLUMED: Action WHOLEMOLECULES
+PLUMED:   with label @1
+PLUMED:   with stride 1
+PLUMED:   atoms in entity 0 : 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_504_@CA_505_@CA_506_@CA_507
+PLUMED:   Colvar 1 is calculated from atoms : 1 2 3 4 
+PLUMED:   value sin_tor_@CA_504_@CA_505_@CA_506_@CA_507 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_504_@CA_505_@CA_506_@CA_507
+PLUMED:   Colvar 1 is calculated from atoms : 1 2 3 4 
+PLUMED:   value cos_tor_@CA_504_@CA_505_@CA_506_@CA_507 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_505_@CA_506_@CA_507_@CA_508
+PLUMED:   Colvar 1 is calculated from atoms : 2 3 4 5 
+PLUMED:   value sin_tor_@CA_505_@CA_506_@CA_507_@CA_508 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_505_@CA_506_@CA_507_@CA_508
+PLUMED:   Colvar 1 is calculated from atoms : 2 3 4 5 
+PLUMED:   value cos_tor_@CA_505_@CA_506_@CA_507_@CA_508 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_506_@CA_507_@CA_508_@CA_509
+PLUMED:   Colvar 1 is calculated from atoms : 3 4 5 6 
+PLUMED:   value sin_tor_@CA_506_@CA_507_@CA_508_@CA_509 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_506_@CA_507_@CA_508_@CA_509
+PLUMED:   Colvar 1 is calculated from atoms : 3 4 5 6 
+PLUMED:   value cos_tor_@CA_506_@CA_507_@CA_508_@CA_509 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_507_@CA_508_@CA_509_@CA_510
+PLUMED:   Colvar 1 is calculated from atoms : 4 5 6 7 
+PLUMED:   value sin_tor_@CA_507_@CA_508_@CA_509_@CA_510 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_507_@CA_508_@CA_509_@CA_510
+PLUMED:   Colvar 1 is calculated from atoms : 4 5 6 7 
+PLUMED:   value cos_tor_@CA_507_@CA_508_@CA_509_@CA_510 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_508_@CA_509_@CA_510_@CA_511
+PLUMED:   Colvar 1 is calculated from atoms : 5 6 7 8 
+PLUMED:   value sin_tor_@CA_508_@CA_509_@CA_510_@CA_511 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_508_@CA_509_@CA_510_@CA_511
+PLUMED:   Colvar 1 is calculated from atoms : 5 6 7 8 
+PLUMED:   value cos_tor_@CA_508_@CA_509_@CA_510_@CA_511 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_509_@CA_510_@CA_511_@CA_512
+PLUMED:   Colvar 1 is calculated from atoms : 6 7 8 9 
+PLUMED:   value sin_tor_@CA_509_@CA_510_@CA_511_@CA_512 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_509_@CA_510_@CA_511_@CA_512
+PLUMED:   Colvar 1 is calculated from atoms : 6 7 8 9 
+PLUMED:   value cos_tor_@CA_509_@CA_510_@CA_511_@CA_512 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_510_@CA_511_@CA_512_@CA_513
+PLUMED:   Colvar 1 is calculated from atoms : 7 8 9 10 
+PLUMED:   value sin_tor_@CA_510_@CA_511_@CA_512_@CA_513 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_510_@CA_511_@CA_512_@CA_513
+PLUMED:   Colvar 1 is calculated from atoms : 7 8 9 10 
+PLUMED:   value cos_tor_@CA_510_@CA_511_@CA_512_@CA_513 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_511_@CA_512_@CA_513_@CA_514
+PLUMED:   Colvar 1 is calculated from atoms : 8 9 10 11 
+PLUMED:   value sin_tor_@CA_511_@CA_512_@CA_513_@CA_514 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_511_@CA_512_@CA_513_@CA_514
+PLUMED:   Colvar 1 is calculated from atoms : 8 9 10 11 
+PLUMED:   value cos_tor_@CA_511_@CA_512_@CA_513_@CA_514 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_512_@CA_513_@CA_514_@CA_515
+PLUMED:   Colvar 1 is calculated from atoms : 9 10 11 12 
+PLUMED:   value sin_tor_@CA_512_@CA_513_@CA_514_@CA_515 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_512_@CA_513_@CA_514_@CA_515
+PLUMED:   Colvar 1 is calculated from atoms : 9 10 11 12 
+PLUMED:   value cos_tor_@CA_512_@CA_513_@CA_514_@CA_515 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_513_@CA_514_@CA_515_@CA_516
+PLUMED:   Colvar 1 is calculated from atoms : 10 11 12 13 
+PLUMED:   value sin_tor_@CA_513_@CA_514_@CA_515_@CA_516 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_513_@CA_514_@CA_515_@CA_516
+PLUMED:   Colvar 1 is calculated from atoms : 10 11 12 13 
+PLUMED:   value cos_tor_@CA_513_@CA_514_@CA_515_@CA_516 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_514_@CA_515_@CA_516_@CA_517
+PLUMED:   Colvar 1 is calculated from atoms : 11 12 13 14 
+PLUMED:   value sin_tor_@CA_514_@CA_515_@CA_516_@CA_517 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_514_@CA_515_@CA_516_@CA_517
+PLUMED:   Colvar 1 is calculated from atoms : 11 12 13 14 
+PLUMED:   value cos_tor_@CA_514_@CA_515_@CA_516_@CA_517 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_515_@CA_516_@CA_517_@CA_518
+PLUMED:   Colvar 1 is calculated from atoms : 12 13 14 15 
+PLUMED:   value sin_tor_@CA_515_@CA_516_@CA_517_@CA_518 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_515_@CA_516_@CA_517_@CA_518
+PLUMED:   Colvar 1 is calculated from atoms : 12 13 14 15 
+PLUMED:   value cos_tor_@CA_515_@CA_516_@CA_517_@CA_518 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_516_@CA_517_@CA_518_@CA_519
+PLUMED:   Colvar 1 is calculated from atoms : 13 14 15 16 
+PLUMED:   value sin_tor_@CA_516_@CA_517_@CA_518_@CA_519 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_516_@CA_517_@CA_518_@CA_519
+PLUMED:   Colvar 1 is calculated from atoms : 13 14 15 16 
+PLUMED:   value cos_tor_@CA_516_@CA_517_@CA_518_@CA_519 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_517_@CA_518_@CA_519_@CA_520
+PLUMED:   Colvar 1 is calculated from atoms : 14 15 16 17 
+PLUMED:   value sin_tor_@CA_517_@CA_518_@CA_519_@CA_520 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_517_@CA_518_@CA_519_@CA_520
+PLUMED:   Colvar 1 is calculated from atoms : 14 15 16 17 
+PLUMED:   value cos_tor_@CA_517_@CA_518_@CA_519_@CA_520 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_518_@CA_519_@CA_520_@CA_521
+PLUMED:   Colvar 1 is calculated from atoms : 15 16 17 18 
+PLUMED:   value sin_tor_@CA_518_@CA_519_@CA_520_@CA_521 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_518_@CA_519_@CA_520_@CA_521
+PLUMED:   Colvar 1 is calculated from atoms : 15 16 17 18 
+PLUMED:   value cos_tor_@CA_518_@CA_519_@CA_520_@CA_521 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_519_@CA_520_@CA_521_@CA_522
+PLUMED:   Colvar 1 is calculated from atoms : 16 17 18 19 
+PLUMED:   value sin_tor_@CA_519_@CA_520_@CA_521_@CA_522 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_519_@CA_520_@CA_521_@CA_522
+PLUMED:   Colvar 1 is calculated from atoms : 16 17 18 19 
+PLUMED:   value cos_tor_@CA_519_@CA_520_@CA_521_@CA_522 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_520_@CA_521_@CA_522_@CA_523
+PLUMED:   Colvar 1 is calculated from atoms : 17 18 19 20 
+PLUMED:   value sin_tor_@CA_520_@CA_521_@CA_522_@CA_523 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_520_@CA_521_@CA_522_@CA_523
+PLUMED:   Colvar 1 is calculated from atoms : 17 18 19 20 
+PLUMED:   value cos_tor_@CA_520_@CA_521_@CA_522_@CA_523 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_521_@CA_522_@CA_523_@CA_524
+PLUMED:   Colvar 1 is calculated from atoms : 18 19 20 21 
+PLUMED:   value sin_tor_@CA_521_@CA_522_@CA_523_@CA_524 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_521_@CA_522_@CA_523_@CA_524
+PLUMED:   Colvar 1 is calculated from atoms : 18 19 20 21 
+PLUMED:   value cos_tor_@CA_521_@CA_522_@CA_523_@CA_524 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_522_@CA_523_@CA_524_@CA_525
+PLUMED:   Colvar 1 is calculated from atoms : 19 20 21 22 
+PLUMED:   value sin_tor_@CA_522_@CA_523_@CA_524_@CA_525 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_522_@CA_523_@CA_524_@CA_525
+PLUMED:   Colvar 1 is calculated from atoms : 19 20 21 22 
+PLUMED:   value cos_tor_@CA_522_@CA_523_@CA_524_@CA_525 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_523_@CA_524_@CA_525_@CA_526
+PLUMED:   Colvar 1 is calculated from atoms : 20 21 22 23 
+PLUMED:   value sin_tor_@CA_523_@CA_524_@CA_525_@CA_526 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_523_@CA_524_@CA_525_@CA_526
+PLUMED:   Colvar 1 is calculated from atoms : 20 21 22 23 
+PLUMED:   value cos_tor_@CA_523_@CA_524_@CA_525_@CA_526 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_524_@CA_525_@CA_526_@CA_527
+PLUMED:   Colvar 1 is calculated from atoms : 21 22 23 24 
+PLUMED:   value sin_tor_@CA_524_@CA_525_@CA_526_@CA_527 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_524_@CA_525_@CA_526_@CA_527
+PLUMED:   Colvar 1 is calculated from atoms : 21 22 23 24 
+PLUMED:   value cos_tor_@CA_524_@CA_525_@CA_526_@CA_527 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_525_@CA_526_@CA_527_@CA_528
+PLUMED:   Colvar 1 is calculated from atoms : 22 23 24 25 
+PLUMED:   value sin_tor_@CA_525_@CA_526_@CA_527_@CA_528 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_525_@CA_526_@CA_527_@CA_528
+PLUMED:   Colvar 1 is calculated from atoms : 22 23 24 25 
+PLUMED:   value cos_tor_@CA_525_@CA_526_@CA_527_@CA_528 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_526_@CA_527_@CA_528_@CA_529
+PLUMED:   Colvar 1 is calculated from atoms : 23 24 25 26 
+PLUMED:   value sin_tor_@CA_526_@CA_527_@CA_528_@CA_529 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_526_@CA_527_@CA_528_@CA_529
+PLUMED:   Colvar 1 is calculated from atoms : 23 24 25 26 
+PLUMED:   value cos_tor_@CA_526_@CA_527_@CA_528_@CA_529 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_527_@CA_528_@CA_529_@CA_530
+PLUMED:   Colvar 1 is calculated from atoms : 24 25 26 27 
+PLUMED:   value sin_tor_@CA_527_@CA_528_@CA_529_@CA_530 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_527_@CA_528_@CA_529_@CA_530
+PLUMED:   Colvar 1 is calculated from atoms : 24 25 26 27 
+PLUMED:   value cos_tor_@CA_527_@CA_528_@CA_529_@CA_530 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_528_@CA_529_@CA_530_@CA_531
+PLUMED:   Colvar 1 is calculated from atoms : 25 26 27 28 
+PLUMED:   value sin_tor_@CA_528_@CA_529_@CA_530_@CA_531 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_528_@CA_529_@CA_530_@CA_531
+PLUMED:   Colvar 1 is calculated from atoms : 25 26 27 28 
+PLUMED:   value cos_tor_@CA_528_@CA_529_@CA_530_@CA_531 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_529_@CA_530_@CA_531_@CA_532
+PLUMED:   Colvar 1 is calculated from atoms : 26 27 28 29 
+PLUMED:   value sin_tor_@CA_529_@CA_530_@CA_531_@CA_532 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_529_@CA_530_@CA_531_@CA_532
+PLUMED:   Colvar 1 is calculated from atoms : 26 27 28 29 
+PLUMED:   value cos_tor_@CA_529_@CA_530_@CA_531_@CA_532 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_530_@CA_531_@CA_532_@CA_533
+PLUMED:   Colvar 1 is calculated from atoms : 27 28 29 30 
+PLUMED:   value sin_tor_@CA_530_@CA_531_@CA_532_@CA_533 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_530_@CA_531_@CA_532_@CA_533
+PLUMED:   Colvar 1 is calculated from atoms : 27 28 29 30 
+PLUMED:   value cos_tor_@CA_530_@CA_531_@CA_532_@CA_533 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_531_@CA_532_@CA_533_@CA_534
+PLUMED:   Colvar 1 is calculated from atoms : 28 29 30 31 
+PLUMED:   value sin_tor_@CA_531_@CA_532_@CA_533_@CA_534 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_531_@CA_532_@CA_533_@CA_534
+PLUMED:   Colvar 1 is calculated from atoms : 28 29 30 31 
+PLUMED:   value cos_tor_@CA_531_@CA_532_@CA_533_@CA_534 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_532_@CA_533_@CA_534_@CA_535
+PLUMED:   Colvar 1 is calculated from atoms : 29 30 31 32 
+PLUMED:   value sin_tor_@CA_532_@CA_533_@CA_534_@CA_535 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_532_@CA_533_@CA_534_@CA_535
+PLUMED:   Colvar 1 is calculated from atoms : 29 30 31 32 
+PLUMED:   value cos_tor_@CA_532_@CA_533_@CA_534_@CA_535 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_533_@CA_534_@CA_535_@CA_536
+PLUMED:   Colvar 1 is calculated from atoms : 30 31 32 33 
+PLUMED:   value sin_tor_@CA_533_@CA_534_@CA_535_@CA_536 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_533_@CA_534_@CA_535_@CA_536
+PLUMED:   Colvar 1 is calculated from atoms : 30 31 32 33 
+PLUMED:   value cos_tor_@CA_533_@CA_534_@CA_535_@CA_536 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_534_@CA_535_@CA_536_@CA_537
+PLUMED:   Colvar 1 is calculated from atoms : 31 32 33 34 
+PLUMED:   value sin_tor_@CA_534_@CA_535_@CA_536_@CA_537 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_534_@CA_535_@CA_536_@CA_537
+PLUMED:   Colvar 1 is calculated from atoms : 31 32 33 34 
+PLUMED:   value cos_tor_@CA_534_@CA_535_@CA_536_@CA_537 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_535_@CA_536_@CA_537_@CA_538
+PLUMED:   Colvar 1 is calculated from atoms : 32 33 34 35 
+PLUMED:   value sin_tor_@CA_535_@CA_536_@CA_537_@CA_538 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_535_@CA_536_@CA_537_@CA_538
+PLUMED:   Colvar 1 is calculated from atoms : 32 33 34 35 
+PLUMED:   value cos_tor_@CA_535_@CA_536_@CA_537_@CA_538 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_536_@CA_537_@CA_538_@CA_539
+PLUMED:   Colvar 1 is calculated from atoms : 33 34 35 36 
+PLUMED:   value sin_tor_@CA_536_@CA_537_@CA_538_@CA_539 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_536_@CA_537_@CA_538_@CA_539
+PLUMED:   Colvar 1 is calculated from atoms : 33 34 35 36 
+PLUMED:   value cos_tor_@CA_536_@CA_537_@CA_538_@CA_539 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_537_@CA_538_@CA_539_@CA_540
+PLUMED:   Colvar 1 is calculated from atoms : 34 35 36 37 
+PLUMED:   value sin_tor_@CA_537_@CA_538_@CA_539_@CA_540 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_537_@CA_538_@CA_539_@CA_540
+PLUMED:   Colvar 1 is calculated from atoms : 34 35 36 37 
+PLUMED:   value cos_tor_@CA_537_@CA_538_@CA_539_@CA_540 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_538_@CA_539_@CA_540_@CA_541
+PLUMED:   Colvar 1 is calculated from atoms : 35 36 37 38 
+PLUMED:   value sin_tor_@CA_538_@CA_539_@CA_540_@CA_541 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_538_@CA_539_@CA_540_@CA_541
+PLUMED:   Colvar 1 is calculated from atoms : 35 36 37 38 
+PLUMED:   value cos_tor_@CA_538_@CA_539_@CA_540_@CA_541 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_539_@CA_540_@CA_541_@CA_542
+PLUMED:   Colvar 1 is calculated from atoms : 36 37 38 39 
+PLUMED:   value sin_tor_@CA_539_@CA_540_@CA_541_@CA_542 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_539_@CA_540_@CA_541_@CA_542
+PLUMED:   Colvar 1 is calculated from atoms : 36 37 38 39 
+PLUMED:   value cos_tor_@CA_539_@CA_540_@CA_541_@CA_542 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_540_@CA_541_@CA_542_@CA_543
+PLUMED:   Colvar 1 is calculated from atoms : 37 38 39 40 
+PLUMED:   value sin_tor_@CA_540_@CA_541_@CA_542_@CA_543 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_540_@CA_541_@CA_542_@CA_543
+PLUMED:   Colvar 1 is calculated from atoms : 37 38 39 40 
+PLUMED:   value cos_tor_@CA_540_@CA_541_@CA_542_@CA_543 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_541_@CA_542_@CA_543_@CA_544
+PLUMED:   Colvar 1 is calculated from atoms : 38 39 40 41 
+PLUMED:   value sin_tor_@CA_541_@CA_542_@CA_543_@CA_544 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_541_@CA_542_@CA_543_@CA_544
+PLUMED:   Colvar 1 is calculated from atoms : 38 39 40 41 
+PLUMED:   value cos_tor_@CA_541_@CA_542_@CA_543_@CA_544 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_542_@CA_543_@CA_544_@CA_545
+PLUMED:   Colvar 1 is calculated from atoms : 39 40 41 42 
+PLUMED:   value sin_tor_@CA_542_@CA_543_@CA_544_@CA_545 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_542_@CA_543_@CA_544_@CA_545
+PLUMED:   Colvar 1 is calculated from atoms : 39 40 41 42 
+PLUMED:   value cos_tor_@CA_542_@CA_543_@CA_544_@CA_545 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_543_@CA_544_@CA_545_@CA_546
+PLUMED:   Colvar 1 is calculated from atoms : 40 41 42 43 
+PLUMED:   value sin_tor_@CA_543_@CA_544_@CA_545_@CA_546 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_543_@CA_544_@CA_545_@CA_546
+PLUMED:   Colvar 1 is calculated from atoms : 40 41 42 43 
+PLUMED:   value cos_tor_@CA_543_@CA_544_@CA_545_@CA_546 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_544_@CA_545_@CA_546_@CA_547
+PLUMED:   Colvar 1 is calculated from atoms : 41 42 43 44 
+PLUMED:   value sin_tor_@CA_544_@CA_545_@CA_546_@CA_547 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_544_@CA_545_@CA_546_@CA_547
+PLUMED:   Colvar 1 is calculated from atoms : 41 42 43 44 
+PLUMED:   value cos_tor_@CA_544_@CA_545_@CA_546_@CA_547 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_545_@CA_546_@CA_547_@CA_548
+PLUMED:   Colvar 1 is calculated from atoms : 42 43 44 45 
+PLUMED:   value sin_tor_@CA_545_@CA_546_@CA_547_@CA_548 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_545_@CA_546_@CA_547_@CA_548
+PLUMED:   Colvar 1 is calculated from atoms : 42 43 44 45 
+PLUMED:   value cos_tor_@CA_545_@CA_546_@CA_547_@CA_548 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_546_@CA_547_@CA_548_@CA_549
+PLUMED:   Colvar 1 is calculated from atoms : 43 44 45 46 
+PLUMED:   value sin_tor_@CA_546_@CA_547_@CA_548_@CA_549 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_546_@CA_547_@CA_548_@CA_549
+PLUMED:   Colvar 1 is calculated from atoms : 43 44 45 46 
+PLUMED:   value cos_tor_@CA_546_@CA_547_@CA_548_@CA_549 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_547_@CA_548_@CA_549_@CA_550
+PLUMED:   Colvar 1 is calculated from atoms : 44 45 46 47 
+PLUMED:   value sin_tor_@CA_547_@CA_548_@CA_549_@CA_550 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_547_@CA_548_@CA_549_@CA_550
+PLUMED:   Colvar 1 is calculated from atoms : 44 45 46 47 
+PLUMED:   value cos_tor_@CA_547_@CA_548_@CA_549_@CA_550 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_548_@CA_549_@CA_550_@CA_551
+PLUMED:   Colvar 1 is calculated from atoms : 45 46 47 48 
+PLUMED:   value sin_tor_@CA_548_@CA_549_@CA_550_@CA_551 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_548_@CA_549_@CA_550_@CA_551
+PLUMED:   Colvar 1 is calculated from atoms : 45 46 47 48 
+PLUMED:   value cos_tor_@CA_548_@CA_549_@CA_550_@CA_551 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_549_@CA_550_@CA_551_@CA_552
+PLUMED:   Colvar 1 is calculated from atoms : 46 47 48 49 
+PLUMED:   value sin_tor_@CA_549_@CA_550_@CA_551_@CA_552 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_549_@CA_550_@CA_551_@CA_552
+PLUMED:   Colvar 1 is calculated from atoms : 46 47 48 49 
+PLUMED:   value cos_tor_@CA_549_@CA_550_@CA_551_@CA_552 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_550_@CA_551_@CA_552_@CA_553
+PLUMED:   Colvar 1 is calculated from atoms : 47 48 49 50 
+PLUMED:   value sin_tor_@CA_550_@CA_551_@CA_552_@CA_553 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_550_@CA_551_@CA_552_@CA_553
+PLUMED:   Colvar 1 is calculated from atoms : 47 48 49 50 
+PLUMED:   value cos_tor_@CA_550_@CA_551_@CA_552_@CA_553 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_551_@CA_552_@CA_553_@CA_554
+PLUMED:   Colvar 1 is calculated from atoms : 48 49 50 51 
+PLUMED:   value sin_tor_@CA_551_@CA_552_@CA_553_@CA_554 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_551_@CA_552_@CA_553_@CA_554
+PLUMED:   Colvar 1 is calculated from atoms : 48 49 50 51 
+PLUMED:   value cos_tor_@CA_551_@CA_552_@CA_553_@CA_554 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_552_@CA_553_@CA_554_@CA_555
+PLUMED:   Colvar 1 is calculated from atoms : 49 50 51 52 
+PLUMED:   value sin_tor_@CA_552_@CA_553_@CA_554_@CA_555 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_552_@CA_553_@CA_554_@CA_555
+PLUMED:   Colvar 1 is calculated from atoms : 49 50 51 52 
+PLUMED:   value cos_tor_@CA_552_@CA_553_@CA_554_@CA_555 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_553_@CA_554_@CA_555_@CA_556
+PLUMED:   Colvar 1 is calculated from atoms : 50 51 52 53 
+PLUMED:   value sin_tor_@CA_553_@CA_554_@CA_555_@CA_556 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_553_@CA_554_@CA_555_@CA_556
+PLUMED:   Colvar 1 is calculated from atoms : 50 51 52 53 
+PLUMED:   value cos_tor_@CA_553_@CA_554_@CA_555_@CA_556 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_554_@CA_555_@CA_556_@CA_557
+PLUMED:   Colvar 1 is calculated from atoms : 51 52 53 54 
+PLUMED:   value sin_tor_@CA_554_@CA_555_@CA_556_@CA_557 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_554_@CA_555_@CA_556_@CA_557
+PLUMED:   Colvar 1 is calculated from atoms : 51 52 53 54 
+PLUMED:   value cos_tor_@CA_554_@CA_555_@CA_556_@CA_557 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_555_@CA_556_@CA_557_@CA_558
+PLUMED:   Colvar 1 is calculated from atoms : 52 53 54 55 
+PLUMED:   value sin_tor_@CA_555_@CA_556_@CA_557_@CA_558 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_555_@CA_556_@CA_557_@CA_558
+PLUMED:   Colvar 1 is calculated from atoms : 52 53 54 55 
+PLUMED:   value cos_tor_@CA_555_@CA_556_@CA_557_@CA_558 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_556_@CA_557_@CA_558_@CA_559
+PLUMED:   Colvar 1 is calculated from atoms : 53 54 55 56 
+PLUMED:   value sin_tor_@CA_556_@CA_557_@CA_558_@CA_559 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_556_@CA_557_@CA_558_@CA_559
+PLUMED:   Colvar 1 is calculated from atoms : 53 54 55 56 
+PLUMED:   value cos_tor_@CA_556_@CA_557_@CA_558_@CA_559 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_557_@CA_558_@CA_559_@CA_560
+PLUMED:   Colvar 1 is calculated from atoms : 54 55 56 57 
+PLUMED:   value sin_tor_@CA_557_@CA_558_@CA_559_@CA_560 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_557_@CA_558_@CA_559_@CA_560
+PLUMED:   Colvar 1 is calculated from atoms : 54 55 56 57 
+PLUMED:   value cos_tor_@CA_557_@CA_558_@CA_559_@CA_560 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_558_@CA_559_@CA_560_@CA_561
+PLUMED:   Colvar 1 is calculated from atoms : 55 56 57 58 
+PLUMED:   value sin_tor_@CA_558_@CA_559_@CA_560_@CA_561 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_558_@CA_559_@CA_560_@CA_561
+PLUMED:   Colvar 1 is calculated from atoms : 55 56 57 58 
+PLUMED:   value cos_tor_@CA_558_@CA_559_@CA_560_@CA_561 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_559_@CA_560_@CA_561_@CA_562
+PLUMED:   Colvar 1 is calculated from atoms : 56 57 58 59 
+PLUMED:   value sin_tor_@CA_559_@CA_560_@CA_561_@CA_562 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_559_@CA_560_@CA_561_@CA_562
+PLUMED:   Colvar 1 is calculated from atoms : 56 57 58 59 
+PLUMED:   value cos_tor_@CA_559_@CA_560_@CA_561_@CA_562 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_560_@CA_561_@CA_562_@CA_563
+PLUMED:   Colvar 1 is calculated from atoms : 57 58 59 60 
+PLUMED:   value sin_tor_@CA_560_@CA_561_@CA_562_@CA_563 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_560_@CA_561_@CA_562_@CA_563
+PLUMED:   Colvar 1 is calculated from atoms : 57 58 59 60 
+PLUMED:   value cos_tor_@CA_560_@CA_561_@CA_562_@CA_563 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_561_@CA_562_@CA_563_@CA_564
+PLUMED:   Colvar 1 is calculated from atoms : 58 59 60 61 
+PLUMED:   value sin_tor_@CA_561_@CA_562_@CA_563_@CA_564 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_561_@CA_562_@CA_563_@CA_564
+PLUMED:   Colvar 1 is calculated from atoms : 58 59 60 61 
+PLUMED:   value cos_tor_@CA_561_@CA_562_@CA_563_@CA_564 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_562_@CA_563_@CA_564_@CA_565
+PLUMED:   Colvar 1 is calculated from atoms : 59 60 61 62 
+PLUMED:   value sin_tor_@CA_562_@CA_563_@CA_564_@CA_565 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_562_@CA_563_@CA_564_@CA_565
+PLUMED:   Colvar 1 is calculated from atoms : 59 60 61 62 
+PLUMED:   value cos_tor_@CA_562_@CA_563_@CA_564_@CA_565 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_563_@CA_564_@CA_565_@CA_566
+PLUMED:   Colvar 1 is calculated from atoms : 60 61 62 63 
+PLUMED:   value sin_tor_@CA_563_@CA_564_@CA_565_@CA_566 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_563_@CA_564_@CA_565_@CA_566
+PLUMED:   Colvar 1 is calculated from atoms : 60 61 62 63 
+PLUMED:   value cos_tor_@CA_563_@CA_564_@CA_565_@CA_566 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_564_@CA_565_@CA_566_@CA_567
+PLUMED:   Colvar 1 is calculated from atoms : 61 62 63 64 
+PLUMED:   value sin_tor_@CA_564_@CA_565_@CA_566_@CA_567 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_564_@CA_565_@CA_566_@CA_567
+PLUMED:   Colvar 1 is calculated from atoms : 61 62 63 64 
+PLUMED:   value cos_tor_@CA_564_@CA_565_@CA_566_@CA_567 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_565_@CA_566_@CA_567_@CA_568
+PLUMED:   Colvar 1 is calculated from atoms : 62 63 64 65 
+PLUMED:   value sin_tor_@CA_565_@CA_566_@CA_567_@CA_568 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_565_@CA_566_@CA_567_@CA_568
+PLUMED:   Colvar 1 is calculated from atoms : 62 63 64 65 
+PLUMED:   value cos_tor_@CA_565_@CA_566_@CA_567_@CA_568 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_566_@CA_567_@CA_568_@CA_569
+PLUMED:   Colvar 1 is calculated from atoms : 63 64 65 66 
+PLUMED:   value sin_tor_@CA_566_@CA_567_@CA_568_@CA_569 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_566_@CA_567_@CA_568_@CA_569
+PLUMED:   Colvar 1 is calculated from atoms : 63 64 65 66 
+PLUMED:   value cos_tor_@CA_566_@CA_567_@CA_568_@CA_569 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_567_@CA_568_@CA_569_@CA_570
+PLUMED:   Colvar 1 is calculated from atoms : 64 65 66 67 
+PLUMED:   value sin_tor_@CA_567_@CA_568_@CA_569_@CA_570 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_567_@CA_568_@CA_569_@CA_570
+PLUMED:   Colvar 1 is calculated from atoms : 64 65 66 67 
+PLUMED:   value cos_tor_@CA_567_@CA_568_@CA_569_@CA_570 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_568_@CA_569_@CA_570_@CA_571
+PLUMED:   Colvar 1 is calculated from atoms : 65 66 67 68 
+PLUMED:   value sin_tor_@CA_568_@CA_569_@CA_570_@CA_571 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_568_@CA_569_@CA_570_@CA_571
+PLUMED:   Colvar 1 is calculated from atoms : 65 66 67 68 
+PLUMED:   value cos_tor_@CA_568_@CA_569_@CA_570_@CA_571 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_569_@CA_570_@CA_571_@CA_572
+PLUMED:   Colvar 1 is calculated from atoms : 66 67 68 69 
+PLUMED:   value sin_tor_@CA_569_@CA_570_@CA_571_@CA_572 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_569_@CA_570_@CA_571_@CA_572
+PLUMED:   Colvar 1 is calculated from atoms : 66 67 68 69 
+PLUMED:   value cos_tor_@CA_569_@CA_570_@CA_571_@CA_572 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_570_@CA_571_@CA_572_@CA_573
+PLUMED:   Colvar 1 is calculated from atoms : 67 68 69 70 
+PLUMED:   value sin_tor_@CA_570_@CA_571_@CA_572_@CA_573 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_570_@CA_571_@CA_572_@CA_573
+PLUMED:   Colvar 1 is calculated from atoms : 67 68 69 70 
+PLUMED:   value cos_tor_@CA_570_@CA_571_@CA_572_@CA_573 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_571_@CA_572_@CA_573_@CA_574
+PLUMED:   Colvar 1 is calculated from atoms : 68 69 70 71 
+PLUMED:   value sin_tor_@CA_571_@CA_572_@CA_573_@CA_574 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_571_@CA_572_@CA_573_@CA_574
+PLUMED:   Colvar 1 is calculated from atoms : 68 69 70 71 
+PLUMED:   value cos_tor_@CA_571_@CA_572_@CA_573_@CA_574 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_572_@CA_573_@CA_574_@CA_575
+PLUMED:   Colvar 1 is calculated from atoms : 69 70 71 72 
+PLUMED:   value sin_tor_@CA_572_@CA_573_@CA_574_@CA_575 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_572_@CA_573_@CA_574_@CA_575
+PLUMED:   Colvar 1 is calculated from atoms : 69 70 71 72 
+PLUMED:   value cos_tor_@CA_572_@CA_573_@CA_574_@CA_575 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_573_@CA_574_@CA_575_@CA_576
+PLUMED:   Colvar 1 is calculated from atoms : 70 71 72 73 
+PLUMED:   value sin_tor_@CA_573_@CA_574_@CA_575_@CA_576 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_573_@CA_574_@CA_575_@CA_576
+PLUMED:   Colvar 1 is calculated from atoms : 70 71 72 73 
+PLUMED:   value cos_tor_@CA_573_@CA_574_@CA_575_@CA_576 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_574_@CA_575_@CA_576_@CA_577
+PLUMED:   Colvar 1 is calculated from atoms : 71 72 73 74 
+PLUMED:   value sin_tor_@CA_574_@CA_575_@CA_576_@CA_577 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_574_@CA_575_@CA_576_@CA_577
+PLUMED:   Colvar 1 is calculated from atoms : 71 72 73 74 
+PLUMED:   value cos_tor_@CA_574_@CA_575_@CA_576_@CA_577 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_575_@CA_576_@CA_577_@CA_578
+PLUMED:   Colvar 1 is calculated from atoms : 72 73 74 75 
+PLUMED:   value sin_tor_@CA_575_@CA_576_@CA_577_@CA_578 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_575_@CA_576_@CA_577_@CA_578
+PLUMED:   Colvar 1 is calculated from atoms : 72 73 74 75 
+PLUMED:   value cos_tor_@CA_575_@CA_576_@CA_577_@CA_578 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_576_@CA_577_@CA_578_@CA_579
+PLUMED:   Colvar 1 is calculated from atoms : 73 74 75 76 
+PLUMED:   value sin_tor_@CA_576_@CA_577_@CA_578_@CA_579 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_576_@CA_577_@CA_578_@CA_579
+PLUMED:   Colvar 1 is calculated from atoms : 73 74 75 76 
+PLUMED:   value cos_tor_@CA_576_@CA_577_@CA_578_@CA_579 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_577_@CA_578_@CA_579_@CA_580
+PLUMED:   Colvar 1 is calculated from atoms : 74 75 76 77 
+PLUMED:   value sin_tor_@CA_577_@CA_578_@CA_579_@CA_580 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_577_@CA_578_@CA_579_@CA_580
+PLUMED:   Colvar 1 is calculated from atoms : 74 75 76 77 
+PLUMED:   value cos_tor_@CA_577_@CA_578_@CA_579_@CA_580 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_578_@CA_579_@CA_580_@CA_581
+PLUMED:   Colvar 1 is calculated from atoms : 75 76 77 78 
+PLUMED:   value sin_tor_@CA_578_@CA_579_@CA_580_@CA_581 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_578_@CA_579_@CA_580_@CA_581
+PLUMED:   Colvar 1 is calculated from atoms : 75 76 77 78 
+PLUMED:   value cos_tor_@CA_578_@CA_579_@CA_580_@CA_581 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_579_@CA_580_@CA_581_@CA_582
+PLUMED:   Colvar 1 is calculated from atoms : 76 77 78 79 
+PLUMED:   value sin_tor_@CA_579_@CA_580_@CA_581_@CA_582 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_579_@CA_580_@CA_581_@CA_582
+PLUMED:   Colvar 1 is calculated from atoms : 76 77 78 79 
+PLUMED:   value cos_tor_@CA_579_@CA_580_@CA_581_@CA_582 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_580_@CA_581_@CA_582_@CA_583
+PLUMED:   Colvar 1 is calculated from atoms : 77 78 79 80 
+PLUMED:   value sin_tor_@CA_580_@CA_581_@CA_582_@CA_583 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_580_@CA_581_@CA_582_@CA_583
+PLUMED:   Colvar 1 is calculated from atoms : 77 78 79 80 
+PLUMED:   value cos_tor_@CA_580_@CA_581_@CA_582_@CA_583 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_581_@CA_582_@CA_583_@CA_584
+PLUMED:   Colvar 1 is calculated from atoms : 78 79 80 81 
+PLUMED:   value sin_tor_@CA_581_@CA_582_@CA_583_@CA_584 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_581_@CA_582_@CA_583_@CA_584
+PLUMED:   Colvar 1 is calculated from atoms : 78 79 80 81 
+PLUMED:   value cos_tor_@CA_581_@CA_582_@CA_583_@CA_584 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_582_@CA_583_@CA_584_@CA_585
+PLUMED:   Colvar 1 is calculated from atoms : 79 80 81 82 
+PLUMED:   value sin_tor_@CA_582_@CA_583_@CA_584_@CA_585 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_582_@CA_583_@CA_584_@CA_585
+PLUMED:   Colvar 1 is calculated from atoms : 79 80 81 82 
+PLUMED:   value cos_tor_@CA_582_@CA_583_@CA_584_@CA_585 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_583_@CA_584_@CA_585_@CA_586
+PLUMED:   Colvar 1 is calculated from atoms : 80 81 82 83 
+PLUMED:   value sin_tor_@CA_583_@CA_584_@CA_585_@CA_586 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_583_@CA_584_@CA_585_@CA_586
+PLUMED:   Colvar 1 is calculated from atoms : 80 81 82 83 
+PLUMED:   value cos_tor_@CA_583_@CA_584_@CA_585_@CA_586 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_584_@CA_585_@CA_586_@CA_587
+PLUMED:   Colvar 1 is calculated from atoms : 81 82 83 84 
+PLUMED:   value sin_tor_@CA_584_@CA_585_@CA_586_@CA_587 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_584_@CA_585_@CA_586_@CA_587
+PLUMED:   Colvar 1 is calculated from atoms : 81 82 83 84 
+PLUMED:   value cos_tor_@CA_584_@CA_585_@CA_586_@CA_587 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_585_@CA_586_@CA_587_@CA_588
+PLUMED:   Colvar 1 is calculated from atoms : 82 83 84 85 
+PLUMED:   value sin_tor_@CA_585_@CA_586_@CA_587_@CA_588 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_585_@CA_586_@CA_587_@CA_588
+PLUMED:   Colvar 1 is calculated from atoms : 82 83 84 85 
+PLUMED:   value cos_tor_@CA_585_@CA_586_@CA_587_@CA_588 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_586_@CA_587_@CA_588_@CA_589
+PLUMED:   Colvar 1 is calculated from atoms : 83 84 85 86 
+PLUMED:   value sin_tor_@CA_586_@CA_587_@CA_588_@CA_589 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_586_@CA_587_@CA_588_@CA_589
+PLUMED:   Colvar 1 is calculated from atoms : 83 84 85 86 
+PLUMED:   value cos_tor_@CA_586_@CA_587_@CA_588_@CA_589 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_587_@CA_588_@CA_589_@CA_590
+PLUMED:   Colvar 1 is calculated from atoms : 84 85 86 87 
+PLUMED:   value sin_tor_@CA_587_@CA_588_@CA_589_@CA_590 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_587_@CA_588_@CA_589_@CA_590
+PLUMED:   Colvar 1 is calculated from atoms : 84 85 86 87 
+PLUMED:   value cos_tor_@CA_587_@CA_588_@CA_589_@CA_590 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_588_@CA_589_@CA_590_@CA_591
+PLUMED:   Colvar 1 is calculated from atoms : 85 86 87 88 
+PLUMED:   value sin_tor_@CA_588_@CA_589_@CA_590_@CA_591 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_588_@CA_589_@CA_590_@CA_591
+PLUMED:   Colvar 1 is calculated from atoms : 85 86 87 88 
+PLUMED:   value cos_tor_@CA_588_@CA_589_@CA_590_@CA_591 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_589_@CA_590_@CA_591_@CA_592
+PLUMED:   Colvar 1 is calculated from atoms : 86 87 88 89 
+PLUMED:   value sin_tor_@CA_589_@CA_590_@CA_591_@CA_592 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_589_@CA_590_@CA_591_@CA_592
+PLUMED:   Colvar 1 is calculated from atoms : 86 87 88 89 
+PLUMED:   value cos_tor_@CA_589_@CA_590_@CA_591_@CA_592 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_590_@CA_591_@CA_592_@CA_593
+PLUMED:   Colvar 1 is calculated from atoms : 87 88 89 90 
+PLUMED:   value sin_tor_@CA_590_@CA_591_@CA_592_@CA_593 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_590_@CA_591_@CA_592_@CA_593
+PLUMED:   Colvar 1 is calculated from atoms : 87 88 89 90 
+PLUMED:   value cos_tor_@CA_590_@CA_591_@CA_592_@CA_593 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_591_@CA_592_@CA_593_@CA_594
+PLUMED:   Colvar 1 is calculated from atoms : 88 89 90 91 
+PLUMED:   value sin_tor_@CA_591_@CA_592_@CA_593_@CA_594 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_591_@CA_592_@CA_593_@CA_594
+PLUMED:   Colvar 1 is calculated from atoms : 88 89 90 91 
+PLUMED:   value cos_tor_@CA_591_@CA_592_@CA_593_@CA_594 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_592_@CA_593_@CA_594_@CA_595
+PLUMED:   Colvar 1 is calculated from atoms : 89 90 91 92 
+PLUMED:   value sin_tor_@CA_592_@CA_593_@CA_594_@CA_595 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_592_@CA_593_@CA_594_@CA_595
+PLUMED:   Colvar 1 is calculated from atoms : 89 90 91 92 
+PLUMED:   value cos_tor_@CA_592_@CA_593_@CA_594_@CA_595 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_593_@CA_594_@CA_595_@CA_596
+PLUMED:   Colvar 1 is calculated from atoms : 90 91 92 93 
+PLUMED:   value sin_tor_@CA_593_@CA_594_@CA_595_@CA_596 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_593_@CA_594_@CA_595_@CA_596
+PLUMED:   Colvar 1 is calculated from atoms : 90 91 92 93 
+PLUMED:   value cos_tor_@CA_593_@CA_594_@CA_595_@CA_596 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_594_@CA_595_@CA_596_@CA_597
+PLUMED:   Colvar 1 is calculated from atoms : 91 92 93 94 
+PLUMED:   value sin_tor_@CA_594_@CA_595_@CA_596_@CA_597 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_594_@CA_595_@CA_596_@CA_597
+PLUMED:   Colvar 1 is calculated from atoms : 91 92 93 94 
+PLUMED:   value cos_tor_@CA_594_@CA_595_@CA_596_@CA_597 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_595_@CA_596_@CA_597_@CA_598
+PLUMED:   Colvar 1 is calculated from atoms : 92 93 94 95 
+PLUMED:   value sin_tor_@CA_595_@CA_596_@CA_597_@CA_598 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_595_@CA_596_@CA_597_@CA_598
+PLUMED:   Colvar 1 is calculated from atoms : 92 93 94 95 
+PLUMED:   value cos_tor_@CA_595_@CA_596_@CA_597_@CA_598 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_596_@CA_597_@CA_598_@CA_599
+PLUMED:   Colvar 1 is calculated from atoms : 93 94 95 96 
+PLUMED:   value sin_tor_@CA_596_@CA_597_@CA_598_@CA_599 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_596_@CA_597_@CA_598_@CA_599
+PLUMED:   Colvar 1 is calculated from atoms : 93 94 95 96 
+PLUMED:   value cos_tor_@CA_596_@CA_597_@CA_598_@CA_599 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_597_@CA_598_@CA_599_@CA_600
+PLUMED:   Colvar 1 is calculated from atoms : 94 95 96 97 
+PLUMED:   value sin_tor_@CA_597_@CA_598_@CA_599_@CA_600 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_597_@CA_598_@CA_599_@CA_600
+PLUMED:   Colvar 1 is calculated from atoms : 94 95 96 97 
+PLUMED:   value cos_tor_@CA_597_@CA_598_@CA_599_@CA_600 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_598_@CA_599_@CA_600_@CA_601
+PLUMED:   Colvar 1 is calculated from atoms : 95 96 97 98 
+PLUMED:   value sin_tor_@CA_598_@CA_599_@CA_600_@CA_601 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_598_@CA_599_@CA_600_@CA_601
+PLUMED:   Colvar 1 is calculated from atoms : 95 96 97 98 
+PLUMED:   value cos_tor_@CA_598_@CA_599_@CA_600_@CA_601 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_599_@CA_600_@CA_601_@CA_602
+PLUMED:   Colvar 1 is calculated from atoms : 96 97 98 99 
+PLUMED:   value sin_tor_@CA_599_@CA_600_@CA_601_@CA_602 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_599_@CA_600_@CA_601_@CA_602
+PLUMED:   Colvar 1 is calculated from atoms : 96 97 98 99 
+PLUMED:   value cos_tor_@CA_599_@CA_600_@CA_601_@CA_602 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_600_@CA_601_@CA_602_@CA_603
+PLUMED:   Colvar 1 is calculated from atoms : 97 98 99 100 
+PLUMED:   value sin_tor_@CA_600_@CA_601_@CA_602_@CA_603 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_600_@CA_601_@CA_602_@CA_603
+PLUMED:   Colvar 1 is calculated from atoms : 97 98 99 100 
+PLUMED:   value cos_tor_@CA_600_@CA_601_@CA_602_@CA_603 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_601_@CA_602_@CA_603_@CA_604
+PLUMED:   Colvar 1 is calculated from atoms : 98 99 100 101 
+PLUMED:   value sin_tor_@CA_601_@CA_602_@CA_603_@CA_604 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_601_@CA_602_@CA_603_@CA_604
+PLUMED:   Colvar 1 is calculated from atoms : 98 99 100 101 
+PLUMED:   value cos_tor_@CA_601_@CA_602_@CA_603_@CA_604 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_602_@CA_603_@CA_604_@CA_605
+PLUMED:   Colvar 1 is calculated from atoms : 99 100 101 102 
+PLUMED:   value sin_tor_@CA_602_@CA_603_@CA_604_@CA_605 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_602_@CA_603_@CA_604_@CA_605
+PLUMED:   Colvar 1 is calculated from atoms : 99 100 101 102 
+PLUMED:   value cos_tor_@CA_602_@CA_603_@CA_604_@CA_605 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_603_@CA_604_@CA_605_@CA_606
+PLUMED:   Colvar 1 is calculated from atoms : 100 101 102 103 
+PLUMED:   value sin_tor_@CA_603_@CA_604_@CA_605_@CA_606 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_603_@CA_604_@CA_605_@CA_606
+PLUMED:   Colvar 1 is calculated from atoms : 100 101 102 103 
+PLUMED:   value cos_tor_@CA_603_@CA_604_@CA_605_@CA_606 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label sin_tor_@CA_604_@CA_605_@CA_606_@CA_607
+PLUMED:   Colvar 1 is calculated from atoms : 101 102 103 104 
+PLUMED:   value sin_tor_@CA_604_@CA_605_@CA_606_@CA_607 contains the sum of all the values
+PLUMED: Action ALPHABETA
+PLUMED:   with label cos_tor_@CA_604_@CA_605_@CA_606_@CA_607
+PLUMED:   Colvar 1 is calculated from atoms : 101 102 103 104 
+PLUMED:   value cos_tor_@CA_604_@CA_605_@CA_606_@CA_607 contains the sum of all the values
+PLUMED: Action PRINT
+PLUMED:   with label @204
+PLUMED:   with stride 1
+PLUMED:   with arguments sin_tor_@CA_504_@CA_505_@CA_506_@CA_507 cos_tor_@CA_504_@CA_505_@CA_506_@CA_507 sin_tor_@CA_505_@CA_506_@CA_507_@CA_508 cos_tor_@CA_505_@CA_506_@CA_507_@CA_508 sin_tor_@CA_506_@CA_507_@CA_508_@CA_509 cos_tor_@CA_506_@CA_507_@CA_508_@CA_509 sin_tor_@CA_507_@CA_508_@CA_509_@CA_510 cos_tor_@CA_507_@CA_508_@CA_509_@CA_510 sin_tor_@CA_508_@CA_509_@CA_510_@CA_511 cos_tor_@CA_508_@CA_509_@CA_510_@CA_511 sin_tor_@CA_509_@CA_510_@CA_511_@CA_512 cos_tor_@CA_509_@CA_510_@CA_511_@CA_512 sin_tor_@CA_510_@CA_511_@CA_512_@CA_513 cos_tor_@CA_510_@CA_511_@CA_512_@CA_513 sin_tor_@CA_511_@CA_512_@CA_513_@CA_514 cos_tor_@CA_511_@CA_512_@CA_513_@CA_514 sin_tor_@CA_512_@CA_513_@CA_514_@CA_515 cos_tor_@CA_512_@CA_513_@CA_514_@CA_515 sin_tor_@CA_513_@CA_514_@CA_515_@CA_516 cos_tor_@CA_513_@CA_514_@CA_515_@CA_516 sin_tor_@CA_514_@CA_515_@CA_516_@CA_517 cos_tor_@CA_514_@CA_515_@CA_516_@CA_517 sin_tor_@CA_515_@CA_516_@CA_517_@CA_518 cos_tor_@CA_515_@CA_516_@CA_517_@CA_518 sin_tor_@CA_516_@CA_517_@CA_518_@CA_519 cos_tor_@CA_516_@CA_517_@CA_518_@CA_519 sin_tor_@CA_517_@CA_518_@CA_519_@CA_520 cos_tor_@CA_517_@CA_518_@CA_519_@CA_520 sin_tor_@CA_518_@CA_519_@CA_520_@CA_521 cos_tor_@CA_518_@CA_519_@CA_520_@CA_521 sin_tor_@CA_519_@CA_520_@CA_521_@CA_522 cos_tor_@CA_519_@CA_520_@CA_521_@CA_522 sin_tor_@CA_520_@CA_521_@CA_522_@CA_523 cos_tor_@CA_520_@CA_521_@CA_522_@CA_523 sin_tor_@CA_521_@CA_522_@CA_523_@CA_524 cos_tor_@CA_521_@CA_522_@CA_523_@CA_524 sin_tor_@CA_522_@CA_523_@CA_524_@CA_525 cos_tor_@CA_522_@CA_523_@CA_524_@CA_525 sin_tor_@CA_523_@CA_524_@CA_525_@CA_526 cos_tor_@CA_523_@CA_524_@CA_525_@CA_526 sin_tor_@CA_524_@CA_525_@CA_526_@CA_527 cos_tor_@CA_524_@CA_525_@CA_526_@CA_527 sin_tor_@CA_525_@CA_526_@CA_527_@CA_528 cos_tor_@CA_525_@CA_526_@CA_527_@CA_528 sin_tor_@CA_526_@CA_527_@CA_528_@CA_529 cos_tor_@CA_526_@CA_527_@CA_528_@CA_529 sin_tor_@CA_527_@CA_528_@CA_529_@CA_530 cos_tor_@CA_527_@CA_528_@CA_529_@CA_530 sin_tor_@CA_528_@CA_529_@CA_530_@CA_531 cos_tor_@CA_528_@CA_529_@CA_530_@CA_531 sin_tor_@CA_529_@CA_530_@CA_531_@CA_532 cos_tor_@CA_529_@CA_530_@CA_531_@CA_532 sin_tor_@CA_530_@CA_531_@CA_532_@CA_533 cos_tor_@CA_530_@CA_531_@CA_532_@CA_533 sin_tor_@CA_531_@CA_532_@CA_533_@CA_534 cos_tor_@CA_531_@CA_532_@CA_533_@CA_534 sin_tor_@CA_532_@CA_533_@CA_534_@CA_535 cos_tor_@CA_532_@CA_533_@CA_534_@CA_535 sin_tor_@CA_533_@CA_534_@CA_535_@CA_536 cos_tor_@CA_533_@CA_534_@CA_535_@CA_536 sin_tor_@CA_534_@CA_535_@CA_536_@CA_537 cos_tor_@CA_534_@CA_535_@CA_536_@CA_537 sin_tor_@CA_535_@CA_536_@CA_537_@CA_538 cos_tor_@CA_535_@CA_536_@CA_537_@CA_538 sin_tor_@CA_536_@CA_537_@CA_538_@CA_539 cos_tor_@CA_536_@CA_537_@CA_538_@CA_539 sin_tor_@CA_537_@CA_538_@CA_539_@CA_540 cos_tor_@CA_537_@CA_538_@CA_539_@CA_540 sin_tor_@CA_538_@CA_539_@CA_540_@CA_541 cos_tor_@CA_538_@CA_539_@CA_540_@CA_541 sin_tor_@CA_539_@CA_540_@CA_541_@CA_542 cos_tor_@CA_539_@CA_540_@CA_541_@CA_542 sin_tor_@CA_540_@CA_541_@CA_542_@CA_543 cos_tor_@CA_540_@CA_541_@CA_542_@CA_543 sin_tor_@CA_541_@CA_542_@CA_543_@CA_544 cos_tor_@CA_541_@CA_542_@CA_543_@CA_544 sin_tor_@CA_542_@CA_543_@CA_544_@CA_545 cos_tor_@CA_542_@CA_543_@CA_544_@CA_545 sin_tor_@CA_543_@CA_544_@CA_545_@CA_546 cos_tor_@CA_543_@CA_544_@CA_545_@CA_546 sin_tor_@CA_544_@CA_545_@CA_546_@CA_547 cos_tor_@CA_544_@CA_545_@CA_546_@CA_547 sin_tor_@CA_545_@CA_546_@CA_547_@CA_548 cos_tor_@CA_545_@CA_546_@CA_547_@CA_548 sin_tor_@CA_546_@CA_547_@CA_548_@CA_549 cos_tor_@CA_546_@CA_547_@CA_548_@CA_549 sin_tor_@CA_547_@CA_548_@CA_549_@CA_550 cos_tor_@CA_547_@CA_548_@CA_549_@CA_550 sin_tor_@CA_548_@CA_549_@CA_550_@CA_551 cos_tor_@CA_548_@CA_549_@CA_550_@CA_551 sin_tor_@CA_549_@CA_550_@CA_551_@CA_552 cos_tor_@CA_549_@CA_550_@CA_551_@CA_552 sin_tor_@CA_550_@CA_551_@CA_552_@CA_553 cos_tor_@CA_550_@CA_551_@CA_552_@CA_553 sin_tor_@CA_551_@CA_552_@CA_553_@CA_554 cos_tor_@CA_551_@CA_552_@CA_553_@CA_554 sin_tor_@CA_552_@CA_553_@CA_554_@CA_555 cos_tor_@CA_552_@CA_553_@CA_554_@CA_555 sin_tor_@CA_553_@CA_554_@CA_555_@CA_556 cos_tor_@CA_553_@CA_554_@CA_555_@CA_556 sin_tor_@CA_554_@CA_555_@CA_556_@CA_557 cos_tor_@CA_554_@CA_555_@CA_556_@CA_557 sin_tor_@CA_555_@CA_556_@CA_557_@CA_558 cos_tor_@CA_555_@CA_556_@CA_557_@CA_558 sin_tor_@CA_556_@CA_557_@CA_558_@CA_559 cos_tor_@CA_556_@CA_557_@CA_558_@CA_559 sin_tor_@CA_557_@CA_558_@CA_559_@CA_560 cos_tor_@CA_557_@CA_558_@CA_559_@CA_560 sin_tor_@CA_558_@CA_559_@CA_560_@CA_561 cos_tor_@CA_558_@CA_559_@CA_560_@CA_561 sin_tor_@CA_559_@CA_560_@CA_561_@CA_562 cos_tor_@CA_559_@CA_560_@CA_561_@CA_562 sin_tor_@CA_560_@CA_561_@CA_562_@CA_563 cos_tor_@CA_560_@CA_561_@CA_562_@CA_563 sin_tor_@CA_561_@CA_562_@CA_563_@CA_564 cos_tor_@CA_561_@CA_562_@CA_563_@CA_564 sin_tor_@CA_562_@CA_563_@CA_564_@CA_565 cos_tor_@CA_562_@CA_563_@CA_564_@CA_565 sin_tor_@CA_563_@CA_564_@CA_565_@CA_566 cos_tor_@CA_563_@CA_564_@CA_565_@CA_566 sin_tor_@CA_564_@CA_565_@CA_566_@CA_567 cos_tor_@CA_564_@CA_565_@CA_566_@CA_567 sin_tor_@CA_565_@CA_566_@CA_567_@CA_568 cos_tor_@CA_565_@CA_566_@CA_567_@CA_568 sin_tor_@CA_566_@CA_567_@CA_568_@CA_569 cos_tor_@CA_566_@CA_567_@CA_568_@CA_569 sin_tor_@CA_567_@CA_568_@CA_569_@CA_570 cos_tor_@CA_567_@CA_568_@CA_569_@CA_570 sin_tor_@CA_568_@CA_569_@CA_570_@CA_571 cos_tor_@CA_568_@CA_569_@CA_570_@CA_571 sin_tor_@CA_569_@CA_570_@CA_571_@CA_572 cos_tor_@CA_569_@CA_570_@CA_571_@CA_572 sin_tor_@CA_570_@CA_571_@CA_572_@CA_573 cos_tor_@CA_570_@CA_571_@CA_572_@CA_573 sin_tor_@CA_571_@CA_572_@CA_573_@CA_574 cos_tor_@CA_571_@CA_572_@CA_573_@CA_574 sin_tor_@CA_572_@CA_573_@CA_574_@CA_575 cos_tor_@CA_572_@CA_573_@CA_574_@CA_575 sin_tor_@CA_573_@CA_574_@CA_575_@CA_576 cos_tor_@CA_573_@CA_574_@CA_575_@CA_576 sin_tor_@CA_574_@CA_575_@CA_576_@CA_577 cos_tor_@CA_574_@CA_575_@CA_576_@CA_577 sin_tor_@CA_575_@CA_576_@CA_577_@CA_578 cos_tor_@CA_575_@CA_576_@CA_577_@CA_578 sin_tor_@CA_576_@CA_577_@CA_578_@CA_579 cos_tor_@CA_576_@CA_577_@CA_578_@CA_579 sin_tor_@CA_577_@CA_578_@CA_579_@CA_580 cos_tor_@CA_577_@CA_578_@CA_579_@CA_580 sin_tor_@CA_578_@CA_579_@CA_580_@CA_581 cos_tor_@CA_578_@CA_579_@CA_580_@CA_581 sin_tor_@CA_579_@CA_580_@CA_581_@CA_582 cos_tor_@CA_579_@CA_580_@CA_581_@CA_582 sin_tor_@CA_580_@CA_581_@CA_582_@CA_583 cos_tor_@CA_580_@CA_581_@CA_582_@CA_583 sin_tor_@CA_581_@CA_582_@CA_583_@CA_584 cos_tor_@CA_581_@CA_582_@CA_583_@CA_584 sin_tor_@CA_582_@CA_583_@CA_584_@CA_585 cos_tor_@CA_582_@CA_583_@CA_584_@CA_585 sin_tor_@CA_583_@CA_584_@CA_585_@CA_586 cos_tor_@CA_583_@CA_584_@CA_585_@CA_586 sin_tor_@CA_584_@CA_585_@CA_586_@CA_587 cos_tor_@CA_584_@CA_585_@CA_586_@CA_587 sin_tor_@CA_585_@CA_586_@CA_587_@CA_588 cos_tor_@CA_585_@CA_586_@CA_587_@CA_588 sin_tor_@CA_586_@CA_587_@CA_588_@CA_589 cos_tor_@CA_586_@CA_587_@CA_588_@CA_589 sin_tor_@CA_587_@CA_588_@CA_589_@CA_590 cos_tor_@CA_587_@CA_588_@CA_589_@CA_590 sin_tor_@CA_588_@CA_589_@CA_590_@CA_591 cos_tor_@CA_588_@CA_589_@CA_590_@CA_591 sin_tor_@CA_589_@CA_590_@CA_591_@CA_592 cos_tor_@CA_589_@CA_590_@CA_591_@CA_592 sin_tor_@CA_590_@CA_591_@CA_592_@CA_593 cos_tor_@CA_590_@CA_591_@CA_592_@CA_593 sin_tor_@CA_591_@CA_592_@CA_593_@CA_594 cos_tor_@CA_591_@CA_592_@CA_593_@CA_594 sin_tor_@CA_592_@CA_593_@CA_594_@CA_595 cos_tor_@CA_592_@CA_593_@CA_594_@CA_595 sin_tor_@CA_593_@CA_594_@CA_595_@CA_596 cos_tor_@CA_593_@CA_594_@CA_595_@CA_596 sin_tor_@CA_594_@CA_595_@CA_596_@CA_597 cos_tor_@CA_594_@CA_595_@CA_596_@CA_597 sin_tor_@CA_595_@CA_596_@CA_597_@CA_598 cos_tor_@CA_595_@CA_596_@CA_597_@CA_598 sin_tor_@CA_596_@CA_597_@CA_598_@CA_599 cos_tor_@CA_596_@CA_597_@CA_598_@CA_599 sin_tor_@CA_597_@CA_598_@CA_599_@CA_600 cos_tor_@CA_597_@CA_598_@CA_599_@CA_600 sin_tor_@CA_598_@CA_599_@CA_600_@CA_601 cos_tor_@CA_598_@CA_599_@CA_600_@CA_601 sin_tor_@CA_599_@CA_600_@CA_601_@CA_602 cos_tor_@CA_599_@CA_600_@CA_601_@CA_602 sin_tor_@CA_600_@CA_601_@CA_602_@CA_603 cos_tor_@CA_600_@CA_601_@CA_602_@CA_603 sin_tor_@CA_601_@CA_602_@CA_603_@CA_604 cos_tor_@CA_601_@CA_602_@CA_603_@CA_604 sin_tor_@CA_602_@CA_603_@CA_604_@CA_605 cos_tor_@CA_602_@CA_603_@CA_604_@CA_605 sin_tor_@CA_603_@CA_604_@CA_605_@CA_606 cos_tor_@CA_603_@CA_604_@CA_605_@CA_606 sin_tor_@CA_604_@CA_605_@CA_606_@CA_607 cos_tor_@CA_604_@CA_605_@CA_606_@CA_607
+PLUMED:   on file /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/colvars.dat
+PLUMED:   with format  %f
+PLUMED: END FILE: /shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/torsions.dat
+PLUMED: Timestep: 1.000000
+PLUMED: KbT has not been set by the MD engine
+PLUMED: It should be set by hand where needed
+PLUMED: Relevant bibliography:
+PLUMED:   [1] The PLUMED consortium, Nat. Methods 16, 670 (2019)
+PLUMED:   [2] Tribello, Bonomi, Branduardi, Camilloni, and Bussi, Comput. Phys. Commun. 185, 604 (2014)
+PLUMED: Please read and cite where appropriate!
+PLUMED: Finished setup
+PLUMED:                                               Cycles        Total      Average      Minimum      Maximum
+PLUMED:                                                    1     0.150304     0.150304     0.150304     0.150304
+PLUMED: 1 Prepare dependencies                           164     0.000612     0.000004     0.000003     0.000010
+PLUMED: 2 Sharing data                                   164     0.001358     0.000008     0.000002     0.001070
+PLUMED: 3 Waiting for data                               164     0.000045     0.000000     0.000000     0.000003
+PLUMED: 4 Calculating (forward loop)                     164     0.095453     0.000582     0.000547     0.000727
+PLUMED: 5 Applying (backward loop)                       164     0.003564     0.000022     0.000020     0.000027
+PLUMED: 6 Update                                         164     0.014408     0.000088     0.000081     0.000165
+
+deep_cartograph [INFO]: Elapsed time (Compute features): 00 h 00 min 01 s
+deep_cartograph [INFO]: ==================
+deep_cartograph [INFO]: Filtering features
+deep_cartograph [INFO]: ==================
+deep_cartograph [INFO]: Finding the features that contains the most information about the transitions or conformational changes.
+deep_cartograph [INFO]: The following algorithms are available:
+deep_cartograph [INFO]: - Hartigan's dip test filter. Keeps features that are not unimodal.
+deep_cartograph [INFO]: - Shannon entropy filter. Keeps features with entropy greater than a threshold.
+deep_cartograph [INFO]: - Standard deviation filter. Keeps features with standard deviation greater than a threshold.
+deep_cartograph [INFO]: - Final Mutual information clustering (AMINO). Clusters filtered features according to a mutual information based distance and selects one feature per cluster minimizing the distorsion.
+deep_cartograph [INFO]: Note that the all features must be in the same units to apply the entropy and standard deviation filters meaningfully.
+deep_cartograph [INFO]: Initial size of features set: 202.
+deep_cartograph.tools.filter_features.filtering [INFO]: Computing dip test.
+deep_cartograph.tools.filter_features.filtering [INFO]: Filtered 148 features.
+deep_cartograph.modules.amino.amino [INFO]: Skipping AMINO clustering.
+deep_cartograph [INFO]: Elapsed time (Filter features): 00 h 00 min 01 s
+deep_cartograph [INFO]: ================================
+deep_cartograph [INFO]: Training of Collective Variables
+deep_cartograph [INFO]: ================================
+deep_cartograph [INFO]: Training of collective variables using the mlcolvar library.
+deep_cartograph [INFO]: Creating datasets from colvars...
+deep_cartograph [INFO]: Number of samples: 164
+deep_cartograph [INFO]: Number of features: 54
+deep_cartograph.tools.train_colvars.utils [INFO]: Calculating PCA...
+deep_cartograph.modules.figures.figures [INFO]: Computing FES(PC 1, PC 2)...
+deep_cartograph.tools.train_colvars.utils [INFO]: Projecting trajectory...
+deep_cartograph.modules.statistics.statistics [DEBUG]: Clustering frames with HDBSCAN...
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_cluster_size: 50
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_samples: 5
+deep_cartograph.modules.statistics.statistics [DEBUG]: cluster_selection_epsilon: 0.0
+deep_cartograph.modules.statistics.statistics [DEBUG]: max_cluster_size: 82
+deep_cartograph.modules.statistics.statistics [DEBUG]: n_jobs: 1
+deep_cartograph.modules.statistics.statistics [DEBUG]: Number of clusters (including noise cluster): 3
+deep_cartograph.tools.train_colvars.utils [WARNING]: The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: 128
+deep_cartograph.tools.train_colvars.utils [INFO]: Training Autoencoder CV...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Initializing Autoencoder object...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Initializing metrics and callbacks...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Initializing Trainer...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Training...
+deep_cartograph.tools.train_colvars.utils [INFO]: Best model score: 0.03807580843567848
+deep_cartograph.modules.figures.figures [INFO]: Computing FES(AE 1, AE 2)...
+deep_cartograph.tools.train_colvars.utils [INFO]: Projecting trajectory...
+deep_cartograph.modules.statistics.statistics [DEBUG]: Clustering frames with HDBSCAN...
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_cluster_size: 50
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_samples: 5
+deep_cartograph.modules.statistics.statistics [DEBUG]: cluster_selection_epsilon: 0.0
+deep_cartograph.modules.statistics.statistics [DEBUG]: max_cluster_size: 82
+deep_cartograph.modules.statistics.statistics [DEBUG]: n_jobs: 1
+deep_cartograph.modules.statistics.statistics [DEBUG]: Number of clusters (including noise cluster): 2
+deep_cartograph.tools.train_colvars.utils [INFO]: Calculating TICA CV...
+deep_cartograph.modules.figures.figures [INFO]: Computing FES(TIC 1, TIC 2)...
+deep_cartograph.tools.train_colvars.utils [INFO]: Projecting trajectory...
+deep_cartograph.modules.statistics.statistics [DEBUG]: Clustering frames with HDBSCAN...
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_cluster_size: 50
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_samples: 5
+deep_cartograph.modules.statistics.statistics [DEBUG]: cluster_selection_epsilon: 0.0
+deep_cartograph.modules.statistics.statistics [DEBUG]: max_cluster_size: 82
+deep_cartograph.modules.statistics.statistics [DEBUG]: n_jobs: 1
+deep_cartograph.modules.statistics.statistics [DEBUG]: Number of clusters (including noise cluster): 1
+deep_cartograph.tools.train_colvars.utils [ERROR]: Failed to project the trajectory. Error message: index 0 is out of bounds for axis 0 with size 0
+deep_cartograph.tools.train_colvars.utils [WARNING]: The batch size is larger than the number of samples in the training set. Setting the batch size to the closest power of two: 64
+deep_cartograph.tools.train_colvars.utils [INFO]: Calculating DeepTICA CV...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Initializing DeepTICA object...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Initializing metrics and callbacks...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Initializing Trainer...
+deep_cartograph.tools.train_colvars.utils [DEBUG]: Training...
+deep_cartograph.tools.train_colvars.utils [INFO]: Best model score: -0.09223168343305588
+deep_cartograph.tools.train_colvars.utils [INFO]: Took 46 epochs
+deep_cartograph.tools.train_colvars.utils [INFO]: Eigenvalue 1: 0.29403790831565857
+deep_cartograph.tools.train_colvars.utils [INFO]: Eigenvalue 2: -0.07598285377025604
+deep_cartograph.modules.figures.figures [INFO]: Computing FES(DeepTIC 1, DeepTIC 2)...
+deep_cartograph.tools.train_colvars.utils [INFO]: Projecting trajectory...
+deep_cartograph.modules.statistics.statistics [DEBUG]: Clustering frames with HDBSCAN...
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_cluster_size: 50
+deep_cartograph.modules.statistics.statistics [DEBUG]: min_samples: 5
+deep_cartograph.modules.statistics.statistics [DEBUG]: cluster_selection_epsilon: 0.0
+deep_cartograph.modules.statistics.statistics [DEBUG]: max_cluster_size: 66
+deep_cartograph.modules.statistics.statistics [DEBUG]: n_jobs: 1
+deep_cartograph.modules.statistics.statistics [DEBUG]: Number of clusters (including noise cluster): 1
+deep_cartograph.tools.train_colvars.utils [ERROR]: Failed to project the trajectory. Error message: index 0 is out of bounds for axis 0 with size 0
+deep_cartograph [INFO]: Elapsed time (Train colvars): 00 h 00 min 09 s
+deep_cartograph [INFO]: Total elapsed time: 00 h 00 min 11 s
