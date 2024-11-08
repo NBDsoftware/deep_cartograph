@@ -66,7 +66,12 @@ class TrainColvarsWorkflow:
         self.ref_colvars_path: Union[List[str], None] = ref_colvars_path
         self.trajectory_path: Union[str, None] = trajectory_path
         self.topology_path: Union[str, None] = topology_path
-        self.samples_per_frame: float = samples_per_frame
+        
+        if not samples_per_frame:
+            self.samples_per_frame = 1
+        else:
+            self.samples_per_frame: float = samples_per_frame
+            
         self.ref_labels: Union[List[str], None] = ref_labels
         
         # Validate inputs existence
