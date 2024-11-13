@@ -11,7 +11,7 @@ from typing import Dict, List, Literal, Union
 from deep_cartograph import compute_features
 from deep_cartograph import filter_features
 from deep_cartograph import train_colvars
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, read_list
+from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, read_feature_constraints
 from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 
 ########
@@ -21,7 +21,7 @@ from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 def deep_cartograph(configuration: Dict, trajectory: str, topology: str, reference_folder: Union[str, None] = None, 
                     label_reference: bool = False, dimension: Union[int, None] = None, 
                     cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, 
-                    output_folder: str = 'deep_cartograph') -> None:
+                    restart: bool = False, output_folder: Union[str, None] = None) -> None:
     """
     Function that maps the trajectory onto the collective variables.
 
@@ -44,6 +44,14 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
     # Start timer
     start_time = time.time()
 
+    # If output folder is not given, create default
+    if not output_folder:
+        output_folder = 'deep_cartograph'
+    
+    # If restart is False, create unique output folder
+    if not restart:
+        output_folder = get_unique_path(output_folder)
+            
     # Create output folder if it does not exist
     create_output_folder(output_folder)
 
@@ -131,7 +139,7 @@ def deep_cartograph(configuration: Dict, trajectory: str, topology: str, referen
                 output_folder = step2_output_folder)
 
     # Read filtered features
-    filtered_features = read_list(output_features_path)
+    filtered_features = read_feature_constraints(output_features_path)
     
     if not label_reference:
         ref_labels = None
@@ -220,25 +228,19 @@ if __name__ == "__main__":
     # Set logger
     set_logger(verbose=args.verbose)
 
-    # If output folder is given
-    if args.output_folder:
-        if args.restart:
-            output_folder = args.output_folder
-        else:
-            output_folder = get_unique_path(args.output_folder)
-    # If output folder is not given
-    else:
-        if args.restart:
-            output_folder = 'deep_cartograph'
-        else:
-            output_folder = get_unique_path('deep_cartograph')
-        
-    # Create output folder
-    create_output_folder(output_folder)
-
     # Read configuration
     configuration = read_configuration(args.configuration_path)
 
+    # If output folder is not given, create default
+    if args.output_folder is None:
+        output_folder = 'deep_cartograph'
+    else:
+        output_folder = args.output_folder
+          
+    # If restart is False, create unique output folder
+    if not args.restart:
+        output_folder = get_unique_path(output_folder)
+    
     # Run tool
     deep_cartograph(
         configuration = configuration, 
@@ -248,7 +250,8 @@ if __name__ == "__main__":
         label_reference = args.label_reference,
         dimension = args.dimension, 
         cvs = args.cvs, 
+        restart = args.restart,
         output_folder = output_folder)
-
+    
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))

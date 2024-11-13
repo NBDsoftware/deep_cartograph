@@ -89,6 +89,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
         samples_per_frame:   samples in the colvars file for each frame in the trajectory file. Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)
         output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
+    from deep_cartograph.modules.common import create_output_folder
     
     logger = logging.getLogger("deep_cartograph")
 
@@ -100,6 +101,9 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
 
     # Start timer
     start_time = time.time()
+    
+    # Create output directory
+    create_output_folder(output_folder)
     
     # Create a TrainColvarsWorkflow object 
     workflow = TrainColvarsWorkflow(
@@ -125,7 +129,7 @@ def train_colvars(configuration: Dict, colvars_path: str, feature_constraints: U
 
 if __name__ == "__main__":
 
-    from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, read_feature_constraints
+    from deep_cartograph.modules.common import get_unique_path, read_configuration, read_feature_constraints
 
     parser = argparse.ArgumentParser("Deep Cartograph: Train Collective Variables", description="Train collective variables using the mlcolvar library.")
 
@@ -142,17 +146,13 @@ if __name__ == "__main__":
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help='Dimension of the CV to train or compute', required=False)
     parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
-    parser.add_argument('-out', '-output', dest='output_folder', help='Path to the output folder', required=True)
+    parser.add_argument('-out', '-output', dest='output_folder', help='Path to the output folder', required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Set the logging level to DEBUG', default=False)
 
     args = parser.parse_args()
 
     # Set logger
     set_logger(verbose=args.verbose)
-
-    # Create unique output directory
-    output_folder = get_unique_path(args.output_folder)
-    create_output_folder(output_folder)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)
@@ -167,7 +167,16 @@ if __name__ == "__main__":
         ref_colvars_path = [args.ref_colvars_path]
         if args.label_reference:
             ref_labels = [Path(args.ref_colvars_path).stem]
-            
+    
+    # Give value to output_folder
+    if args.output_folder is None:
+        output_folder = 'train_colvars'
+    else:
+        output_folder = args.output_folder
+    
+    # If called through command line, create a unique output folder
+    output_folder = get_unique_path(output_folder)
+        
     # Create a TrainColvarsWorkflow object and run the workflow
     train_colvars(
         configuration = configuration,
@@ -181,6 +190,6 @@ if __name__ == "__main__":
         topology = args.topology,
         samples_per_frame = args.samples_per_frame,
         output_folder = output_folder)
-
+    
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))

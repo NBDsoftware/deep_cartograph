@@ -142,7 +142,7 @@ if __name__ == "__main__":
     # Inputs
     parser.add_argument("-conf", dest='configuration_path', help="Path to the YAML configuration file with the settings of the filtering task", required=True)
     parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the input colvars file", required=True)
-    parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=True)
+    parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument("-csv_summary", action='store_true', help="Save a CSV summary with the values of the different metrics for each feature", required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
     
@@ -151,9 +151,14 @@ if __name__ == "__main__":
     # Set logger
     set_logger(verbose=args.verbose)
 
+    # Give value to output_folder
+    if args.output_folder is None:
+        output_folder = 'filter_features'
+    else:
+        output_folder = args.output_folder
+        
     # Create unique output directory
-    output_folder = get_unique_path(args.output_folder)
-    create_output_folder(output_folder)
+    output_folder = get_unique_path(output_folder)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)
@@ -167,7 +172,4 @@ if __name__ == "__main__":
 
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
-
-        
-    
     

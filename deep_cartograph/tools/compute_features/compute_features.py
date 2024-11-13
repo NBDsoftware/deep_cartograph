@@ -138,17 +138,22 @@ if __name__ == "__main__":
     parser.add_argument('-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
     parser.add_argument('-topology', dest='topology', help="Path to topology file.", required=True)
     parser.add_argument('-colvars', dest='colvars_path', help="Path to the output colvars file that the PLUMED input will produce", required=True)
-    parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=True)
+    parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
     args = parser.parse_args()
 
     # Set logger
     set_logger(verbose=args.verbose)
-
+    
+    # Give value to output_folder
+    if args.output_folder is None:
+        output_folder = 'compute_features'
+    else:
+        output_folder = args.output_folder
+        
     # Create unique output directory
-    output_folder = get_unique_path(args.output_folder)
-    create_output_folder(output_folder)
+    output_folder = get_unique_path(output_folder)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)

@@ -1,4 +1,5 @@
 from deep_cartograph.tools.filter_features import filter_features
+from deep_cartograph.modules.common import read_feature_constraints
 import importlib.resources as resources
 from deep_cartograph import tests
 import shutil
@@ -47,18 +48,17 @@ def test_filter_features():
         shutil.rmtree(output_path)
         
     # Call API
-    output_features = filter_features(
+    output_features_path = filter_features(
         configuration = get_config(),
         colvars_path = colvars_path,
         csv_summary = True,
         output_folder = output_path)
     
     # Read the all reference filtered features into a list
-    with open(reference_features_path, 'r') as f:
-        reference_features = f.readlines()
+    reference_features = read_feature_constraints(reference_features_path)
     
-    # Remove the newline characters
-    reference_features = [line.strip() for line in reference_features]
+    # Read the all output filtered features into a list
+    output_features = read_feature_constraints(output_features_path)
     
     # Compare the reference and output features
     test_passed = output_features == reference_features
