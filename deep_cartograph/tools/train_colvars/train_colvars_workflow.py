@@ -53,7 +53,6 @@ class TrainColvarsWorkflow:
         
         # Set output folder
         self.output_folder: str = output_folder
-        create_output_folder(output_folder)
         
         # Configuration related attributes
         self.configuration: Dict = validate_configuration(configuration, TrainColvarsSchema, output_folder)

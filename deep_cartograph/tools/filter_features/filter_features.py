@@ -5,14 +5,14 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Union
 
 ########
 # TOOL #
 ########
 
-def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = False,
-                    output_folder: str = 'filter_features'):
+def filter_features(configuration: Dict, colvars_path: str, output_features_path: Union[str, None] = None, 
+                    csv_summary: bool = False, output_folder: str = 'filter_features'):
     """
     Function that filters the features in the colvars file using different algorithms to select a subset that contains 
     the most information about the system.
@@ -22,13 +22,14 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
 
         configuration:             Configuration dictionary (see default_config.yml for more information)
         colvars_path:              Path to the input colvars file with the time series of features.
+        output_features_path       (Optional) Path to the output file with the filtered features.
         csv_summary:               (Optional) If True, saves a CSV summary with the filter values for each collective variable
         output_folder:             (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
 
     Returns
     -------
 
-        filtered_features:   
+        output_features_path:      Path to the output file with the filtered features.
     """
 
     from deep_cartograph.modules.amino import amino
@@ -79,14 +80,14 @@ def filter_features(configuration: Dict, colvars_path: str, csv_summary: bool = 
     filtered_features = amino(filtered_features, colvars_path, output_folder, configuration['amino_settings'], configuration['sampling_settings'])
 
     # Save the filtered features
-    filtered_features_path = os.path.join(output_folder, 'filtered_features.txt')
-    save_list(filtered_features, filtered_features_path)
+    output_features_path = os.path.join(output_folder, 'filtered_features.txt')
+    save_list(filtered_features, output_features_path)
 
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Filter features): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
             
-    return filtered_features
+    return output_features_path
 
 def set_logger(verbose: bool):
     """
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     # Inputs
     parser.add_argument("-conf", dest='configuration_path', help="Path to the YAML configuration file with the settings of the filtering task", required=True)
     parser.add_argument("-colvars", dest='colvars_path', type=str, help="Path to the input colvars file", required=True)
-    parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=True)
+    parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument("-csv_summary", action='store_true', help="Save a CSV summary with the values of the different metrics for each feature", required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
     
@@ -150,9 +151,14 @@ if __name__ == "__main__":
     # Set logger
     set_logger(verbose=args.verbose)
 
+    # Give value to output_folder
+    if args.output_folder is None:
+        output_folder = 'filter_features'
+    else:
+        output_folder = args.output_folder
+        
     # Create unique output directory
-    output_folder = get_unique_path(args.output_folder)
-    create_output_folder(output_folder)
+    output_folder = get_unique_path(output_folder)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)
@@ -166,7 +172,4 @@ if __name__ == "__main__":
 
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
-
-        
-    
     

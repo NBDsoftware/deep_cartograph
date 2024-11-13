@@ -99,6 +99,10 @@ def test_compute_features():
       
     # Output files
     output_path = os.path.join(tests_path, "output_compute_features_2")
+        
+    # Remove output folder if it exists
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
     
     print("Testing compute_features with distances ...")
     

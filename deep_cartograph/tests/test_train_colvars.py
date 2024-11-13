@@ -15,6 +15,10 @@ def get_config():
   cvs: ['pca', 'deep_tica', 'tica', 'ae']
   common:
     dimension: 2
+    input_colvars: 
+      start: 0
+      stop: null
+      stride: 1
     architecture:
       hidden_layers: [5, 3]
       lag_time: 1                        

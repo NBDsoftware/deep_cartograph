@@ -117,7 +117,7 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, out
     
     # Dump the validated configuration to the output folder
     if output_folder is not None:
-        bck_configuration_path = get_unique_path(os.path.join(output_folder, "configuration.yml"))
+        bck_configuration_path = os.path.join(output_folder, "configuration.yml")
         with open(bck_configuration_path, 'w') as config_file:
             yaml.dump(validated_configuration, config_file)
 
@@ -188,7 +188,7 @@ def find_feature_names(colvars_path: str) -> list:
         
     return feature_names
 
-def read_feature_constraints(features_path: str, features_regex: str) -> Union[List[str], str]:
+def read_feature_constraints(features_path: Union[str, None], features_regex: Union[str, None] = None) -> Union[List[str], str]:
     """
     Read the feature constraints from the configuration file. Either a list of features or a regex.
     If both are given, the list of features is used.
@@ -210,9 +210,14 @@ def read_feature_constraints(features_path: str, features_regex: str) -> Union[L
     """
 
     if features_path is not None:
-        # Features path is given, load the list of features
-        feature_constraints = np.loadtxt(features_path, dtype=str)
         logger.info(f' Using features in {features_path}')
+        
+        # Features path is given, load the list of features 
+        feature_constraints = np.loadtxt(features_path, dtype=str)
+        
+        # Remove any trailing newline characters
+        feature_constraints = [feature.strip() for feature in feature_constraints]
+        
         return feature_constraints
     
     if features_regex is not None:
@@ -313,6 +318,29 @@ def save_list(list_to_save: list, path_to_save: str) -> None:
             file_to_save.write(f'{element}\n')
 
     return
+
+def read_list(path_to_read: str) -> list:
+    """
+    Function that reads a list from a file.
+
+    Inputs
+    ------
+
+        path_to_read: Path to the file where the list is saved
+    
+    Returns
+    -------
+
+        list_read: List read from the file
+    """
+
+    # Open the file
+    with open(path_to_read, 'r') as file_to_read:
+
+        # Read the lines
+        list_read = file_to_read.readlines()
+
+    return list_read
 
 def get_unique_path(path: str):
     """

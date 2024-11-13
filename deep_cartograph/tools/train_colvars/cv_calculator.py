@@ -98,7 +98,7 @@ class CVCalculator:
         logger.info('Reading data from colvars files...')
         
         filter_dict = get_filter_dict(feature_constraints)
-            
+        
         # Main data
         self.training_input_dtset, self.projection_input_df = create_dataset_from_files(
             file_names=[colvars_path],
@@ -107,6 +107,7 @@ class CVCalculator:
             verbose=False, 
             return_dataframe=True
         )
+        
         self.projection_input_df = self.projection_input_df.filter(**filter_dict)
         
         # Number of features
