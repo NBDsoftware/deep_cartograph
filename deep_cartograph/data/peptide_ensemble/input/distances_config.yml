@@ -22,14 +22,7 @@ filter_features:
     compute_std: False                
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
-    std_quantile: 0                  
-  amino_settings:
-    run_amino: False           
-    max_independent_ops: 20     
-    min_independent_ops: 5     
-    ops_batch_size: null       
-    num_bins: 100               
-    bandwidth: 0.1           
+    std_quantile: 0                      
   sampling_settings:
     relaxation_time: 1                                   
 

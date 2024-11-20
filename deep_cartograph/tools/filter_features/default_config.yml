@@ -11,14 +11,6 @@ filter_settings:
   entropy_quantile: 0                # Entropy quantile to use for filtering (0.1 by default, 0 to skip filter)
   std_quantile: 0                    # Standard deviation quantile to use for filtering (0.1 by default, 0 to skip filter)
   
-amino_settings:
-  run_amino: False                 # Run amino analysis (False by default)
-  max_independent_features: 20     # Maximum number of independent order parameters to find
-  min_independent_features: 5      # Minimum number of independent order parameters to find
-  features_batch_size: null        # Max number of order parameters that will be analyzed simultaneously (all by default, must be greater or equal than max_ind_features)
-  num_bins: 100                    # Number of bins to use for the histograms (50 by default)
-  bandwidth: 0.1                   # Bandwidth to use for the kernel density estimation (0.1 by default)
-  
 sampling_settings:
   num_samples: null                # Number of samples to use for each order parameter (all by default)
   total_num_samples: null          # Total number of samples per order parameter in the colvars file (Required if num_samples is used)

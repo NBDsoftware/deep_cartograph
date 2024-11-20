@@ -32,7 +32,6 @@ def filter_features(configuration: Dict, colvars_path: str, output_features_path
         output_features_path:      Path to the output file with the filtered features.
     """
 
-    from deep_cartograph.modules.amino import amino
     from deep_cartograph.tools.filter_features.filtering import Filter
     from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_list, find_feature_names, files_exist
     from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
@@ -47,7 +46,6 @@ def filter_features(configuration: Dict, colvars_path: str, output_features_path
     logger.info("- Hartigan's dip test filter. Keeps features that are not unimodal.")
     logger.info("- Shannon entropy filter. Keeps features with entropy greater than a threshold.")
     logger.info("- Standard deviation filter. Keeps features with standard deviation greater than a threshold.")
-    logger.info("- Final Mutual information clustering (AMINO). Clusters filtered features according to a mutual information based distance and selects one feature per cluster minimizing the distorsion.")
     logger.info("Note that the all features must be in the same units to apply the entropy and standard deviation filters meaningfully.")
 
     # Start timer
@@ -75,9 +73,6 @@ def filter_features(configuration: Dict, colvars_path: str, output_features_path
 
     # Filter the features
     filtered_features = features_filter.run(csv_summary)
-
-    # Apply AMINO to the filtered subset of features
-    filtered_features = amino(filtered_features, colvars_path, output_folder, configuration['amino_settings'], configuration['sampling_settings'])
 
     # Save the filtered features
     output_features_path = os.path.join(output_folder, 'filtered_features.txt')
