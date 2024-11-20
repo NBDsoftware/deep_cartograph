@@ -75,3 +75,14 @@ options:
 An example for the YAML configuration file can be found here `deep_cartograph/default_config.yml`.
 
 **PLUMED interface**: the resulting Deep Learning CVs can be deployed for enhancing sampling with the [PLUMED](https://www.plumed.org/) package via the [pytorch](https://www.plumed.org/doc-master/user-doc/html/_p_y_t_o_r_c_h__m_o_d_e_l.html>`_) interface, available since version 2.9. 
+
+## FAQ
+
+**Error in LatticeReduction.cpp when using a trajectory from AMBER**
+
+```
+(tools/LatticeReduction.cpp:42) static void PLMD::LatticeReduction::sort(PLMD::Vector*)
++++ assertion failed: m[1]<=m[2]*onePlusEpsilon
+```
+
+This is related to how PLUMED reads the lattice vector information from the input files. Might be a problem specific to AMBER, see [discussion](https://groups.google.com/g/plumed-users/c/k6QoUu5LGoE/m/uzt4VGooCAAJ?utm_medium=email&utm_source=footer). Try to change the PLUMED version or convert the trajectory to a different format.
