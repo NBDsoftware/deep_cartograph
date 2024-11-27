@@ -5,7 +5,9 @@ import lightning
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Union
+from pathlib import Path
+from typing import Dict, List, Tuple, Union
+from sklearn.decomposition import PCA       
 
 from mlcolvar.utils.timelagged import create_timelagged_dataset # NOTE: this function returns less samples than expected: N-lag_time-2
 from mlcolvar.utils.io import create_dataset_from_files
@@ -13,10 +15,9 @@ from mlcolvar.data import DictModule, DictDataset
 from mlcolvar.cvs import AutoEncoderCV, DeepTICA
 from mlcolvar.utils.trainer import MetricsCallback
 from mlcolvar.utils.plot import plot_metrics
-from mlcolvar.core.stats import TICA, PCA
+from mlcolvar.core.stats import TICA
 from mlcolvar.core.transform import Normalization
 from mlcolvar.core.transform.utils import Statistics
-
 
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
@@ -594,24 +595,27 @@ class PCACalculator(LinearCVCalculator):
         Compute Principal Component Analysis (PCA) on the input features. 
         """
         
-        # Find the user requested q for torch.pca_lowrank
-        pca_lowrank_q = self.architecture_config['pca_lowrank_q']
-        if pca_lowrank_q is None:
-            pca_lowrank_q = self.num_features
+        # Choose between deterministic and non-deterministic PCA
+        # if pca_lowrank_q < self.num_features:
+             # Non-deterministic PCA using randomized SVD
+             # out_features is q in torch.pca_lowrank -> Controls the dimensionality of the random projection in the randomized SVD algorithm (trade-off between speed and accuracy)
+        #    pca_cv = PCA(in_features = self.num_features, out_features=min(pca_lowrank_q, self.num_features, self.num_samples))
+        #    try:
+        #        pca_eigvals, pca_eigvecs = pca_cv.compute(X=torch.tensor(self.normalized_training_data.numpy()), center = True)
+        #    except Exception as e:
+        #        logger.error(f'PCA could not be computed. Error message: {e}')
+        #        return
+        #    # Extract the first cv_dimension eigenvectors as CVs 
+        #    self.cv = pca_eigvecs[:,0:self.cv_dimension].numpy()
         
-        # Use PCA to compute high variance linear combinations of the input features
-        # out_features is q in torch.pca_lowrank -> Controls the dimensionality of the random projection in the randomized SVD algorithm (trade-off between speed and accuracy)
-        pca_cv = PCA(in_features = self.num_features, out_features=min(pca_lowrank_q, self.num_features, self.num_samples))
+        # Create PCA object
+        pca = PCA(n_components=self.cv_dimension)
         
-        # Compute PCA
-        try:
-            pca_eigvals, pca_eigvecs = pca_cv.compute(X=torch.tensor(self.training_input_dtset[:]['data'].numpy()), center = True)
-        except Exception as e:
-            logger.error(f'PCA could not be computed. Error message: {e}')
-            return
+        # Fit the PCA model
+        pca.fit(self.normalized_training_data.numpy())
         
-        # Extract the first cv_dimension eigenvectors as CVs 
-        self.cv = pca_eigvecs[:,0:self.cv_dimension].numpy()
+        # Save the eigenvectors as CVs
+        self.cv = pca.components_.T
         
         # Follow a criteria for the sign of the eigenvectors - first weight of each eigenvector should be positive
         for i in range(self.cv_dimension):

@@ -60,7 +60,6 @@ train_colvars:
       - 10
       - 10
       lag_time: 30
-      pca_lowrank_q: null
     dimension: 2
     training:
       early_stopping:

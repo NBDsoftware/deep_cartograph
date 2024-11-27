@@ -33,7 +33,6 @@ train_colvars:
     architecture:
       hidden_layers: [20, 20] # fixed
       lag_time: 20
-      pca_lowrank_q: null
     training: 
       general:
         max_tries: 10       

@@ -41,7 +41,6 @@ train_colvars:
     architecture:
       hidden_layers: [15, 15]
       lag_time: 20
-      pca_lowrank_q: null
     training: 
       general:
         max_tries: 10
@@ -90,7 +89,7 @@ train_colvars:
       num_bins: 200
       num_blocks: 1
       max_fes: 18
-    projected_trajectory:
+    traj_projection:
       plot: True
       num_bins: 100
       bandwidth: 0.25

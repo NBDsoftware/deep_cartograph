@@ -22,7 +22,6 @@ def get_config():
     architecture:
       hidden_layers: [5, 3]
       lag_time: 1                        
-      pca_lowrank_q: null
     training: 
       general:
         max_tries: 10
