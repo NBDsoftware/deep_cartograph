@@ -55,8 +55,10 @@ def test_compute_features():
     
     # Inputs and reference files
     input_path = os.path.join(data_path, "input")
-    trajectory_path = os.path.join(input_path, "CA_trajectory.dcd")
-    topology_path = os.path.join(input_path, "CA_topology.pdb")
+    trajectory_folder = os.path.join(input_path, "trajectory")
+    topology_folder = os.path.join(input_path, "topology")
+    trajectory_path = os.path.join(trajectory_folder, "CA_example.dcd")
+    topology_path = os.path.join(topology_folder, "CA_example.pdb")
     reference_colvars_path = os.path.join(data_path, "reference", "compute_features", "virtual_dihedrals.dat")
     
     # Output files

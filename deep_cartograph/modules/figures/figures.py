@@ -75,17 +75,17 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
         fig, ax = plt.subplots()
 
         # Compute the FES along the given variables
-        fes, grid, bounds, error = compute_fes(X, temp = temperature, ax = ax, plot = True, 
+        fes, fes_grid, fes_bounds, fes_error = compute_fes(X, temp = temperature, ax = ax, plot = True, 
                                             plot_max_fes = max_fes, backend = "KDEpy",
                                             num_samples = num_bins, bandwidth = bandwidth,
-                                            blocks = num_blocks, eps = 1e-10, bounds = find_limits(X, X_ref))
+                                            blocks = num_blocks, eps = 1e-10, bounds = get_ranges(X))
         
         # Save the FE values, the grid, the bounds and the error
         if settings.get('save', False):
             np.save(os.path.join(output_path, 'fes.npy'), fes)
-            np.save(os.path.join(output_path, 'grid.npy'), grid)
-            np.save(os.path.join(output_path, 'bounds.npy'), bounds)
-            np.save(os.path.join(output_path, 'error.npy'), error)
+            np.save(os.path.join(output_path, 'fes_grid.npy'), fes_grid)
+            np.save(os.path.join(output_path, 'fes_bounds.npy'), fes_bounds)
+            np.save(os.path.join(output_path, 'fes_error.npy'), fes_error)
 
         # Add reference data to the FES plot
         if X_ref is not None:
@@ -116,12 +116,15 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
         if max_fes and cv_dimension == 1:
             ax.set_ylim(0, max_fes)
 
-        # Enforce CV limits
+        # Find the range of the data
+        data_range = get_ranges(X, X_ref)
+        
+        # Enforce CV limits, mix data ranges and -1, 1 limits
         if cv_dimension == 1:
-            ax.set_xlim(bounds)
+            ax.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
         elif cv_dimension == 2:
-            ax.set_xlim(bounds[0])
-            ax.set_ylim(bounds[1])
+            ax.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
+            ax.set_ylim(min(data_range[1][0], -1), max(data_range[1][1], 1))
 
         ax.legend(fontsize = font_size)
 
@@ -136,7 +139,7 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
 
     return
 
-def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
+def create_cv_plot(fes, fes_grid, cv, x, y, labels, cv_labels, max_fes, file_path):
     """
     Creates a figure with the value of the CV for each point (x,y) of the grid,
     adds the fes as a contour plot and saves it to a file.
@@ -148,7 +151,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
 
     fes : array-like
         Free energy surface
-    grid : array-like
+    fes_grid : array-like
         Grid of the free energy surface
     cv : array-like
         CV values
@@ -166,7 +169,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
         File path where the figure is saved
     """
 
-    def add_fes_contour(fes, grid, ax, max_fes):
+    def add_fes_contour(fes, fes_grid, ax, max_fes):
         """
         Adds a contour plot of the free energy surface to a given axis.
         
@@ -175,7 +178,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
 
         fes : array-like
             Free energy surface
-        grid : array-like
+        fes_grid : array-like
             Grid of the free energy surface
         ax : matplotlib axis
             Axis where the contour plot is added
@@ -184,7 +187,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
         """
 
         # Add contour plot 
-        ax.contour(grid[0], grid[1], fes, levels=np.linspace(0, max_fes, 10), colors='black', linestyles='dashed', linewidths=0.5)
+        ax.contour(fes_grid[0], fes_grid[1], fes, levels=np.linspace(0, max_fes, 10), colors='black', linestyles='dashed', linewidths=0.5)
 
         return
 
@@ -197,7 +200,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
         fig, ax = plt.subplots()
 
         # Add contour plot of the FES
-        add_fes_contour(fes, grid, ax, max_fes)
+        add_fes_contour(fes, fes_grid, ax, max_fes)
 
         # Add scatter plot of the CV
         ax.scatter(x, y, c=cv[:,component], cmap='viridis', s=1)
@@ -223,7 +226,7 @@ def create_cv_plot(fes, grid, cv, x, y, labels, cv_labels, max_fes, file_path):
 
     return
 
-def plot_clustered_trajectory(data_df: pd.DataFrame, axis_labels: List[str], cluster_label: str, settings: Dict, file_path: str, cmap: ListedColormap = None) -> None:
+def clusters_scatter_plot(data: pd.DataFrame, column_labels: List[str], cluster_label: str, settings: Dict, file_path: str, cluster_colors: List) -> None:
     """
     Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
     The color of the markers is given by the cluster.
@@ -232,40 +235,43 @@ def plot_clustered_trajectory(data_df: pd.DataFrame, axis_labels: List[str], clu
     Inputs
     ------
 
-        data_df:         data with the trajectory projected on the 2D space
-        axis_labels:     labels of the CVs used to project the trajectory
+        data:         data with the trajectory projected on the 2D space
+        column_labels:     labels of the CVs used to project the trajectory
         cluster_label:   label of the data used to color the markers
         settings:        dictionary with the settings of the plot
         file_path:       path where the figure will be saved
-        cmap:            ListedColormap with the colors to use for each cluster (to use the exact same colors as in other plots)
+        cluster_colors:  list with the RGB colors to use for each cluster
     """
-
+    
     if settings.get('plot', True):
 
-        # If ListedColormap is not given, use the cmap in the settings
-        if cmap is None:
-            cmap = settings.get('cmap', 'viridis')
         marker_size = settings.get('marker_size', 10)
         alpha = settings.get('alpha', 0.5)
         num_bins = settings.get('num_bins', 50)
         bw_adjust = settings.get('bandwidth', 0.5)
 
         # Create a JointGrid object with a colormap
-        ax = sns.JointGrid(data=data_df, x=axis_labels[0], y=axis_labels[1])
+        ax = sns.JointGrid(data=data, x=column_labels[0], y=column_labels[1])
 
         # Create a scatter plot of the data, color-coded by the cluster
         scatter = ax.plot_joint(
             sns.scatterplot, 
-            data=data_df,
+            data=data,
             hue=cluster_label, 
-            palette=cmap, 
+            palette=cluster_colors, 
             alpha=alpha, 
             edgecolor=".2", 
             linewidth=.5,
             legend='full',
             s=marker_size)
         
-        scatter.set_axis_labels(axis_labels[0], axis_labels[1])
+        scatter.set_axis_labels(column_labels[0], column_labels[1])
+        
+        # Get range of the data
+        data_range = get_ranges(data[[column_labels[0], column_labels[1]]].to_numpy())
+
+        ax.ax_joint.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
+        ax.ax_joint.set_ylim(min(data_range[1][0], -1), max(data_range[1][1], 1))
 
         # Marginal histograms
         ax.plot_marginals(sns.histplot, kde=True, bins=num_bins, kde_kws = {'bw_adjust': bw_adjust})
@@ -279,47 +285,52 @@ def plot_clustered_trajectory(data_df: pd.DataFrame, axis_labels: List[str], clu
         # Close the figure
         plt.close()
 
-def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], frame_label: str, settings: Dict, file_path: str, cmap: ListedColormap = None) -> None:
+def gradient_scatter_plot(data: pd.DataFrame, column_labels: List[str], color_label: str, settings: Dict, file_path: str) -> None:
     """
-    Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
-    The color of the markers is given by the frame number.
-    Save the figure to a file.
+    Create a scatter plot of the column_labels columns of the data DataFrame. 
+    The color of the markers is a gradient of the colormap given in settings and determined by the color_label column.
+    The plot is saved to a file.
 
     Inputs
     ------
 
-        data_df:         data with the trajectory projected on the 2D space
-        axis_labels:     labels of the CVs used to project the trajectory
-        frame_label:     label of the data used to color the markers
+        data:         data with the trajectory projected on the 2D space
+        column_labels:     labels of the CVs used to project the trajectory
+        color_label:     label of the data used to color the markers
         settings:        dictionary with the settings of the plot
         file_path:       path where the figure will be saved
-        cmap:            ListedColormap with the colors to use for each cluster (to use the exact same colors as in other plots)
     """
 
     if settings.get('plot', True):
 
-        # If ListedColormap is not given, use the cmap in the settings
-        if cmap is None:
-            cmap = settings.get('cmap', 'viridis')
-        marker_size = settings.get('marker_size', 10)
-        alpha = settings.get('alpha', 0.5)
+        cmap = settings.get('cmap')
+        marker_size = settings.get('marker_size')
+        alpha = settings.get('alpha')
 
         # Create a figure
         fig, ax = plt.subplots()
 
         # Create a scatter plot color-coded by the order
-        ax.scatter(data_df[axis_labels[0]], data_df[axis_labels[1]], c=data_df[frame_label], cmap=cmap, s=marker_size, alpha=alpha, edgecolor=".2", linewidth=.5)
+        ax.scatter(data[column_labels[0]], data[column_labels[1]], c=data[color_label], cmap=cmap,
+                   s=marker_size, alpha=alpha, edgecolor=".2", linewidth=.5)
 
         # Add color bar
-        norm = plt.Normalize(data_df[frame_label].min(), data_df[frame_label].max())
+        norm = plt.Normalize(data[color_label].min(), data[color_label].max())
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         cbar = ax.figure.colorbar(sm, ax=ax)
         cbar.set_label('Frame num.')
 
         # Set axis labels
-        ax.set_xlabel(axis_labels[0])
-        ax.set_ylabel(axis_labels[1])
+        ax.set_xlabel(column_labels[0])
+        ax.set_ylabel(column_labels[1])
+        
+        # Get range of the data
+        data_range = get_ranges(data[[column_labels[0], column_labels[1]]].to_numpy())
+        
+        # Enforce CV limits, mix data ranges and -1, 1 limits
+        ax.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
+        ax.set_ylim(min(data_range[1][0], -1), max(data_range[1][1], 1))
         
         # Apply tight layout
         plt.tight_layout()
@@ -330,30 +341,29 @@ def plot_projected_trajectory(data_df: pd.DataFrame, axis_labels: List[str], fra
         # Close the figure
         plt.close()
 
-def find_limits(X: np.ndarray, X_ref: Union[List[np.ndarray], None]) -> List:
+def get_ranges(X: np.ndarray, X_ref: Union[List[np.ndarray], None] = None) -> List:
     """
-    Find the limits of the axis for the FES plot.
+    Find the range of the data along each dimension.
 
     Inputs
     ------
 
-        X:             data with the time series of the variables along which the FES is computed
-        X_ref:         data with the reference values of the variables along which the FES is computed
+        X:             array with the main data
+        X_ref:         array with the reference data
 
     Returns
     -------
 
-        limits:        List with the limits of the axis for the FES plot
+        ranges:       list with the range of the data along each dimension +/- 0.5% of the range
     """
 
     # Dimensions of the input data
-    fes_dimension = X.shape[1]
+    data_dimension = X.shape[1]
 
-    # Find the limits of the axis
-    if fes_dimension == 1:
+    if data_dimension == 1:
 
         # Find the range of the main data
-        limits = (np.min(X), np.max(X))
+        data_range = (np.min(X), np.max(X))
 
         # If reference data is provided
         if X_ref is not None:
@@ -364,23 +374,23 @@ def find_limits(X: np.ndarray, X_ref: Union[List[np.ndarray], None]) -> List:
                 min_x = np.min(X_ref_i)
                 max_x = np.max(X_ref_i)
 
-                if min_x < limits[0]:
-                    limits = (min_x, limits[1])
+                if min_x < data_range[0]:
+                    data_range = (min_x, data_range[1])
 
-                if max_x > limits[1]:
-                    limits = (limits[0], max_x)
+                if max_x > data_range[1]:
+                    data_range = (data_range[0], max_x)
 
         # Define an offset as 5% of the range
-        offset = 0.05*(limits[1]-limits[0])
+        offset = 0.005*(data_range[1]-data_range[0])
 
         # Add the offset to the limits
-        limits = (limits[0]-offset, limits[1]+offset)
+        data_range = [(data_range[0]-offset, data_range[1]+offset)]
 
     else:
 
-        limits = []
+        data_range = []
 
-        for i in range(fes_dimension):
+        for i in range(data_dimension):
             
             # Find the range of the main data
             limit_i = (np.min(X[:, i]), np.max(X[:, i]))
@@ -404,11 +414,11 @@ def find_limits(X: np.ndarray, X_ref: Union[List[np.ndarray], None]) -> List:
             offset = 0.05*(limit_i[1]-limit_i[0])
 
             # Add the offset to the limits
-            limits.append((limit_i[0]-offset, limit_i[1]+offset))
+            data_range.append((limit_i[0]-offset, limit_i[1]+offset))
 
-    return limits
+    return data_range
 
-def plot_clusters_size(cluster_labels: pd.Series, cmap: ListedColormap, output_folder: str):
+def plot_clusters_size(cluster_labels: pd.Series, colors: List, output_folder: str):
     """
     Plot barplot with the number of members for each cluster.
     
@@ -416,7 +426,7 @@ def plot_clusters_size(cluster_labels: pd.Series, cmap: ListedColormap, output_f
     ------
 
         cluster_labels   : List with cluster ID for each frame
-        cmap             : ListedColormap with the colors to use for each cluster
+        colors           : List with the RGB colors to use for each cluster
         output_folder    : Path to the output folder
     """
 
@@ -438,9 +448,6 @@ def plot_clusters_size(cluster_labels: pd.Series, cmap: ListedColormap, output_f
 
     # Number of clusters
     num_clusters = len(clusters)
-
-    # Find the color used for each cluster
-    colors = [cmap(i) for i in range(num_clusters)]
 
     # Transfor the RGB values to hex
     colors = [rgb2hex(color) for color in colors]

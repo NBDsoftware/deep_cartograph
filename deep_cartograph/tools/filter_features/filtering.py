@@ -5,6 +5,7 @@ Class that computes metrics of the features to filter them.
 import os
 import logging
 import pandas as pd
+from typing import List
 
 # Local imports
 from deep_cartograph.modules.statistics.entropy import entropy_calculator
@@ -21,10 +22,10 @@ class Filter:
     It also contains the filtering methods
     """
 
-    def __init__(self, colvar_path: str, feature_names: list, output_dir: str, settings: dict) -> None:
+    def __init__(self, colvars_paths: List[str], feature_names: list, output_dir: str, settings: dict) -> None:
 
         # Paths
-        self.colvar_path = colvar_path
+        self.colvars_paths = colvars_paths
         self.output_dir = output_dir
 
         # Configuration 
@@ -48,7 +49,7 @@ class Filter:
         """
 
         # Compute the entropy of each feature
-        entropy_df = entropy_calculator(self.colvar_path, self.feature_names)
+        entropy_df = entropy_calculator(self.colvars_paths, self.feature_names)
 
         # Merge the dataframes
         self.features_data = self.features_data.merge(entropy_df, on='name', how='inner')
@@ -61,7 +62,7 @@ class Filter:
         """
 
         # Compute the standard deviation of each feature
-        std_df = std_calculator(self.colvar_path, self.feature_names)
+        std_df = std_calculator(self.colvars_paths, self.feature_names)
 
         # Merge the dataframes
         self.features_data = self.features_data.merge(std_df, on='name', how='inner')
@@ -74,7 +75,7 @@ class Filter:
         """
 
         # Compute the dip test p-value for each feature
-        dip_df = diptest_calculator(self.colvar_path, self.feature_names)
+        dip_df = diptest_calculator(self.colvars_paths, self.feature_names)
 
         # Merge the dataframes
         self.features_data = self.features_data.merge(dip_df, on='name', how='inner')

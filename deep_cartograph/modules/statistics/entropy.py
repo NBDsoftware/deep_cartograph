@@ -26,68 +26,59 @@ Intuitive explanation:
     of variables with different units.
 """
 
-def entropy_calculator(colvar_path: str, feature_names: list):
+from typing import List
+import pandas as pd 
+
+def entropy_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd.DataFrame:
     """
-    Function that computes the Shannon entropy of the distribution of each order parameter.
+    Function that computes the Shannon entropy of the distribution of each feature.
 
     Inputs
     ------
 
-        colvar_path:    Path to the colvar file with the time series data of the features
+        colvars_paths:     List of paths to the colvar files with the time series data of the features
         feature_names:     List of names of the features to analyze
     
     Outputs
     -------
 
-        entropies_df: Dataframe with the order parameter names and their entropies
+        entropies_df: Dataframe with the feature names and their entropies
     """
 
-    import pandas as pd
-
-    # Compute the entropy of each order parameter
-    feature_entropies = shannon_entropy(colvar_path, feature_names)
-
-    # Create a dataframe with the order parameter names and their entropies
-    entropies_df = pd.DataFrame({'name': feature_names, 'entropy': feature_entropies})
-
-    # Return the dataframe
-    return entropies_df
-
-def shannon_entropy(colvar_path: str, feature_names: list) -> list:
-    """
-    Function that computes the Shannon entropy of the distribution of each order parameter.
-
-    Inputs
-    ------
-
-        colvar_path: Path to the colvar file with the time series data of the features
-        feature_names:   List of names of the features to analyze
-    
-    Outputs
-    -------
-
-        feature_entropies: List of entropies of the features
-    """
-
-    from scipy.stats import entropy
-    import numpy as np
-
-    from deep_cartograph.modules.common import common
-
-    # Iterate over the features
-    feature_entropies = []
-
-    for name in feature_names:
-
-        # Read the order parameter time series
-        op_data = common.read_colvars_pandas(colvar_path, [name])
-        op_timeseries = op_data[name]
+    def shannon_entropy() -> List[float]:
+        """
+        Function that computes the Shannon entropy of the distribution of each feature.
         
-        # Compute the histogram of the order parameter
-        hist, bin_edges = np.histogram(op_timeseries, bins=100, density=True)
-        prob_distribution = hist * np.diff(bin_edges)
+        Outputs
+        -------
 
-        # Compute and append the entropy to the list
-        feature_entropies.append(round(entropy(prob_distribution, base=2), 3))
-    
-    return feature_entropies
+            feature_entropies: List of entropies of the features
+        """
+
+        from scipy.stats import entropy
+        import numpy as np
+
+        from deep_cartograph.modules.common import read_colvars
+
+        # Iterate over the features
+        feature_entropies = []
+
+        for name in feature_names:
+
+            # Read the feature time series
+            feature_df = read_colvars(colvars_paths, [name])
+            
+            # Compute the histogram of the feature
+            hist, bin_edges = np.histogram(feature_df[name].to_numpy(), bins=100, density=True)
+            prob_distribution = hist * np.diff(bin_edges)
+
+            # Compute and append the entropy to the list
+            feature_entropies.append(round(entropy(prob_distribution, base=2), 3))
+        
+        return feature_entropies
+
+    # Compute the entropy of each feature
+    feature_entropies = shannon_entropy()
+
+    # Return a dataframe with the feature names and their entropies
+    return pd.DataFrame({'name': feature_names, 'entropy': feature_entropies})

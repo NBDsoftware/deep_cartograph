@@ -75,9 +75,9 @@ def optimize_clustering(features: np.ndarray, settings: Dict):
             silhouette_scores.append(silhouette_score(features, cluster_labels))
             
             # Log
-            logger.debug(f"Calinski-Harabasz score: {calinski_harabasz_scores[-1]}")
-            logger.debug(f"Davies-Bouldin score: {davies_bouldin_scores[-1]}")
-            logger.debug(f"Average silhouette score: {silhouette_scores[-1]}")
+            logger.debug(f"Calinski-Harabasz score: {round(calinski_harabasz_scores[-1],3)}")
+            logger.debug(f"Davies-Bouldin score: {round(davies_bouldin_scores[-1],3)}")
+            logger.debug(f"Average silhouette score: {round(silhouette_scores[-1],3)}")
             
             # Save results
             results.append((cluster_labels, centroids))

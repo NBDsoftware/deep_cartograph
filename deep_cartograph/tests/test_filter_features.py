@@ -43,8 +43,7 @@ def test_filter_features():
     # Call API
     output_features_path = filter_features(
         configuration = get_config(),
-        colvars_path = colvars_path,
-        csv_summary = True,
+        colvars_paths = [colvars_path],
         output_folder = output_path)
     
     # Read the all reference filtered features into a list
@@ -53,8 +52,10 @@ def test_filter_features():
     # Read the all output filtered features into a list
     output_features = read_feature_constraints(output_features_path)
     
-    # Compare the reference and output features
-    test_passed = output_features == reference_features
+    # Compare them without considering the order
+    reference_set = set(reference_features)
+    output_set = set(output_features)    
+    test_passed = reference_set == output_set
     assert test_passed
     
     # If the test passed, clean the output folder
