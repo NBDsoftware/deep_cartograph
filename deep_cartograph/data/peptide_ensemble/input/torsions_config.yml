@@ -72,21 +72,14 @@ train_colvars:
       num_bins: 200
       num_blocks: 1
       max_fes: 18
-    projected_trajectory:
+    traj_projection:
       plot: True
       num_bins: 100
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 8
-    projected_clustered_trajectory:
-      plot: True
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.8
-      cmap: turbo
-      use_legend: False
-      marker_size: 8
+      use_legend: True
+      marker_size: 12
   clustering:                        
     run: True                        
     algorithm: hierarchical               

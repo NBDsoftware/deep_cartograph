@@ -95,15 +95,8 @@ train_colvars:
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 5
-    projected_clustered_trajectory:
-      plot: True
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.8
-      cmap: turbo
-      use_legend: False
-      marker_size: 5
+      use_legend: True
+      marker_size: 12
   clustering:                        
     run: False                        
     algorithm: hdbscan               
