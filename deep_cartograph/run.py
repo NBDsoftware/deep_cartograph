@@ -101,7 +101,7 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
         # Create unique output folder
         ref_name = Path(ref_trajectory).stem
         step1_output_folder = os.path.join(step1_parent_path, ref_name)
-        colvars_path = os.path.join(step1_output_folder, 'colvars.dat')
+        ref_colvars_path = os.path.join(step1_output_folder, 'colvars.dat')
 
         if os.path.exists(ref_colvars_path):
             logger.info("Colvars file already exists for reference file. Skipping computation of features.")
@@ -110,11 +110,11 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
                 configuration = configuration['compute_features'], 
                 trajectory = ref_trajectory,
                 topology = ref_topology,
-                colvars_path = colvars_path,
+                colvars_path = ref_colvars_path,
                 output_folder = step1_output_folder)
         
         # Save path to colvars file and name of reference file
-        ref_colvars_paths.append(colvars_path)
+        ref_colvars_paths.append(ref_colvars_path)
         ref_names.append(ref_name)
 
     if not label_reference:
