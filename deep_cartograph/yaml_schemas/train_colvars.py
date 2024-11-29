@@ -81,6 +81,8 @@ class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
     dimension: int = 2
+    # Features normalization
+    features_normalization: Literal['mean_std', 'min_max', 'none'] = 'mean_std'
     # Input colvars
     input_colvars: InputColvars = InputColvars()
     # Architecture settings (used when applicable)

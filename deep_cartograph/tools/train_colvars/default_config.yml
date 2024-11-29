@@ -1,6 +1,7 @@
 # cvs:                           List of Collective Variables to calculate
 # common:                        Common settings for the Collective Variables
 #   dimension:                    (int) Number of dimensions to calculate
+#   features_normalization:       (str) Normalization of the input features, e.g. 'mean_std', 'min_max', null
 #   input_colvars:              Settings for the input colvars file reading with the time series of the input features
 #     start:                      (int) Start index to read the input features (df.iloc[start:stop:stride])
 #     stop:                       (int) Stop index to read the input features (df.iloc[start:stop:stride])
@@ -34,6 +35,7 @@
 cvs: ['pca', 'ae', 'tica', 'deep_tica']
 common:
   dimension: 1
+  features_normalization: 'mean_std' # ['mean_std', 'min_max', null]
   input_colvars: 
     start: 0
     stop: null

@@ -6,7 +6,7 @@ import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Literal
 from sklearn.decomposition import PCA       
 
 from mlcolvar.utils.timelagged import create_timelagged_dataset # NOTE: this function returns less samples than expected: N-lag_time-2
@@ -67,7 +67,8 @@ class CVCalculator:
         # Configuration
         self.configuration: Dict = configuration
         self.architecture_config: Dict = configuration['architecture']
-        self.input_colvars_settings: Dict = configuration['input_colvars']
+        self.training_reading_settings: Dict = configuration['input_colvars']
+        self.features_normalization: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
         
         # Read the data
         self.read_training_data(colvars_paths)
@@ -130,7 +131,7 @@ class CVCalculator:
         logger.info('Reading training data from colvars files...')
         
         # Use same load args for all colvars files
-        load_args = [self.input_colvars_settings for _ in colvars_paths]
+        load_args = [self.training_reading_settings for _ in colvars_paths]
         
         # Main data
         self.training_input_dtset = create_dataset_from_files(
@@ -323,7 +324,13 @@ class LinearCVCalculator(CVCalculator):
         
         # Compute normalization layer using training data statistics
         training_data_stats = Statistics(self.training_input_dtset[:]['data']).to_dict()
-        self.features_normalization = Normalization(self.num_features, mean=training_data_stats["mean"], range=training_data_stats["std"])
+        stats_length = len(training_data_stats["mean"])
+        if self.features_normalization == 'min_max':
+            self.features_normalization = Normalization(self.num_features, mode='min_max', stats=training_data_stats)
+        elif self.features_normalization == 'mean_std':
+            self.features_normalization = Normalization(self.num_features, mean=training_data_stats["mean"], range=training_data_stats["std"])
+        elif self.features_normalization == 'none':
+            self.features_normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length)   )
 
         # Normalize the training data
         self.normalized_training_data: torch.Tensor = self.features_normalization(self.training_input_dtset[:]['data'])
@@ -486,7 +493,12 @@ class NonLinearCVCalculator(CVCalculator):
         self.nn_options: Dict = {'activation': 'shifted_softplus', 'dropout': self.dropout} 
         
         # Normalization of features in the Non-linear models: min_max or mean_std
-        self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std'}}  
+        if self.features_normalization == 'min_max':
+            self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
+        elif self.features_normalization == 'mean_std':
+            self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std'}}
+        elif self.features_normalization == 'none':
+            self.cv_options: Dict = {'norm_in' : None}
         
         # Optimizer
         self.opt_name: str = self.optimizer_config['name']

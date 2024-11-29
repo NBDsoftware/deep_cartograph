@@ -34,6 +34,7 @@ train_colvars:
   cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
     dimension: 2
+    features_normalization: 'mean_std'
     input_colvars: 
       start: 0
       stop: null

@@ -30,6 +30,7 @@ train_colvars:
   cvs: ['pca', 'ae']
   common:
     dimension: 2
+    features_normalization: 'min_max'
     architecture:
       hidden_layers: [20, 20] # fixed
       lag_time: 20
