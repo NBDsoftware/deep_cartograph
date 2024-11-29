@@ -53,13 +53,13 @@ class CVCalculator:
         """
         
         # Training data
-        self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in input_colvars_settings
+        self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in training_reading_settings
 
-        # Reference data
-        self.ref_dfs: List[pd.DataFrame] = []
-        
         self.num_features: int = None
         self.num_samples: int = None
+        
+        # Reference data
+        self.ref_datasets: List[DictDataset] = []
         
         # Filter dictionary
         self.feature_filter = self.get_feature_filter(feature_constraints)
@@ -84,7 +84,26 @@ class CVCalculator:
         self.projected_ref: List[np.ndarray] = []
     
         self.output_path: str =  output_path
-
+    
+    def initialize(self):
+        """
+        Initializes the specific CV calculator:
+        
+            - Finds the number of samples from the input dataset
+            - Creates the output folder for the CV using the cv_name
+            - Logs the start of the calculation using the cv_name
+        """
+        
+        # Get the number of samples - input_dataset depends on the specific CV calculator
+        self.num_samples = self.training_input_dtset["data"].shape[0]
+        logger.info(f'Number of samples: {self.num_samples}')
+        
+        # Create output folder for this CV
+        self.output_path = os.path.join(self.output_path, self.cv_name)
+        create_output_folder(self.output_path)
+        
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
+    
     def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
         """
         Create the filter dictionary to select the features to use from the feature constraints.
@@ -154,55 +173,42 @@ class CVCalculator:
         # Reference data (if provided)
         if ref_colvars_paths:
             for path in ref_colvars_paths:
-                _, ref_dataframe = create_dataset_from_files(
+                ref_dataset = create_dataset_from_files(
                     file_names=[path], 
                     filter_args=self.feature_filter, 
                     verbose=False, 
-                    return_dataframe=True
+                    return_dataframe=False
                 )
                 
                 # Check if the number of features is the same
-                if ref_dataframe.shape[1] != self.num_features:
-                    logger.error(f"""Number of features in reference dataset {path} is {ref_dataframe.shape[1]} and does 
-                                    not match the number of features in the main dataset ({self.num_features}). Exiting...""")
+                if ref_dataset["data"].shape[1] != self.num_features:
+                    logger.error(f"""Number of features in colvars file {path} is {ref_dataset["data"].shape[1]} and does 
+                                    not match the number of features in the training dataset ({self.num_features}). Exiting...""")
                     sys.exit(1)
                 
                 # Append to lists
-                self.ref_dfs.append(ref_dataframe.filter(**self.feature_filter)) 
+                self.ref_datasets.append(ref_dataset) 
               
-    def read_colvars_data(self, colvars_path: str):
+    def read_colvars_data(self, colvars_path: str) -> DictDataset:
         """
         Reads the colvars data from the colvars file.
         """
         
         # Read the colvars file
-        _, colvars_dataframe = create_dataset_from_files(
+        colvars_dataset = create_dataset_from_files(
             file_names=[colvars_path], 
             filter_args=self.feature_filter, 
             verbose=False, 
-            return_dataframe=True
+            return_dataframe=False
         )
         
-        return colvars_dataframe.filter(**self.feature_filter)
-    
-    def initialize(self):
-        """
-        Initializes the specific CV calculator:
-        
-            - Finds the number of samples from the input dataset
-            - Creates the output folder for the CV using the cv_name
-            - Logs the start of the calculation using the cv_name
-        """
-        
-        # Get the number of samples - input_dataset depends on the specific CV calculator
-        self.num_samples = self.training_input_dtset["data"].shape[0]
-        logger.info(f'Number of samples: {self.num_samples}')
-        
-        # Create output folder for this CV
-        self.output_path = os.path.join(self.output_path, self.cv_name)
-        create_output_folder(self.output_path)
-        
-        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
+        # Check if the number of features is the same
+        if colvars_dataset["data"].shape[1] != self.num_features:
+            logger.error(f"""Number of features in colvars file {colvars_path} is {colvars_dataset["data"].shape[1]} and does 
+                            not match the number of features in the training dataset ({self.num_features}). Exiting...""")
+            sys.exit(1)
+            
+        return colvars_dataset
     
     # Main methods
     def run(self, cv_dimension: Union[int, None] = None):
@@ -368,15 +374,12 @@ class LinearCVCalculator(CVCalculator):
         logger.info(f'Projecting reference data onto {cv_names_map[self.cv_name]} ...')
         
         # If reference data is provided
-        if self.ref_dfs:
+        if self.ref_datasets:
             
-            for ref_df in self.ref_dfs:
+            for ref_dtset in self.ref_datasets:
                 
-                # Transform to numpy array
-                ref_array = ref_df.to_numpy(dtype=np.float32)
-                
-                # Transform to torch tensor
-                ref_tensor = torch.tensor(ref_array)
+                # Get the torch tensor
+                ref_tensor = ref_dtset[:]['data']
                 
                 # Normalize the reference data
                 ref_tensor = self.features_normalization(ref_tensor)
@@ -386,7 +389,7 @@ class LinearCVCalculator(CVCalculator):
                 
                 self.projected_ref.append(self.cv_normalization(torch.tensor(projected_ref)).numpy())  
   
-    def project_colvars(self, colvars_path: str):
+    def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
         """
         Projects the samples from the colvars file onto the CV space.
         
@@ -405,13 +408,10 @@ class LinearCVCalculator(CVCalculator):
         
         logger.info(f'Projecting {Path(colvars_path).stem} features onto {cv_names_map[self.cv_name]} ...')
         
-        colvars_dataframe = self.read_colvars_data(colvars_path)
+        colvars_dataset= self.read_colvars_data(colvars_path)
         
-        # Find a numpy array of features
-        colvars_array = colvars_dataframe.to_numpy(dtype=np.float32)
-        
-        # Transform to torch tensor
-        colvars_tensor = torch.tensor(colvars_array)
+        # Get the torch tensor
+        colvars_tensor = colvars_dataset[:]['data']
         
         # Normalize the features
         colvars_tensor = self.features_normalization(colvars_tensor)
@@ -732,13 +732,13 @@ class NonLinearCVCalculator(CVCalculator):
         logger.info(f'Projecting reference data onto {cv_names_map[self.cv_name]} ...')
 
         # If reference data is provided, project it as well
-        if self.ref_dfs:
-            for df in self.ref_dfs:
-                ref_features_array = df.to_numpy(dtype=np.float32)
+        if self.ref_datasets:
+            for dataset in self.ref_datasets:
+                ref_tensor = dataset[:]['data']
                 with torch.no_grad():
-                    self.projected_ref.append(self.cv(torch.Tensor(ref_features_array)).numpy())
+                    self.projected_ref.append(self.cv(ref_tensor).numpy())
                     
-    def project_colvars(self, colvars_path: str):
+    def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
         """
         Projects the samples from the colvars file onto the CV space.
         
@@ -757,11 +757,13 @@ class NonLinearCVCalculator(CVCalculator):
         
         logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
         
-        colvars_dataframe = self.read_colvars_data(colvars_path)
+        colvars_dataset = self.read_colvars_data(colvars_path)
         
-        # Data projected onto normalized latent space
+        colvars_tensor = colvars_dataset[:]['data']
+        
+        # Data projected onto normalized latent space - feature and latent space normalization included in the model
         with torch.no_grad():
-            projected_colvars = self.cv(torch.Tensor(colvars_dataframe.values)).numpy()
+            projected_colvars = self.cv(colvars_tensor).numpy()
    
         return projected_colvars
     
