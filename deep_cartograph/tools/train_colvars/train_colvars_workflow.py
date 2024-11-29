@@ -162,97 +162,100 @@ class TrainColvarsWorkflow:
             # Compute collective variable and project features onto the CV space
             cv_calculator = self.calculate_cv(cv)
             
-            # Project each colvars and trajectory file:
-            for colvars, trajectory, topology in zip(self.colvars_paths, self.trajectory_paths, self.topology_paths):
-                
-                # Log
-                logger.info(f"Projecting colvars file: {colvars}")
-                logger.info(f"Corresponding trajectory file: {trajectory}")
-                logger.info(f"Corresponding topology file: {topology}")
-                
-                # Output folder for the current trajectory
-                traj_output_folder = os.path.join(cv_output_folder, Path(trajectory).stem)
-                
-                # Project the colvars data onto the CV space
-                projected_colvars = cv_calculator.project_colvars(colvars)
+            # If the CV was calculated successfully
+            if cv_calculator.cv_ready():
             
-                # Plot FES of the CV space - add ref data if available
-                figures.plot_fes(
-                    X = projected_colvars,
-                    cv_labels = cv_calculator.get_labels(),
-                    X_ref = cv_calculator.get_projected_ref(),
-                    X_ref_labels = self.ref_labels,
-                    settings = self.figures_configuration,
-                    output_path = traj_output_folder)
-            
-                # Create a dataframe with the projected input data
-                projected_colvars_df = pd.DataFrame(projected_colvars, columns=cv_calculator.get_labels())
-            
-                # Add a column with the order of the data points
-                projected_colvars_df['order'] = np.arange(projected_colvars_df.shape[0])
+                # Project each colvars and trajectory file:
+                for colvars, trajectory, topology in zip(self.colvars_paths, self.trajectory_paths, self.topology_paths):
+                    
+                    # Log
+                    logger.info(f"Projecting colvars file: {colvars}")
+                    logger.info(f"Corresponding trajectory file: {trajectory}")
+                    logger.info(f"Corresponding topology file: {topology}")
+                    
+                    # Output folder for the current trajectory
+                    traj_output_folder = os.path.join(cv_output_folder, Path(trajectory).stem)
+                    
+                    # Project the colvars data onto the CV space
+                    projected_colvars = cv_calculator.project_colvars(colvars)
+                
+                    # Plot FES of the CV space - add ref data if available
+                    figures.plot_fes(
+                        X = projected_colvars,
+                        cv_labels = cv_calculator.get_labels(),
+                        X_ref = cv_calculator.get_projected_ref(),
+                        X_ref_labels = self.ref_labels,
+                        settings = self.figures_configuration,
+                        output_path = traj_output_folder)
+                
+                    # Create a dataframe with the projected input data
+                    projected_colvars_df = pd.DataFrame(projected_colvars, columns=cv_calculator.get_labels())
+                
+                    # Add a column with the order of the data points
+                    projected_colvars_df['order'] = np.arange(projected_colvars_df.shape[0])
 
-                # If clustering is enabled
-                if self.clustering_configuration['run']:
-                    
-                    # Cluster the input samples
-                    cluster_labels, centroids = statistics.optimize_clustering(projected_colvars, self.clustering_configuration)
-                    
-                    # Add cluster labels to the projected input dataframe
-                    projected_colvars_df['cluster'] = cluster_labels
-                    
-                    # Find centroids among input samples
-                    if len(centroids) > 0:
-                        centroids_df = statistics.find_centroids(projected_colvars_df, centroids, cv_calculator.get_labels())
-                        
-                    # Generate color map for the clusters
-                    num_clusters = len(np.unique(cluster_labels))
-                    cluster_colors = figures.generate_colors(num_clusters, self.figures_configuration['traj_projection']['cmap'])
-
-                    # Plot cluster sizes 
-                    figures.plot_clusters_size(cluster_labels, cluster_colors, traj_output_folder)
-                    
-                    # Extract clusters from the trajectory
-                    if (None not in [trajectory, topology]) and (len(centroids) > 0):
-                        md.extract_clusters_from_traj(trajectory_path = trajectory, 
-                                                    topology_path = topology,
-                                                    traj_df = projected_colvars_df,
-                                                    samples_per_frame = self.samples_per_frame, 
-                                                    centroids_df = centroids_df,
-                                                    cluster_label = 'cluster',
-                                                    frame_label = 'order', 
-                                                    output_folder = os.path.join(traj_output_folder, 'clusters'))
-                    elif len(centroids) == 0:
-                        logger.warning("No centroids found. Skipping extraction of clusters from the trajectory.")
-                    else:
-                        logger.warning("Trajectory and/or topology files not provided. Skipping extraction of clusters from the trajectory.")
-                        logger.debug(f"Trajectory: {trajectory}")
-                        logger.debug(f"Topology: {topology}")
-                
-                # 2D plots of the input data projected onto the CV space
-                if cv_calculator.get_cv_dimension() == 2:
-                    
-                    # Colored by order
-                    figures.gradient_scatter_plot(
-                        data = projected_colvars_df,
-                        column_labels = cv_calculator.get_labels(),
-                        color_label = 'order',
-                        settings = self.figures_configuration['traj_projection'],
-                        file_path = os.path.join(traj_output_folder,'trajectory.png'))
-                
                     # If clustering is enabled
                     if self.clustering_configuration['run']:
                         
-                        # Colored by cluster
-                        figures.clusters_scatter_plot(
-                            data = projected_colvars_df, 
+                        # Cluster the input samples
+                        cluster_labels, centroids = statistics.optimize_clustering(projected_colvars, self.clustering_configuration)
+                        
+                        # Add cluster labels to the projected input dataframe
+                        projected_colvars_df['cluster'] = cluster_labels
+                        
+                        # Find centroids among input samples
+                        if len(centroids) > 0:
+                            centroids_df = statistics.find_centroids(projected_colvars_df, centroids, cv_calculator.get_labels())
+                            
+                        # Generate color map for the clusters
+                        num_clusters = len(np.unique(cluster_labels))
+                        cluster_colors = figures.generate_colors(num_clusters, self.figures_configuration['traj_projection']['cmap'])
+
+                        # Plot cluster sizes 
+                        figures.plot_clusters_size(cluster_labels, cluster_colors, traj_output_folder)
+                        
+                        # Extract clusters from the trajectory
+                        if (None not in [trajectory, topology]) and (len(centroids) > 0):
+                            md.extract_clusters_from_traj(trajectory_path = trajectory, 
+                                                        topology_path = topology,
+                                                        traj_df = projected_colvars_df,
+                                                        samples_per_frame = self.samples_per_frame, 
+                                                        centroids_df = centroids_df,
+                                                        cluster_label = 'cluster',
+                                                        frame_label = 'order', 
+                                                        output_folder = os.path.join(traj_output_folder, 'clusters'))
+                        elif len(centroids) == 0:
+                            logger.warning("No centroids found. Skipping extraction of clusters from the trajectory.")
+                        else:
+                            logger.warning("Trajectory and/or topology files not provided. Skipping extraction of clusters from the trajectory.")
+                            logger.debug(f"Trajectory: {trajectory}")
+                            logger.debug(f"Topology: {topology}")
+                    
+                    # 2D plots of the input data projected onto the CV space
+                    if cv_calculator.get_cv_dimension() == 2:
+                        
+                        # Colored by order
+                        figures.gradient_scatter_plot(
+                            data = projected_colvars_df,
                             column_labels = cv_calculator.get_labels(),
-                            cluster_label = 'cluster', 
-                            settings = self.figures_configuration['traj_projection'], 
-                            file_path = os.path.join(traj_output_folder,'trajectory_clustered.png'),
-                            cluster_colors = cluster_colors)
-                
-                # Erase the order column
-                projected_colvars_df.drop('order', axis=1, inplace=True)
-                
-                # Save the projected input data
-                projected_colvars_df.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
+                            color_label = 'order',
+                            settings = self.figures_configuration['traj_projection'],
+                            file_path = os.path.join(traj_output_folder,'trajectory.png'))
+                    
+                        # If clustering is enabled
+                        if self.clustering_configuration['run']:
+                            
+                            # Colored by cluster
+                            figures.clusters_scatter_plot(
+                                data = projected_colvars_df, 
+                                column_labels = cv_calculator.get_labels(),
+                                cluster_label = 'cluster', 
+                                settings = self.figures_configuration['traj_projection'], 
+                                file_path = os.path.join(traj_output_folder,'trajectory_clustered.png'),
+                                cluster_colors = cluster_colors)
+                    
+                    # Erase the order column
+                    projected_colvars_df.drop('order', axis=1, inplace=True)
+                    
+                    # Save the projected input data
+                    projected_colvars_df.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')

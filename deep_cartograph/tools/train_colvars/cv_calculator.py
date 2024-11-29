@@ -135,6 +135,13 @@ class CVCalculator:
         
         return feature_filter
     
+    def cv_ready(self) -> bool:
+        """
+        Checks if the CV is ready to be used.
+        """
+        
+        return self.cv is not None
+        
     # Readers
     def read_training_data(self, colvars_paths: List[str]):
         """
@@ -221,15 +228,18 @@ class CVCalculator:
             
         self.compute_cv()
         
-        self.normalize_cv()
-        
-        self.project_reference()
-        
-        self.cv_specific_tasks()
-        
-        self.save_cv()
-        
-        self.set_labels()
+        # If the CV was computed successfully
+        if self.cv is not None:
+
+            self.normalize_cv()
+            
+            self.project_reference()
+            
+            self.cv_specific_tasks()
+            
+            self.save_cv()
+            
+            self.set_labels()
         
     def compute_cv(self):
         """
@@ -351,10 +361,6 @@ class LinearCVCalculator(CVCalculator):
         Saves the collective variable linear weights to a text file.
         """
         
-        if self.cv is None:
-            logger.error('No collective variable to save.')
-            return
-        
         weights_path = os.path.join(self.output_path, f'weights.txt')
         np.savetxt(weights_path, self.cv)
         
@@ -405,6 +411,10 @@ class LinearCVCalculator(CVCalculator):
         projected_colvars : np.ndarray
             Projected features onto the CV space
         """
+        
+        if self.cv is None:
+            logger.error('No collective variable to project.')
+            return None
         
         logger.info(f'Projecting {Path(colvars_path).stem} features onto {cv_names_map[self.cv_name]} ...')
         
@@ -754,6 +764,10 @@ class NonLinearCVCalculator(CVCalculator):
         projected_colvars : np.ndarray
             Projected features onto the CV space
         """
+        
+        if self.cv is None:
+            logger.error('No collective variable to project.')
+            return None
         
         logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
         
