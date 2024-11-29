@@ -77,18 +77,39 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see default_config.yml for more information)
-        colvars_paths:       Path or list of paths to the colvars files with the input data (samples of features)
-        feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
-        ref_colvars_paths:   List of paths to colvars files with reference data. If None, no reference data is used
-        ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
-        cv_dimension:        dimension of the CVs to train or compute, if None, the value in the configuration file is used
-        cvs:                 List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
-        trajectories:        path to the trajectory files that will be clustered
-        topologies:          path to the topology files of the trajectories
-        samples_per_frame:   samples in the colvars file for each frame in the trajectory file. Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)
-        output_folder:       path to folder where the output files are saved, if not given, a folder named 'output' is created
+        configuration:       
+            Configuration dictionary (see default_config.yml for more information)
+            
+        colvars_paths:       
+            Path or list of paths to the colvars files with the input data (samples of features)
+            
+        feature_constraints: 
+            List with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
+            
+        ref_colvars_paths:   
+            List of paths to colvars files with reference data. If None, no reference data is used
+            
+        ref_labels:          
+            List of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
+            
+        cv_dimension:        
+            Dimension of the CVs to train or compute, if None, the value in the configuration file is used
+            
+        cvs:                 
+            List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
+        trajectories:        
+            Path to the trajectory files that will be clustered
+            
+        topologies:          
+            Path to the topology files of the trajectories
+            
+        samples_per_frame:   
+            Samples in the colvars file for each frame in the trajectory file. Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)
+            
+        output_folder:       
+            Path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
+    
     from deep_cartograph.modules.common import create_output_folder
     
     logger = logging.getLogger("deep_cartograph")

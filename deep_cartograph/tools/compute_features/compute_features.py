@@ -18,16 +18,26 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see default_config.yml for more information)
-        trajectory:          Path to the trajectory file that will be analyzed.
-        topology:            Path to the topology file of the trajectory.
-        colvars_path:        (Optional) Path to the output colvars file with the time series of the features.
-        output_folder:       (Optional) Path to the output folder
+        configuration:
+            A configuration dictionary (see default_config.yml for more information)
+            
+        trajectory:          
+            Path to the trajectory file that will be analyzed.
+            
+        topology:            
+            Path to the topology file of the trajectory.
+            
+        colvars_path:        
+            (Optional) Path to the output colvars file with the time series of the features.
+            
+        output_folder:       
+            (Optional) Path to the output folder
         
     Returns
     -------
 
-        colvars_path:        Path to the output colvars file with the time series of the features.
+        colvars_path:        
+            Path to the output colvars file with the time series of the features.
     """
 
     from deep_cartograph.modules.plumed import utils as plumed_utils

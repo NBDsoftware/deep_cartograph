@@ -28,15 +28,32 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     Parameters
     ----------
 
-        configuration:         Configuration dictionary (see default_config.yml for more information)
-        trajectory_data:       Path to trajectory or folder with trajectories to compute the CVs.
-        topology_data:         Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
-        ref_trajectory_data:   (Optional) Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
-        ref_topology_data:     (Optional) Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in ref_trajectory_data.
-        label_reference:       (Optional) Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
-        dimension:             (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
-        cvs:                   (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
-        output_folder:         (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
+        configuration:         
+            Configuration dictionary (see default_config.yml for more information)
+            
+        trajectory_data:       
+            Path to trajectory or folder with trajectories to compute the CVs.
+            
+        topology_data:         
+            Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
+            
+        ref_trajectory_data:   
+            (Optional) Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
+        
+        ref_topology_data:     
+            (Optional) Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in ref_trajectory_data.
+        
+        label_reference:       
+            (Optional) Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
+        
+        dimension:             
+            (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
+        
+        cvs:                   
+            (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
+        
+        output_folder:         
+            (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
     """
 
     # Set logger
@@ -380,12 +397,12 @@ if __name__ == "__main__":
     parser.add_argument('-ref_traj_data', dest='ref_trajectory_data', help="Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.", required=False)
     parser.add_argument('-ref_topology_data', dest='ref_topology_data', help="Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in -ref_traj_data.", required=False)
     
-    parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder). Do not use this option if there are many samples in the reference data.", default=False)
+    parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.", default=False)
     
     # Options
     parser.add_argument('-restart', dest='restart', action='store_true', help="Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat.", default=False)
-    parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute", required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
+    parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute, overwrites the configuration input YML.", required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica), overwrites the configuration input YML.', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 

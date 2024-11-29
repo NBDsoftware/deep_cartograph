@@ -19,7 +19,7 @@ filter_features:
     compute_std: False                
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
-    std_quantile: 0                         
+    std_quantile: 0                      
   sampling_settings:
     relaxation_time: 1                                   
 
@@ -33,8 +33,8 @@ train_colvars:
       lag_time: 20
     training: 
       general:
-        max_tries: 10        
-        seed: 42             
+        max_tries: 10       
+        seed: 42            
         lengths: [0.8, 0.2]  
         batch_size: 512     
         max_epochs: 1000     
@@ -44,8 +44,8 @@ train_colvars:
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 10         # fixed
-        min_delta: 1.0e-05   # fixed
+        patience: 10        
+        min_delta: 1.0e-05 
       optimizer:
         name: Adam
         kwargs: 

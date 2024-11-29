@@ -24,11 +24,20 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], o
     Parameters
     ----------
 
-        configuration:             Configuration dictionary (see default_config.yml for more information)
-        colvars_paths:             Path or list of paths to the input colvars file/s with the time series of features to filter. If more than one file is given, they should have the same features.
-        output_features_path       (Optional) Path to the output file with the filtered features.
-        csv_summary:               (Optional) If True, saves a CSV summary with the filter values for each collective variable
-        output_folder:             (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
+        configuration:             
+            Configuration dictionary (see default_config.yml for more information)
+            
+        colvars_paths:             
+            Path or list of paths to the input colvars file/s with the time series of features to filter. If more than one file is given, they should have the same features.
+            
+        output_features_path       
+            (Optional) Path to the output file with the filtered features.
+            
+        csv_summary:               
+            (Optional) If True, saves a CSV summary with the filter values for each collective variable
+            
+        output_folder:             
+            (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
 
     Returns
     -------
