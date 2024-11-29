@@ -170,6 +170,16 @@ if __name__ == "__main__":
         ref_colvars_paths = [args.ref_colvars_paths]
         if args.label_reference:
             ref_labels = [Path(args.ref_colvars_paths).stem]
+            
+    # Trajectories should be list or None - see train_colvars API
+    trajectories = None
+    if args.trajectory:
+        trajectories = [args.trajectory]
+        
+    # Topologies should be list or None - see train_colvars API
+    topologies = None
+    if args.topology:
+        topologies = [args.topology]
     
     # Give value to output_folder
     if args.output_folder is None:
@@ -183,14 +193,14 @@ if __name__ == "__main__":
     # Create a TrainColvarsWorkflow object and run the workflow
     train_colvars(
         configuration = configuration,
-        colvars_path = args.colvars_path,
+        colvars_paths = args.colvars_path,
         feature_constraints = feature_constraints,
         ref_colvars_paths = ref_colvars_paths,
         ref_labels = ref_labels,
         dimension = args.dimension,
         cvs = args.cvs,
-        trajectory = args.trajectory,
-        topology = args.topology,
+        trajectories = trajectories,
+        topologies = topologies,
         samples_per_frame = args.samples_per_frame,
         output_folder = output_folder)
     
