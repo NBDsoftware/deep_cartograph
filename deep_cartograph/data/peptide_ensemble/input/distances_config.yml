@@ -32,7 +32,7 @@ train_colvars:
     dimension: 2
     features_normalization: 'min_max'
     architecture:
-      hidden_layers: [20, 20] # fixed
+      hidden_layers: [20, 20]
       lag_time: 20
     training: 
       general:
@@ -72,8 +72,8 @@ train_colvars:
       compute: True  
       save: True  
       temperature: 300
-      bandwidth: 0.025
-      num_bins: 200
+      bandwidth: 0.01
+      num_bins: 300
       num_blocks: 1
       max_fes: 18
     traj_projection:
@@ -85,7 +85,7 @@ train_colvars:
       use_legend: True
       marker_size: 12
   clustering:                        
-    run: True                        
+    run: False                        
     algorithm: hierarchical               
     opt_num_clusters: True          
     search_interval: [5, 15]          
