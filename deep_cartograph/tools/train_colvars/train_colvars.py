@@ -58,7 +58,7 @@ def set_logger(verbose: bool):
 # MAIN #
 ########
 
-def train_colvars(configuration: Dict, colvars_paths: List[str], feature_constraints: Union[List[str], str, None] = None, 
+def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], feature_constraints: Union[List[str], str, None] = None, 
                   ref_colvars_paths: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
                   cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, trajectories: Union[List[str], None] = None, 
                   topologies: Union[List[str], None] = None, samples_per_frame: Union[float, None] = 1, output_folder: str = 'train_colvars'):
@@ -78,9 +78,9 @@ def train_colvars(configuration: Dict, colvars_paths: List[str], feature_constra
     ----------
 
         configuration:       configuration dictionary (see default_config.yml for more information)
-        colvars_paths:       List of paths to the colvars files with the input data (samples of features)
+        colvars_paths:       Path or list of paths to the colvars files with the input data (samples of features)
         feature_constraints: list with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
-        ref_colvars_paths:    list of paths to colvars files with reference data. If None, no reference data is used
+        ref_colvars_paths:   List of paths to colvars files with reference data. If None, no reference data is used
         ref_labels:          list of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
         cv_dimension:        dimension of the CVs to train or compute, if None, the value in the configuration file is used
         cvs:                 List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
@@ -104,6 +104,9 @@ def train_colvars(configuration: Dict, colvars_paths: List[str], feature_constra
     
     # Create output directory
     create_output_folder(output_folder)
+
+    if isinstance(colvars_paths, str):
+        colvars_paths = [colvars_paths]
     
     # Create a TrainColvarsWorkflow object 
     workflow = TrainColvarsWorkflow(

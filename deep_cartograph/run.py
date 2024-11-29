@@ -18,8 +18,8 @@ from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory_folder: str, topology_folder: str, ref_trajectory_folder: Union[str, None] = None, 
-                    ref_topology_folder: Union[str, None] = None, label_reference: bool = False, dimension: Union[int, None] = None, 
+def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: str, ref_trajectory_data: Union[str, None] = None, 
+                    ref_topology_data: Union[str, None] = None, label_reference: bool = False, dimension: Union[int, None] = None, 
                     cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, 
                     restart: bool = False, output_folder: Union[str, None] = None) -> None:
     """
@@ -29,11 +29,11 @@ def deep_cartograph(configuration: Dict, trajectory_folder: str, topology_folder
     ----------
 
         configuration:         Configuration dictionary (see default_config.yml for more information)
-        trajectory_folder:     Path to the folder with trajectories to compute the CVs. To compare the ensembles of different trajectories on the same CVs.
-        topology_folder:       Path to the folder with topology files of the trajectories. Should have the same name as the corresponding trajectory in the trajectory folder.
-        ref_trajectory_folder: (Optional) Path to the folder with reference data.
-        ref_topology_folder:   (Optional) Path to the folder with topology files of the reference data. Should have the same name as the corresponding reference file in the reference folder.
-        label_reference:       (Optional) Use labels for reference data (names of the files in the reference folder)
+        trajectory_data:       Path to trajectory or folder with trajectories to compute the CVs.
+        topology_data:         Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
+        ref_trajectory_data:   (Optional) Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
+        ref_topology_data:     (Optional) Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in ref_trajectory_data.
+        label_reference:       (Optional) Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
         dimension:             (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
         cvs:                   (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
         output_folder:         (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
@@ -60,10 +60,10 @@ def deep_cartograph(configuration: Dict, trajectory_folder: str, topology_folder
     configuration = validate_configuration(configuration, DeepCartograph, output_folder)
     
     # Check main input folders
-    trajectories, topologies = check_input_folders(trajectory_folder, topology_folder)
+    trajectories, topologies = check_data(trajectory_data, topology_data)
     
     # Check reference input folders
-    ref_trajectories, ref_topologies = check_ref_folders(ref_trajectory_folder, ref_topology_folder)
+    ref_trajectories, ref_topologies = check_ref_data(ref_trajectory_data, ref_topology_data)
 
     # Step 1: Compute features
     step1_parent_path = os.path.join(output_folder, 'compute_features')
@@ -157,49 +157,59 @@ def deep_cartograph(configuration: Dict, trajectory_folder: str, topology_folder
     # Write time to log in hours, minutes and seconds
     logger.info('Total elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
-def check_input_folders(trajectory_folder: str, top_folder: str) -> Tuple[List[str], List[str]]:
+def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], List[str]]:
     """
-    Function that checks if the necessary input files exist.
+    Function that checks the existence of the necessary input data files.
     
     Inputs
     ------
     
-        trajectory_folder (str): Path to the folder with trajectories to compute the CVs. To compare the ensembles of different trajectories on the same CVs.
-        top_folder        (str): Path to the folder with topology files of the trajectories. Should have the same name as the corresponding trajectory in the trajectory folder.
+        trajectory_data    (str): Path to trajectory or folder with trajectories to compute the CVs.
+        topology_data      (str): Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
     """
     
     logger = logging.getLogger("deep_cartograph")
     
-    # Check if trajectory folder exists
-    if not os.path.exists(trajectory_folder):
-        logger.error(f"Trajectory folder not found: {trajectory_folder}")
+    if os.path.isdir(trajectory_data):
+        # List the files in the trajectory folder
+        traj_file_paths = [os.path.join(trajectory_data, f) for f in os.listdir(trajectory_data) if os.path.isfile(os.path.join(trajectory_data, f))]
+    elif os.path.isfile(trajectory_data):
+        # Single trajectory file
+        traj_file_paths = [trajectory_data]
+    elif not os.path.exists(trajectory_data):
+        logger.error(f"Trajectory data not found: {trajectory_data}")
+        sys.exit(1)
+    else:
+        logger.error(f"Trajectory data should be a file or a folder: {trajectory_data}")
         sys.exit(1)
     
-    # List the files in the trajectory folder
-    traj_file_paths = [os.path.join(trajectory_folder, f) for f in os.listdir(trajectory_folder) if os.path.isfile(os.path.join(trajectory_folder, f))]
-    
-    # Sort them alphabetically
+    # Sort them alphabetically 
     traj_file_paths.sort()
     
     # Check if there are any
     if len(traj_file_paths) == 0:
-        logger.error(f"Trajectory folder is empty: {trajectory_folder}")
+        logger.error(f"Trajectory data folder is empty: {trajectory_data}")
         sys.exit(1)
     
-    # Check if topology folder exists
-    if not os.path.exists(top_folder):
-        logger.error(f"Topology folder not found: {top_folder}")
-        sys.exit(1) 
-
-    # List the files in the topology folder
-    top_file_paths = [os.path.join(top_folder, f) for f in os.listdir(top_folder) if os.path.isfile(os.path.join(top_folder, f))]
-    
+    if os.path.isdir(topology_data):
+        # List the files in the topology folder
+        top_file_paths = [os.path.join(topology_data, f) for f in os.listdir(topology_data) if os.path.isfile(os.path.join(topology_data, f))]
+    elif os.path.isfile(topology_data):
+        # Single topology file
+        top_file_paths = [topology_data]
+    elif not os.path.exists(topology_data):
+        logger.error(f"Topology data not found: {topology_data}")
+        sys.exit(1)
+    else:
+        logger.error(f"Topology data should be a file or a folder: {topology_data}")
+        sys.exit(1)
+        
     # Sort them alphabetically
     top_file_paths.sort()
     
     # Check if there are any
     if len(top_file_paths) == 0:
-        logger.error(f"Topology folder is empty: {top_folder}")
+        logger.error(f"Topology folder is empty: {topology_data}")
         sys.exit(1)
     
     # Check if we have the same number of topology files as trajectory files
@@ -223,48 +233,73 @@ def check_input_folders(trajectory_folder: str, top_folder: str) -> Tuple[List[s
             
     return traj_file_paths, top_file_paths
 
-def check_ref_folders(ref_trajectory_folder: Union[str, None], ref_topology_folder: Union[str, None]) -> Tuple[List[str], List[str]]:
+def check_ref_data(ref_trajectory_data: Union[str, None], ref_topology_data: Union[str, None]) -> Tuple[List[str], List[str]]:
     """
-    Function that checks if the necessary input files exist.
+    Function that checks (if given) the existence of the optional reference data files.
     
     Inputs
     ------
     
-        ref_trajectory_folder (str): Path to the folder with reference data.
-        ref_topology_folder   (str): Path to the folder with topology files of the reference data. Should have the same name as the corresponding reference file in the reference folder.
+        ref_trajectory_data (str): Path to the folder with reference data.
+        ref_topology_data   (str): Path to the folder with topology files of the reference data. Should have the same name as the corresponding reference file in the reference folder.
     """      
     
     logger = logging.getLogger("deep_cartograph")
     
-    # Check if no reference folder is given
-    if ref_trajectory_folder is None or ref_topology_folder is None:
-        logger.debug("No reference folder given.")
+    if ref_trajectory_data is None and ref_topology_data is not None:
+        logger.error("Reference topology data provided without reference trajectory data.")
+        sys.exit(1)
+    elif ref_trajectory_data is not None and ref_topology_data is None:
+        logger.error("Reference trajectory data provided without reference topology data.")
+        sys.exit(1)
+    elif ref_trajectory_data is None and ref_topology_data is None:
+        logger.debug("No reference data provided.")
         return [], []
     
-    # Check if reference trajectory folder exists
-    if not os.path.exists(ref_trajectory_folder):
-        logger.error("Reference trajectory folder not found: %s", ref_trajectory_folder)
-        sys.exit(1)
+    # Both reference trajectory and topology data are provided
     
-    # Check if reference topology folder exists
-    if not os.path.exists(ref_topology_folder):
-        logger.error("Reference topology folder not found: %s", ref_topology_folder)
+    # Check reference data 
+    if os.path.isdir(ref_trajectory_data):
+        # List the files in the reference trajectory folder
+        ref_traj_paths = [os.path.join(ref_trajectory_data, f) for f in os.listdir(ref_trajectory_data) if os.path.isfile(os.path.join(ref_trajectory_data, f))]
+    elif os.path.isfile(ref_trajectory_data):
+        # Single reference trajectory file
+        ref_traj_paths = [ref_trajectory_data]
+    elif not os.path.exists(ref_trajectory_data):
+        logger.error(f"Reference trajectory data not found: {ref_trajectory_data}")
+        sys.exit(1)
+    else:
+        logger.error(f"Reference trajectory data should be a file or a folder: {ref_trajectory_data}")
         sys.exit(1)
         
-    # List the files in the reference trajectory folder
-    ref_traj_paths = [os.path.join(ref_trajectory_folder, f) for f in os.listdir(ref_trajectory_folder) if os.path.isfile(os.path.join(ref_trajectory_folder, f))]
+    # Sort them alphabetically
+    ref_traj_paths.sort()
     
     # Check if there are any
     if len(ref_traj_paths) == 0:
-        logger.error("Reference trajectory folder is empty: %s", ref_trajectory_folder)
+        logger.error("Reference trajectory folder is empty: %s", ref_trajectory_data)
         sys.exit(1)
-    
-    # List the files in the reference topology folder
-    ref_top_paths = [os.path.join(ref_topology_folder, f) for f in os.listdir(ref_topology_folder) if os.path.isfile(os.path.join(ref_topology_folder, f))]
-    
+        
+    # Check reference topology data
+    if os.path.isdir(ref_topology_data):
+        # List the files in the reference topology folder
+        ref_top_paths = [os.path.join(ref_topology_data, f) for f in os.listdir(ref_topology_data) if os.path.isfile(os.path.join(ref_topology_data, f))]
+    elif os.path.isfile(ref_topology_data):
+        # Single reference topology file
+        ref_top_paths = [ref_topology_data]
+    elif not os.path.exists(ref_topology_data):
+        logger.error(f"Reference topology data not found: {ref_topology_data}")
+        sys.exit(1)
+    else:
+        logger.error(f"Reference topology data should be a file or a folder: {ref_topology_data}")
+        sys.exit(1)
+        
+    # Sort them alphabetically
+    ref_top_paths.sort()
+
     # Check if there are any
     if len(ref_top_paths) == 0:
-        logger.error("Reference topology folder is empty: %s", ref_topology_folder)
+        logger.error("Reference topology folder is empty: %s", ref_topology_data)
         sys.exit(1)
     
     # Check if we have the same number of reference topology files as reference trajectory files
@@ -273,14 +308,17 @@ def check_ref_folders(ref_trajectory_folder: Union[str, None], ref_topology_fold
         sys.exit(1)
         
     # Check if each reference trajectory has a corresponding reference topology file
-    for ref_traj_path in ref_traj_paths:
+    for ref_traj_path, ref_top_path in zip(ref_traj_paths, ref_top_paths):
             
         # Find name of reference trajectory file
         ref_traj_name = Path(ref_traj_path).stem
         
-        # Check if there is a corresponding reference topology file
-        if not any(ref_traj_name in ref_top for ref_top in ref_top_paths):
-            logger.error("Reference topology file not found for reference trajectory: %s", ref_traj_name)
+        # Find name of reference topology file
+        ref_top_name = Path(ref_top_path).stem
+        
+        # Check if they have the same name
+        if ref_traj_name != ref_top_name:
+            logger.error(f"Reference trajectory file does not have a corresponding reference topology file with the same name: {ref_traj_name}")
             sys.exit(1)
             
     return ref_traj_paths, ref_top_paths
@@ -336,11 +374,11 @@ if __name__ == "__main__":
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     
     # Input files
-    parser.add_argument('-traj_folder', dest='trajectory_folder', help="Path to folder with trajectories to compute the CVs. To compare the ensembles of different trajectories on the same CV space, provide different trajectories in this folder.", required=True)
-    parser.add_argument('-top_folder', dest='topology_folder', help="Path to folder with topology files for the trajectories. Should have the same name as the corresponding trajectory in -traj_folder.", required=True)
+    parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to compute the CVs.", required=True)
+    parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data.", required=True)
     
-    parser.add_argument('-ref_traj_folder', dest='ref_trajectory_folder', help="Path to folder with reference trajectories or structures. To project alongside the main trajectories.", required=False)
-    parser.add_argument('-ref_top_folder', dest='ref_topology_folder', help="Path to folder with topology files of the reference data. Should have the same name as the corresponding reference file in the reference folder.", required=False)
+    parser.add_argument('-ref_traj_data', dest='ref_trajectory_data', help="Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.", required=False)
+    parser.add_argument('-ref_topology_data', dest='ref_topology_data', help="Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in -ref_traj_data.", required=False)
     
     parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder). Do not use this option if there are many samples in the reference data.", default=False)
     
@@ -372,10 +410,10 @@ if __name__ == "__main__":
     # Run tool
     deep_cartograph(
         configuration = configuration, 
-        trajectory_folder = args.trajectory_folder, 
-        topology_folder = args.topology_folder,
-        ref_trajectory_folder = args.ref_trajectory_folder,
-        ref_topology_folder = args.ref_topology_folder,
+        trajectory_data = args.trajectory_data, 
+        topology_data = args.topology_data,
+        ref_trajectory_data = args.ref_trajectory_data,
+        ref_topology_data = args.ref_topology_data,
         label_reference = args.label_reference,
         dimension = args.dimension, 
         cvs = args.cvs, 
