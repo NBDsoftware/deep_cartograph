@@ -182,7 +182,9 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     ------
     
         trajectory_data    (str): Path to trajectory or folder with trajectories to compute the CVs.
-        topology_data      (str): Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
+        topology_data      (str): Path to topology or folder with topology files for the trajectories. 
+                                  If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
+                                  If a single topology file is provided, it is used for all trajectories.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -229,24 +231,30 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
         logger.error(f"Topology folder is empty: {topology_data}")
         sys.exit(1)
     
+    # If we have a single topology file, we use it for all trajectories
+    if len(top_file_paths) == 1 and len(traj_file_paths) > 1:
+        top_file_paths = top_file_paths * len(traj_file_paths)
+    
     # Check if we have the same number of topology files as trajectory files
     if len(traj_file_paths) != len(top_file_paths):
         logger.error(f"Number of topology files is different from the number of trajectory files ({len(top_file_paths)} vs {len(traj_file_paths)}).")
         sys.exit(1)
+    
+    if len(top_file_paths) > 1:
         
-    # Check if each trajectory file has a corresponding topology file with the same name
-    for traj_file, topology_file in zip(traj_file_paths, top_file_paths):
-        
-        # Find name of trajectory file
-        traj_name = Path(traj_file).stem
-        
-        # Find name of topology file
-        top_name = Path(topology_file).stem
-        
-        # Check if they have the same name
-        if traj_name != top_name:
-            logger.error(f"Trajectory file does not have a corresponding topology file with the same name: {traj_name}")
-            sys.exit(1)
+        # Check if each trajectory file has a corresponding topology file with the same name
+        for traj_file, topology_file in zip(traj_file_paths, top_file_paths):
+            
+            # Find name of trajectory file
+            traj_name = Path(traj_file).stem
+            
+            # Find name of topology file
+            top_name = Path(topology_file).stem
+            
+            # Check if they have the same name
+            if traj_name != top_name:
+                logger.error(f"Trajectory file does not have a corresponding topology file with the same name: {traj_name}")
+                sys.exit(1)
             
     return traj_file_paths, top_file_paths
 
