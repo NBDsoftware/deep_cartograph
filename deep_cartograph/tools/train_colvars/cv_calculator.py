@@ -639,7 +639,9 @@ class NonLinearCVCalculator(CVCalculator):
                 logger.info(f'Best model score: {self.best_model_score}')
             else:
                 logger.error('The best model checkpoint does not exist.')
-        
+        else:
+            logger.error(f'{cv_names_map[self.cv_name]} has not converged after {self.max_tries} tries.')
+            
     def model_has_converged(self, validation_loss: List):
         """
         Check if there is any problem with the training of the model.
