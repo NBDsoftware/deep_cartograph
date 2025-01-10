@@ -560,7 +560,7 @@ class NonLinearCVCalculator(CVCalculator):
                     lengths = self.training_validation_lengths,
                     batch_size = self.batch_size,
                     shuffle = self.shuffle, 
-                    generator = torch.manual_seed(self.seed))
+                    generator = torch.manual_seed(self.seed + self.tries))
         
                 # Debug
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
