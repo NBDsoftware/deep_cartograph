@@ -4,8 +4,8 @@
 #SBATCH --output=DeepCarto_%j.out
 #SBATCH --error=DeepCarto_%j.err
 #SBATCH --time=02:00:00
-#SBATCH --qos=standard-cpu
-#SBATCH --partition=normal
+#SBATCH --qos=normal
+#SBATCH --partition=standard-cpu 
 
 module purge
 
