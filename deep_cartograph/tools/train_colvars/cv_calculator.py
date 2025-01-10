@@ -697,7 +697,7 @@ class NonLinearCVCalculator(CVCalculator):
         # Data projected onto original latent space of the best model - feature normalization included in the model
         with torch.no_grad():
             self.cv.postprocessing = None
-            projected_training_data = self.cv(torch.Tensor(self.training_input_dtset[:]['data'].numpy()))
+            projected_training_data = self.cv(self.training_input_dtset[:]['data'])
 
         # Compute statistics of the projected training data
         stats = Statistics(projected_training_data)
