@@ -151,8 +151,12 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
-if __name__ == "__main__":
+########
+# MAIN #
+########
 
+def main():
+    
     from deep_cartograph.modules.common import get_unique_path, read_configuration, read_feature_constraints
 
     parser = argparse.ArgumentParser("Deep Cartograph: Train Collective Variables", description="Train collective variables using the mlcolvar library.")
@@ -227,3 +231,8 @@ if __name__ == "__main__":
     
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
+    
+if __name__ == "__main__":
+
+    main()
+    

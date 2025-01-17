@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, List, Literal, Union, Tuple
 
 # Local imports
-from deep_cartograph import compute_features
-from deep_cartograph import filter_features
-from deep_cartograph import train_colvars
+from deep_cartograph.tools import compute_features
+from deep_cartograph.tools import filter_features
+from deep_cartograph.tools import train_colvars
 from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, read_feature_constraints
 from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 
@@ -392,8 +392,8 @@ def set_logger(verbose: bool):
 # MAIN #
 ########
 
-if __name__ == "__main__":
-
+def main():
+    
     parser = argparse.ArgumentParser("Deep Cartograph", description="Map trajectories onto Collective Variables.")
     
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
@@ -447,3 +447,8 @@ if __name__ == "__main__":
     
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
+    
+    
+if __name__ == "__main__":
+    
+    main()

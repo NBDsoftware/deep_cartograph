@@ -137,8 +137,8 @@ def set_logger(verbose: bool):
 # MAIN #
 ########
 
-if __name__ == "__main__":
-
+def main():
+    
     import argparse
     from deep_cartograph.modules.common import create_output_folder, get_unique_path, read_configuration
 
@@ -178,3 +178,7 @@ if __name__ == "__main__":
 
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
+
+if __name__ == "__main__":
+
+    main()
