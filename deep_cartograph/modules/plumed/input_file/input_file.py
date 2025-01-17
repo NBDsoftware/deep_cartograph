@@ -34,6 +34,12 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
         topology_path        (str): topology file path
         colvars_path         (str): path to the colvars file
         output_folder        (str): path to the output folder
+        
+    Returns
+    -------
+    
+        plumed_file_path    (str): path to the PLUMED input file
+        plumed_topology_path (str): path to the PLUMED topology file
     '''
 
     ############### 
