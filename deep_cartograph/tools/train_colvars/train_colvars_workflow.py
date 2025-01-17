@@ -185,7 +185,7 @@ class TrainColvarsWorkflow:
                         cv_labels = cv_calculator.get_labels(),
                         X_ref = cv_calculator.get_projected_ref(),
                         X_ref_labels = self.ref_labels,
-                        settings = self.figures_configuration,
+                        settings = self.figures_configuration['fes'],
                         output_path = traj_output_folder)
                 
                     # Create a dataframe with the projected input data
