@@ -69,8 +69,8 @@ train_colvars:
       compute: True  
       save: True  
       temperature: 300
-      bandwidth: 0.01
-      num_bins: 300
+      bandwidth: 0.05
+      num_bins: 200
       num_blocks: 1
       max_fes: 18
     traj_projection:
