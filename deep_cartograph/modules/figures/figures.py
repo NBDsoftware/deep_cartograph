@@ -29,6 +29,10 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
         settings:     dictionary with the settings of the FES plot
         output_path:  path where the outputs are saved
     """
+    # NOTE: If reference data has many samples, resort to 2D contours of different colors instead of scatter plots
+    
+    # List of matplotlib markers to cycle through
+    markers = ['o', 's', 'D', '^', 'v', '<', '>', 'p', 'P', '*', 'h', 'H', '+', 'x', 'X', '|', '_'] 
 
     # Find settings
     font_size = 12
@@ -93,18 +97,21 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
             for i, X_ref_i in enumerate(X_ref):
 
                 label = X_ref_labels[i] if X_ref_labels else ''
+                
+                # Cycle through markers
+                marker = markers[i % len(markers)]
 
                 # If the reference data is 2D
                 if X_ref_i.shape[1] == 2:
                     
                     # Add as a scatter plot
-                    ax.scatter(X_ref_i[:,0], X_ref_i[:,1], c='black', s=5, label=label)
+                    ax.scatter(X_ref_i[:,0], X_ref_i[:,1], c='black', s=8, label=label, marker=marker)
 
                 # If the reference data is 1D
                 elif X_ref_i.shape[1] == 1:
 
                     # Add as a histogram
-                    ax.hist(X_ref_i, bins=num_bins, color='red', alpha=0.5, density=True, label=label)
+                    ax.hist(X_ref_i, bins=num_bins, alpha=0.5, density=True, label=label)
 
         # Set axis labels
         ax.set_xlabel(cv_labels[0], fontsize = font_size)
@@ -126,7 +133,7 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
             ax.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
             ax.set_ylim(min(data_range[1][0], -1), max(data_range[1][1], 1))
 
-        ax.legend(fontsize = font_size)
+        ax.legend(fontsize = font_size, framealpha=0.5)
 
         # Set tick size
         ax.tick_params(axis='both', which='major', labelsize=tick_size)

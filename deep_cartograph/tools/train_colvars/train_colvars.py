@@ -97,6 +97,7 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
             
         cvs:                 
             List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
+            
         trajectories:        
             Path to the trajectory files that will be clustered
             

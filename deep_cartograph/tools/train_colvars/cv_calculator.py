@@ -74,6 +74,8 @@ class CVCalculator:
         self.read_training_data(colvars_paths)
         self.read_reference_data(ref_colvars_paths)
         
+        self.ref_names: List[str] = [Path(path).stem for path in ref_colvars_paths] if ref_colvars_paths else []
+        
         # General CV attributes
         self.cv_dimension: int = configuration['dimension']
         self.cv_labels: List[str] = []
@@ -235,6 +237,8 @@ class CVCalculator:
             
             self.project_reference()
             
+            self.save_projected_ref()
+            
             self.cv_specific_tasks()
             
             self.save_cv()
@@ -275,6 +279,21 @@ class CVCalculator:
         """
         
         raise NotImplementedError
+    
+    def save_projected_ref(self):
+        """
+        Saves the projected reference data to files, if there is any.
+        """
+        
+        projected_ref_folder = os.path.join(self.output_path, 'reference_data')
+        
+        if self.projected_ref:
+            
+            if not os.path.exists(projected_ref_folder):
+                os.makedirs(projected_ref_folder)
+        
+            for i, ref in enumerate(self.projected_ref):
+                np.savetxt(os.path.join(projected_ref_folder ,f'{self.ref_names[i]}.txt'), ref)
     
     def set_labels(self):
         """

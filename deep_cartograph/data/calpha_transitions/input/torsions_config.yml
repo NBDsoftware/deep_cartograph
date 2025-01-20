@@ -43,31 +43,16 @@ train_colvars:
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 20
+        patience: 100
         min_delta: 1.0e-05
       optimizer:
         name: Adam
         kwargs: 
-          lr: 1.0e-02 
+          lr: 1.0e-02
           weight_decay: 0
       lr_scheduler: null
       save_loss: True
       plot_loss: True
-  ae:           
-    architecture:
-      hidden_layers: [5, 3]
-    training:
-      general:
-        batch_size: 256
-        max_epochs: 10000
-        dropout: 0.1
-      early_stopping:
-        patience: 100
-        min_delta: 1.0e-05
-      optimizer:
-        kwargs: 
-          lr: 1.0e-04
-          weight_decay: 0
   figures:
     fes:
       compute: True  
