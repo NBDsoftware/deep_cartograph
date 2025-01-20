@@ -231,15 +231,6 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
         logger.error(f"Topology folder is empty: {topology_data}")
         sys.exit(1)
     
-    # If we have a single topology file, we use it for all trajectories
-    if len(top_file_paths) == 1 and len(traj_file_paths) > 1:
-        top_file_paths = top_file_paths * len(traj_file_paths)
-    
-    # Check if we have the same number of topology files as trajectory files
-    if len(traj_file_paths) != len(top_file_paths):
-        logger.error(f"Number of topology files is different from the number of trajectory files ({len(top_file_paths)} vs {len(traj_file_paths)}).")
-        sys.exit(1)
-    
     if len(top_file_paths) > 1:
         
         # Check if each trajectory file has a corresponding topology file with the same name
@@ -255,6 +246,15 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
             if traj_name != top_name:
                 logger.error(f"Trajectory file does not have a corresponding topology file with the same name: {traj_name}")
                 sys.exit(1)
+                
+    # If we have a single topology file, we use it for all trajectories
+    if len(top_file_paths) == 1 and len(traj_file_paths) > 1:
+        top_file_paths = top_file_paths * len(traj_file_paths)
+    
+    # Check if we have the same number of topology files as trajectory files
+    if len(traj_file_paths) != len(top_file_paths):
+        logger.error(f"Number of topology files is different from the number of trajectory files ({len(top_file_paths)} vs {len(traj_file_paths)}).")
+        sys.exit(1)
             
     return traj_file_paths, top_file_paths
 
