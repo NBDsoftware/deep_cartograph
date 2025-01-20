@@ -175,6 +175,7 @@ class TrainColvarsWorkflow:
                     
                     # Output folder for the current trajectory
                     traj_output_folder = os.path.join(cv_output_folder, Path(trajectory).stem)
+                    os.makedirs(traj_output_folder, exist_ok=True)
                     
                     # Project the colvars data onto the CV space
                     projected_colvars = cv_calculator.project_colvars(colvars)
