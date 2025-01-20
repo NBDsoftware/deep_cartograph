@@ -18,16 +18,26 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     Parameters
     ----------
 
-        configuration:       configuration dictionary (see default_config.yml for more information)
-        trajectory:          Path to the trajectory file that will be analyzed.
-        topology:            Path to the topology file of the trajectory.
-        colvars_path:        (Optional) Path to the output colvars file with the time series of the features.
-        output_folder:       (Optional) Path to the output folder
+        configuration:
+            A configuration dictionary (see default_config.yml for more information)
+            
+        trajectory:          
+            Path to the trajectory file that will be analyzed.
+            
+        topology:            
+            Path to the topology file of the trajectory.
+            
+        colvars_path:        
+            (Optional) Path to the output colvars file with the time series of the features.
+            
+        output_folder:       
+            (Optional) Path to the output folder
         
     Returns
     -------
 
-        colvars_path:        Path to the output colvars file with the time series of the features.
+        colvars_path:        
+            Path to the output colvars file with the time series of the features.
     """
 
     from deep_cartograph.modules.plumed import utils as plumed_utils
@@ -127,8 +137,8 @@ def set_logger(verbose: bool):
 # MAIN #
 ########
 
-if __name__ == "__main__":
-
+def main():
+    
     import argparse
     from deep_cartograph.modules.common import create_output_folder, get_unique_path, read_configuration
 
@@ -168,3 +178,7 @@ if __name__ == "__main__":
 
     # Move log file to output folder
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
+
+if __name__ == "__main__":
+
+    main()

@@ -1,10 +1,3 @@
-amino_settings:
-  bandwidth: 0.1
-  features_batch_size: null
-  max_independent_features: 20
-  min_independent_features: 5
-  num_bins: 100
-  run_amino: false
 filter_settings:
   compute_diptest: true
   compute_entropy: false

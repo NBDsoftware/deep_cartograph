@@ -176,6 +176,10 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
     else:
         traj_flag = get_traj_flag(traj_path)
         driver_command.append(traj_flag)
+        
+        if Path(traj_path).suffix == ".pdb":
+            traj_path = check_CRYST1_record(traj_path, Path(topology_path).parent)
+            
         traj_path = os.path.abspath(traj_path)
         driver_command.append(traj_path)
 
@@ -373,3 +377,57 @@ def get_traj_flag(traj_path):
         traj_flag = supported_extensions[extension]
 
     return traj_flag
+
+def check_CRYST1_record(pdb_path, output_folder) -> str:
+    """
+    Check if a PDB file has a meaningless CRYST1 record and remove it if so.
+    
+    PDB bank requires the CRYST1 record to be present, so some tools will write a dummy CRYST1 record (like MDAnalysis)
+    
+    Dummy CRYST1 record: 
+    
+        CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1
+        
+    PLUMED will use this record to obtain the box dimensions and correct for periodic boundary conditions when computing
+    variables. So any present CRYST1 record must be meaningful.
+    
+    Parameters
+    ----------
+    
+        pdb_path    (str):  path to the PDB file
+        output_folder (str): path to the output folder where the new PDB file will be written if needed
+    
+    Returns
+    -------
+    
+        pdb_path    (str):  path to the PDB file with the CRYST1 record removed if needed
+    """
+    
+    dummy_cryst1 = "CRYST1    1.000    1.000    1.000  90.00  90.00  90.00"
+
+    # Read PDB file
+    with open(pdb_path, 'r') as pdb_file:
+        pdb_lines = pdb_file.readlines()
+
+    # Check if CRYST1 record is present
+    dummy_record = None
+    for line in pdb_lines:
+        if line.startswith(dummy_cryst1):
+            dummy_record = line
+            break
+        
+    # If dummy record is present, remove it
+    if dummy_record is not None:
+        
+        pdb_lines.remove(dummy_record)
+        new_pdb_path = os.path.join(output_folder, Path(pdb_path).name)
+        
+        # Write new PDB file
+        with open(new_pdb_path, 'w') as pdb_file:
+            pdb_file.writelines(pdb_lines)
+        
+        logger.warning(f"Dummy CRYST1 record removed from {pdb_path}")
+    else:
+        new_pdb_path = pdb_path
+
+    return new_pdb_path

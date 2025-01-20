@@ -8,7 +8,6 @@ The modules in this folder are designed to provide various functionalities and c
 
 ## List of Modules
 
-- **amino**: Contains the Automatic Mutual Noise Omission algorithm from Tiwary et al. with a few modifications.
 - **common**: Contains general purpose functions used in several tools and modules.
 - **figures**: Contains functions to generate figures and plots.
 - **md**: Contains functions to analyze molecular dynamics trajectories and topologies using MDAnalysis.

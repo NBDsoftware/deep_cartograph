@@ -19,14 +19,7 @@ filter_features:
     compute_std: False                
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
-    std_quantile: 0                  
-  amino_settings:
-    run_amino: False           
-    max_independent_ops: 20     
-    min_independent_ops: 5     
-    ops_batch_size: null       
-    num_bins: 100               
-    bandwidth: 0.1           
+    std_quantile: 0                      
   sampling_settings:
     relaxation_time: 1                                   
 
@@ -34,14 +27,14 @@ train_colvars:
   cvs: ['pca', 'ae']
   common:
     dimension: 2
+    features_normalization: 'min_max'
     architecture:
       hidden_layers: [20, 20]
       lag_time: 20
-      pca_lowrank_q: null
     training: 
       general:
-        max_tries: 10        
-        seed: 42             
+        max_tries: 10       
+        seed: 42            
         lengths: [0.8, 0.2]  
         batch_size: 512     
         max_epochs: 1000     
@@ -51,8 +44,8 @@ train_colvars:
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 10         # fixed
-        min_delta: 1.0e-05   # fixed
+        patience: 10        
+        min_delta: 1.0e-05 
       optimizer:
         name: Adam
         kwargs: 
@@ -76,27 +69,20 @@ train_colvars:
       compute: True  
       save: True  
       temperature: 300
-      bandwidth: 0.025
+      bandwidth: 0.05
       num_bins: 200
       num_blocks: 1
       max_fes: 18
-    projected_trajectory:
+    traj_projection:
       plot: True
       num_bins: 100
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 8
-    projected_clustered_trajectory:
-      plot: True
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.8
-      cmap: turbo
-      use_legend: False
-      marker_size: 8
+      use_legend: True
+      marker_size: 12
   clustering:                        
-    run: True                        
+    run: False                        
     algorithm: hierarchical               
     opt_num_clusters: True          
     search_interval: [5, 15]          

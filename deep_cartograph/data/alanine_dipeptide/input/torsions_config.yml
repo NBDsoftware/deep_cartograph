@@ -19,14 +19,7 @@ filter_features:
     compute_std: False                
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
-    std_quantile: 0                  
-  amino_settings:
-    run_amino: False           
-    max_independent_ops: 20     
-    min_independent_ops: 5     
-    ops_batch_size: null       
-    num_bins: 100               
-    bandwidth: 0.1           
+    std_quantile: 0                           
   sampling_settings:
     relaxation_time: 1                                   
 
@@ -37,7 +30,6 @@ train_colvars:
     architecture:
       hidden_layers: [10, 10]
       lag_time: 30
-      pca_lowrank_q: null
     training: 
       general:
         max_tries: 10
@@ -80,20 +72,13 @@ train_colvars:
       num_bins: 200
       num_blocks: 1
       max_fes: 18
-    projected_trajectory:
+    traj_projection:
       plot: True
       num_bins: 100
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 12
-    projected_clustered_trajectory:
-      plot: True
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.8
-      cmap: turbo
-      use_legend: False
+      use_legend: True
       marker_size: 12
   clustering:                        
     run: False                        

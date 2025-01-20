@@ -22,14 +22,13 @@ def get_config():
     architecture:
       hidden_layers: [5, 3]
       lag_time: 1                        
-      pca_lowrank_q: null
     training: 
       general:
         max_tries: 10
         seed: 42
         lengths: [0.8, 0.2]
         batch_size: 256
-        max_epochs: 10000
+        max_epochs: 1000
         dropout: 0.1
         shuffle: False
         random_split: True
@@ -70,20 +69,13 @@ def get_config():
       num_bins: 200
       num_blocks: 1
       max_fes: 18
-    projected_trajectory:
+    traj_projection:
       plot: True
       num_bins: 100
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 12
-    projected_clustered_trajectory:
-      plot: True
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.8
-      cmap: turbo
-      use_legend: False
+      use_legend: True
       marker_size: 12
   clustering:                        
     run: True                        
@@ -95,7 +87,7 @@ def get_config():
     n_init: 20                       
     min_cluster_size: 50             
     min_samples: 5                  
-    cluster_selection_epsilon: 0
+    cluster_selection_epsilon: 0.5
     """
     return yaml.safe_load(yaml_content)
 
@@ -106,8 +98,10 @@ def test_train_colvars():
     
     # Inputs and reference files
     input_path = os.path.join(data_path, "input")
-    trajectory_path = os.path.join(input_path, "CA_trajectory.dcd")
-    topology_path = os.path.join(input_path, "CA_topology.pdb")
+    trajectory_folder = os.path.join(input_path, "trajectory")
+    topology_folder = os.path.join(input_path, "topology")
+    trajectory_path = os.path.join(trajectory_folder, "CA_example.dcd")
+    topology_path = os.path.join(topology_folder, "CA_example.pdb")
     colvars_path = os.path.join(data_path, "reference", "compute_features", "virtual_dihedrals.dat")
     filtered_features_path = os.path.join(data_path, "reference", "filter_features", "filtered_virtual_dihedrals.txt")
     
@@ -128,11 +122,11 @@ def test_train_colvars():
     # Call API
     train_colvars(
         configuration = get_config(),
-        colvars_path = colvars_path,
+        colvars_paths = [colvars_path],
         feature_constraints = filtered_features,  
         output_folder = output_path,
-        trajectory = trajectory_path,
-        topology = topology_path)
+        trajectories = [trajectory_path],
+        topologies = [topology_path])
     
     test_passed = True
     for cv in get_config()['cvs']:
@@ -140,7 +134,7 @@ def test_train_colvars():
         print(f"Testing {cv}...")
         
         # Path to projected trajectory
-        projected_trajectory_path = os.path.join(output_path, cv, "projected_trajectory.csv")
+        projected_trajectory_path = os.path.join(output_path, cv, "CA_example", "projected_trajectory.csv")
         
         # Path to the reference projected trajectory
         reference_projected_trajectory_path = os.path.join(data_path, "reference", "train_colvars", f"{cv}_projected_trajectory.csv")
@@ -159,7 +153,7 @@ def test_train_colvars():
         test_passed = projected_trajectory_df.equals(reference_projected_trajectory_df) and test_passed
     
     assert test_passed
-        
+    
     # If the test passed, clean the output folder
     if test_passed:
       shutil.rmtree(output_path)

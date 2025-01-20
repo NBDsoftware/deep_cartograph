@@ -154,39 +154,46 @@ def merge_configurations(common_config: Dict, specific_config: Union[Dict, None]
 
 
 # Features utils
-def find_feature_names(colvars_path: str) -> list:
+def find_feature_names(colvars_paths: List[str]) -> List[str]:
     """
-    Find feature names from first colvars line and save them in a list
+    Find feature names present in colvars_paths. Feature names are read from the first line. 
+    Only the common features present in all colvars files will be returned as a list.
 
     Inputs
     ------
 
-        colvars_path: Path to the colvars file with the time series data of the features / collective variables
+        colvars_path: Paths to the colvars files with the time series data of the features
     
     Outputs
     -------
 
-        feature_names: List of feature names
+        common_features: List of common feature names present in all colvars files
     """
+    
+    common_features = set()
+    for path in colvars_paths:
+        
+        # Read the first line of the colvars file
+        with open(path, 'r') as colvar_file:
+            first_line = colvar_file.readline().split()
 
-    # Open the colvar file
-    with open(colvars_path, 'r') as colvar_file:
-
-        # Read the first line and split it
-        first_line = colvar_file.readline().split()
-
-    feature_names = []
-
-    # Loop over the elements of the first line, starting from the 4th element
-    for op_index in range(3, len(first_line)):
-        feature_names.append(first_line[op_index])
+        # Read feature names. Skip first 3 elements, they are: #! FIELDS time
+        feature_names = set()
+        for index in range(3, len(first_line)):
+            feature_names.add(first_line[index])
+            
+        if len(common_features) == 0:
+            common_features = feature_names
+        else:
+            common_features = common_features.intersection(feature_names)
 
     # Check if there are any features
-    if len(feature_names) == 0:
-        logger.error(f'No features found in the colvars file {colvars_path}')
+    if len(common_features) == 0:
+        logger.error(f'No common features found in the colvars files: {colvars_paths}')
         sys.exit(1)
-        
-    return feature_names
+    
+    # Return sorted list to ensure consistency
+    return sorted(common_features)
 
 def read_feature_constraints(features_path: Union[str, None], features_regex: Union[str, None] = None) -> Union[List[str], str]:
     """
@@ -229,37 +236,6 @@ def read_feature_constraints(features_path: Union[str, None], features_regex: Un
     logger.info(' Using all features except time, *labels, *walker and *bias columns')
     return default_regex
 
-def get_filter_dict(feature_constraints: Union[List[str], str]) -> Dict:
-    """
-    Create the filter dictionary to select the features to use from the feature constraints.
-
-    Parameters
-    ----------
-
-    feature_constraints: Union[List[str], str]
-        List of features to use or regex to select the features
-    
-    Returns
-    -------
-    
-    filter_dict : dict
-        Dictionary with the filter to select the features
-    """
-
-    if isinstance(feature_constraints, list):
-        # List of features is given
-        filter_dict = dict(items=feature_constraints)
-
-    elif isinstance(feature_constraints, str):
-        # Regex is given
-        filter_dict = dict(regex=feature_constraints)
-        
-    else:
-        # No constraints are given
-        filter_dict = dict(regex=default_regex)
-    
-    return filter_dict
-
 
 # Related to i/o
 def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, verbose: bool = True):
@@ -289,8 +265,8 @@ def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, ve
     df_data = df_data.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
 
     if verbose:
-        print(f"\n - Loaded dataframe {df.shape}:", list(df.columns))
-        print(f" - Descriptors {df_data.shape}:", list(df_data.columns))
+        logger.debug(f"\n - Loaded dataframe {df.shape}:", list(df.columns))
+        logger.debug(f" - Descriptors {df_data.shape}:", list(df_data.columns))
 
     # create DictDataset
     dictionary = {"data": torch.Tensor(df_data.values)}
@@ -410,7 +386,7 @@ def get_unique_path(path: str):
         # Return original path
         return path
     
-def read_colvars_pandas(colvars_path: str, feature_names: list, stratified_samples: list = None ) -> Dict:
+def read_colvars(colvars_paths: Union[List[str], str], feature_names: List[str], stratified_samples: Union[List[int], None] = None ) -> pd.DataFrame:
     """ 
     Read the data of the features in the feature_names list from the colvars file.
     If stratified_samples is not None, only read the samples corresponding to the indices in stratified_samples list.
@@ -418,41 +394,47 @@ def read_colvars_pandas(colvars_path: str, feature_names: list, stratified_sampl
     Inputs
     ------
 
-        colvars_path:           Path to the colvar file with the time series data of the features / collective variables
-        feature_names:          List of names feature names to read
+        colvars_paths:           List of paths to the colvar files with the time series data of the features
+        feature_names:          List of names feature names to read, should be present in all the colvars files
         stratified_samples:     List of indices of the samples to use starting at 1
     
     Outputs
     -------
 
-        ops_data:               Dictionary with the time series data of the features in the feature_names list
+        features_df:            Dataframe with the time series data of the features
     """
-
-    # Read first line of COLVARS file
-    with open(colvars_path, 'r') as colvars_file:
-        first_line = colvars_file.readline()
     
-    # Close COLVARS file
-    colvars_file.close()
+    if isinstance(colvars_paths, str):
+        colvars_paths = [colvars_paths]
+    
+    merged_df = pd.DataFrame()
+    for path in colvars_paths:
+        
+        # Check if the file exists
+        if not os.path.exists(path):
+            logger.error(f"Colvars file not found: {path}")
+            sys.exit(1)
 
-    # Separate first line by spaces
-    first_line = first_line.split()
+        # Read first line of colvars file excluding "#! FIELDS"
+        with open(path, 'r') as file:
+            column_names = file.readline().split()[2:]
+            
+        # Check if there are any features
+        if len(column_names) == 0:
+            logger.error(f'No features found in the colvars file: {path}')
+            sys.exit(1)
 
-    # The first element is "#!" and the second is "FIELDS", remove them
-    column_names = first_line[2:]
+        if stratified_samples is None:
+            # Read colvar file using pandas, read only the columns of the features to analyze
+            colvars_df = pd.read_csv(path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, names=column_names)
+        else:
+            # Read colvar file using pandas, read only the columns of the features to analyze and only the rows in stratified_samples
+            colvars_df = pd.read_csv(path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, skiprows= lambda x: x not in stratified_samples, names=column_names)
 
-    if stratified_samples is None:
-        # Read colvar file using pandas, read only the columns of the features to analyze
-        colvars_df = pd.read_csv(colvars_path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, names=column_names)
-    else:
-        # Read colvar file using pandas, read only the columns of the features to analyze and only the rows in stratified_samples
-        colvars_df = pd.read_csv(colvars_path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, skiprows= lambda x: x not in stratified_samples, names=column_names)
+        # Concatenate this dataframe to the merged dataframe
+        merged_df = pd.concat([merged_df, colvars_df], ignore_index=True)
 
-    # Convert the dataframe to a dictionary
-    features_data = colvars_df.to_dict('list')
-
-    return features_data
-
+    return merged_df
 
 # Related to training
 def closest_power_of_two(n: int) -> int:

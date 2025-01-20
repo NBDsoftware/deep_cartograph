@@ -20,13 +20,6 @@ compute_features:
     traj_stride: 1
     whole_molecule_selection: all
 filter_features:
-  amino_settings:
-    bandwidth: 0.1
-    features_batch_size: null
-    max_independent_features: 20
-    min_independent_features: 5
-    num_bins: 100
-    run_amino: false
   filter_settings:
     compute_diptest: true
     compute_entropy: false
@@ -67,7 +60,6 @@ train_colvars:
       - 10
       - 10
       lag_time: 30
-      pca_lowrank_q: null
     dimension: 2
     training:
       early_stopping:
@@ -118,18 +110,11 @@ train_colvars:
       num_blocks: 1
       save: true
       temperature: 300
-    projected_clustered_trajectory:
-      alpha: 0.8
-      bandwidth: 0.25
-      cmap: turbo
-      marker_size: 5
+    traj_projection:
+      plot: True
       num_bins: 100
-      plot: true
-      use_legend: false
-    projected_trajectory:
+      bandwidth: 0.25
       alpha: 0.6
-      bandwidth: 0.25
       cmap: turbo
-      marker_size: 5
-      num_bins: 100
-      plot: true
+      use_legend: True
+      marker_size: 12

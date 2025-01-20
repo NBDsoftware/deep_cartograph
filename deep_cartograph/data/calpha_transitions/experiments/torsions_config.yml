@@ -11,12 +11,6 @@ compute_features:
           periodic_encoding: True   
           search_mode: virtual
           atoms_format: name
-  plumed_environment:                                                               
-    bin_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/bin/plumed                 
-    kernel_path: /eb/x86_64/software/PLUMED/2.9.0-intel-2021b/lib/libplumedKernel.so  
-    env_commands: 
-      - "ml PLUMED/2.9.0-intel-2021b"                                                 
-      - "unset I_MPI_PMI_LIBRARY" 
 
 filter_features:       
   filter_settings:
@@ -25,14 +19,7 @@ filter_features:
     compute_std: False                
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
-    std_quantile: 0                  
-  amino_settings:
-    run_amino: False           
-    max_independent_ops: 20     
-    min_independent_ops: 5     
-    ops_batch_size: null       
-    num_bins: 100               
-    bandwidth: 0.1           
+    std_quantile: 0                          
   sampling_settings:
     relaxation_time: 1                                   
 
@@ -43,7 +30,6 @@ train_colvars:
     architecture:
       hidden_layers: [15, 15]
       lag_time: 1 
-      pca_lowrank_q: null
     training: 
       general:
         max_tries: 10
@@ -76,21 +62,14 @@ train_colvars:
       num_bins: 200
       num_blocks: 1
       max_fes: 18
-    projected_trajectory:
+    traj_projection:
       plot: True
       num_bins: 100
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      marker_size: 5
-    projected_clustered_trajectory:
-      plot: False
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.8
-      cmap: turbo
-      use_legend: False
-      marker_size: 5
+      use_legend: True
+      marker_size: 12
   clustering:                        
     run: False                        
     algorithm: hdbscan               

@@ -34,19 +34,12 @@ def get_config():
             compute_std: False                
             diptest_significance_level: 0.05   
             entropy_quantile: 0                
-            std_quantile: 0                  
-        amino_settings:
-            run_amino: False           
-            max_independent_ops: 20     
-            min_independent_ops: 5     
-            ops_batch_size: null       
-            num_bins: 100               
-            bandwidth: 0.1           
+            std_quantile: 0                      
         sampling_settings:
             relaxation_time: 1  
           
     train_colvars:
-      cvs: [ 'ae' , 'pca', 'tica', 'deep_tica'] # NOTE: changing the order the test fails... ?
+      cvs: [ 'pca', 'tica', 'deep_tica', 'ae'] 
       common:
         dimension: 2
         input_colvars: 
@@ -56,7 +49,6 @@ def get_config():
         architecture:
           hidden_layers: [5, 3]
           lag_time: 1                        
-          pca_lowrank_q: null
         training: 
           general:
             max_tries: 10
@@ -104,20 +96,13 @@ def get_config():
           num_bins: 200
           num_blocks: 1
           max_fes: 18
-        projected_trajectory:
+        traj_projection:
           plot: True
           num_bins: 100
           bandwidth: 0.25
           alpha: 0.6
           cmap: turbo
-          marker_size: 12
-        projected_clustered_trajectory:
-          plot: True
-          num_bins: 100
-          bandwidth: 0.25
-          alpha: 0.8
-          cmap: turbo
-          use_legend: False
+          use_legend: True
           marker_size: 12
       clustering:                        
         run: True                        
@@ -140,27 +125,29 @@ def test_deep_cartograph():
     
     # Inputs and reference files
     input_path = os.path.join(data_path, "input")
-    trajectory_path = os.path.join(input_path, "CA_trajectory.dcd")
-    topology_path = os.path.join(input_path, "CA_topology.pdb")
+    trajectory_folder = os.path.join(input_path, "trajectory")
+    topology_folder = os.path.join(input_path, "topology")
     reference_path = os.path.join(data_path, "reference", "train_colvars")
     
     # Output files
     output_path = os.path.join(tests_path, "output_deep_cartograph")
     
-    # Check input files exist
-    if not os.path.exists(trajectory_path):
-        raise FileNotFoundError(f"Trajectory file {trajectory_path} does not exist.")
-    if not os.path.exists(topology_path):
-        raise FileNotFoundError(f"Topology file {topology_path} does not exist.")
-      
+    # Check input folders
+    if not os.path.exists(trajectory_folder):
+        raise FileNotFoundError(f"Trajectory folder not found: {trajectory_folder}")
+    if not os.path.exists(topology_folder):
+        raise FileNotFoundError(f"Topology folder not found: {topology_folder}")
+    if not os.path.exists(reference_path):
+        raise FileNotFoundError(f"Reference folder not found: {reference_path}")
+            
     # Remove output folder if it exists
     if os.path.exists(output_path):
         shutil.rmtree(output_path)
     
     # Call API
     deep_cartograph(configuration=get_config(),
-                    trajectory=trajectory_path,
-                    topology=topology_path,
+                    trajectory_folder=trajectory_folder,
+                    topology_folder=topology_folder,
                     output_folder=output_path)
     
     # Find path to train_colvars step
@@ -170,10 +157,11 @@ def test_deep_cartograph():
     test_passed = True
     for cv in ['pca', 'ae', 'tica', 'deep_tica']:
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
-      computed_projection_path = os.path.join(train_colvars_path, cv, "projected_trajectory.csv")
+      computed_projection_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
       reference_df = pd.read_csv(reference_projection_path)
       computed_df = pd.read_csv(computed_projection_path)
       test_passed = test_passed and computed_df.equals(reference_df)
+      print(f"{cv} test passed: {computed_df.equals(reference_df)}")
 
     assert test_passed
     

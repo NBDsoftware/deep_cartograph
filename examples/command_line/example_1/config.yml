@@ -1,45 +1,55 @@
+
+# Example 1
+
+# This section contains the settings for the trajectory featurization 
+# See deep_cartograph/deep_cartograph/tools/compute_features/default_config.yml for more details
 compute_features:
   plumed_settings:
-    traj_stride: 1
+    traj_stride: 1    
     moltype: protein
-    input_name: distances
+    input_name: torsions
     whole_molecule_selection: all
     features:
-      distance_groups:
-        dist:
-          first_selection: "all"
-          second_selection: "all"
-          first_stride: 5
-          second_stride: 15
-          skip_neigh_residues: False
-          skip_bonded_atoms: True
+      dihedral_groups:
+        tor:
+          selection: "all"
+          periodic_encoding: True
+          search_mode: virtual
           atoms_format: name
 
-filter_features:       
-  filter_settings:
-    compute_diptest: True              
-    compute_entropy: False             
-    compute_std: False                
-    diptest_significance_level: 0.05   
-    entropy_quantile: 0                
-    std_quantile: 0                      
-  sampling_settings:
-    relaxation_time: 1                                   
+# This section contains the settings for the filtering of the features
+# See deep_cartograph/deep_cartograph/tools/filter_features/default_config.yml for more details
+filter_features:
+    filter_settings:
+        compute_diptest: True              
+        compute_entropy: False             
+        compute_std: False                
+        diptest_significance_level: 0.05   
+        entropy_quantile: 0                
+        std_quantile: 0                       
+    sampling_settings:
+        relaxation_time: 1  
 
+# This section contains the settings for the training of the colvars and clustering of the trajectory
+# See deep_cartograph/deep_cartograph/tools/train_colvars/default_config.yml for more details
 train_colvars:
-  cvs: ['pca', 'deep_tica', 'tica', 'ae']
+  cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
     dimension: 2
+    input_colvars: 
+      start: 0
+      stop: null
+      stride: 1 
     architecture:
       hidden_layers: [5, 3]
       lag_time: 1                        
     training: 
       general:
-        max_tries: 10
+        max_tries: 3
         seed: 42
         lengths: [0.8, 0.2]
         batch_size: 256
-        max_epochs: 10000
+        max_epochs: 1000
         dropout: 0.1
         shuffle: False
         random_split: True
@@ -57,6 +67,8 @@ train_colvars:
       save_loss: True
       plot_loss: True
   ae:           
+    architecture:
+      hidden_layers: [5, 3]
     training:
       general:
         batch_size: 256
@@ -87,7 +99,7 @@ train_colvars:
       use_legend: True
       marker_size: 12
   clustering:                        
-    run: False                        
+    run: True                        
     algorithm: hierarchical               
     opt_num_clusters: True          
     search_interval: [5, 15]          

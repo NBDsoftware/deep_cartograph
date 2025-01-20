@@ -22,8 +22,6 @@ class Architecture(BaseModel):
     hidden_layers: List[int] = [10, 10]
     # Lag time for TICA and DeepTICA
     lag_time: int = 1
-    # Slightly overestimated rank of the main trajectory data to compute the PCA more efficiently (see torch.pca_lowrank) - if None, q = num_features (n)
-    pca_lowrank_q: Union[int, None] = None
 
 class GeneralSettings(BaseModel):
 
@@ -83,6 +81,8 @@ class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
     dimension: int = 2
+    # Features normalization
+    features_normalization: Literal['mean_std', 'min_max', 'none'] = 'mean_std'
     # Input colvars
     input_colvars: InputColvars = InputColvars()
     # Architecture settings (used when applicable)
@@ -107,22 +107,7 @@ class FesFigure(BaseModel):
     # Maximum value for the Free Energy Surface (above which the value is set to NaN)
     max_fes: float = 30
 
-class ProjectedTrajectory(BaseModel):
-    
-    # Plot the Projected Trajectory
-    plot: bool = True
-    # Number of bins for the Kernel Density Estimation of the Projected Trajectory
-    num_bins: int = 100
-    # Bandwidth for the Kernel Density Estimation of the Projected Trajectory
-    bandwidth: float = 0.25
-    # Transparency of the points in the Projected Trajectory
-    alpha: float = 0.6
-    # Colormap for the Projected Trajectory
-    cmap: str = "turbo"
-    # Size of the markers in the Projected Trajectory
-    marker_size: int = 5
-
-class ProjectedClusteredTrajectory(BaseModel):
+class TrajProjection(BaseModel):
     
     # Plot the Projected Clustered Trajectory
     plot: bool = True
@@ -143,10 +128,8 @@ class Figures(BaseModel):
       
     # Settings for the Free Energy Surface calculation
     fes: FesFigure = FesFigure()
-    # Settings for the Projected Trajectory
-    projected_trajectory: ProjectedTrajectory = ProjectedTrajectory()
-    # Settings for the Projected Clustered Trajectory
-    projected_clustered_trajectory: ProjectedClusteredTrajectory = ProjectedClusteredTrajectory()
+    # Settings for the projection of the trajectory onto the CV space
+    traj_projection: TrajProjection = TrajProjection()
 
 class Clustering(BaseModel):
 

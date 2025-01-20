@@ -16,21 +16,6 @@ class FilterSettings(BaseModel):
     # Standard deviation quantile to use for filtering (0 to skip filter)
     std_quantile: float = 0
 
-class AminoSettings(BaseModel):
-    
-    # Run amino analysis
-    run_amino: bool = False
-    # Maximum number of independent features to find
-    max_independent_features: int = 20
-    # Minimum number of independent features to find
-    min_independent_features: int = 5
-    # Max number of features that will be analyzed simultaneously (all by default, must be greater or equal than max_ind_features)
-    features_batch_size: Union[int, None] = None
-    # Number of bins to use for the histograms
-    num_bins: int = 50
-    # Bandwidth to use for the kernel density estimation
-    bandwidth: float = 0.1
-
 class SamplingSettings(BaseModel):
     
     # Number of samples to use for each feature
@@ -44,7 +29,5 @@ class FilterFeatures(BaseModel):
         
         # Definition of filter settings
         filter_settings: FilterSettings = FilterSettings()
-        # Definition of amino settings
-        amino_settings: AminoSettings = AminoSettings()
         # Definition of sampling settings
         sampling_settings: SamplingSettings = SamplingSettings()
