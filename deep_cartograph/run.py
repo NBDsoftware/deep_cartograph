@@ -5,14 +5,7 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Literal, Union, Tuple
-
-# Local imports
-from deep_cartograph.tools import compute_features
-from deep_cartograph.tools import filter_features
-from deep_cartograph.tools import train_colvars
-from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration, validate_configuration, read_feature_constraints
-from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
+from typing import Dict, List, Literal, Union
 
 ########
 # TOOL #
@@ -55,7 +48,14 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
         output_folder:         
             (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
     """
-
+    from deep_cartograph.modules.common import check_data, check_ref_data, create_output_folder, get_unique_path, validate_configuration, read_feature_constraints
+    from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
+    
+    from deep_cartograph.tools import analyze_geometry
+    from deep_cartograph.tools import compute_features
+    from deep_cartograph.tools import filter_features
+    from deep_cartograph.tools import train_colvars
+    
     # Set logger
     logger = logging.getLogger("deep_cartograph")
 
@@ -181,180 +181,6 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
 
     # Write time to log in hours, minutes and seconds
     logger.info('Total elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
-
-def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], List[str]]:
-    """
-    Function that checks the existence of the necessary input data files.
-    
-    Inputs
-    ------
-    
-        trajectory_data    (str): Path to trajectory or folder with trajectories to compute the CVs.
-        topology_data      (str): Path to topology or folder with topology files for the trajectories. 
-                                  If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
-                                  If a single topology file is provided, it is used for all trajectories.
-    """
-    
-    logger = logging.getLogger("deep_cartograph")
-    
-    if os.path.isdir(trajectory_data):
-        # List the files in the trajectory folder
-        traj_file_paths = [os.path.join(trajectory_data, f) for f in os.listdir(trajectory_data) if os.path.isfile(os.path.join(trajectory_data, f))]
-    elif os.path.isfile(trajectory_data):
-        # Single trajectory file
-        traj_file_paths = [trajectory_data]
-    elif not os.path.exists(trajectory_data):
-        logger.error(f"Trajectory data not found: {trajectory_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Trajectory data should be a file or a folder: {trajectory_data}")
-        sys.exit(1)
-    
-    # Sort them alphabetically 
-    traj_file_paths.sort()
-    
-    # Check if there are any
-    if len(traj_file_paths) == 0:
-        logger.error(f"Trajectory data folder is empty: {trajectory_data}")
-        sys.exit(1)
-    
-    if os.path.isdir(topology_data):
-        # List the files in the topology folder
-        top_file_paths = [os.path.join(topology_data, f) for f in os.listdir(topology_data) if os.path.isfile(os.path.join(topology_data, f))]
-    elif os.path.isfile(topology_data):
-        # Single topology file
-        top_file_paths = [topology_data]
-    elif not os.path.exists(topology_data):
-        logger.error(f"Topology data not found: {topology_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Topology data should be a file or a folder: {topology_data}")
-        sys.exit(1)
-        
-    # Sort them alphabetically
-    top_file_paths.sort()
-    
-    # Check if there are any
-    if len(top_file_paths) == 0:
-        logger.error(f"Topology folder is empty: {topology_data}")
-        sys.exit(1)
-    
-    if len(top_file_paths) > 1:
-        
-        # Check if each trajectory file has a corresponding topology file with the same name
-        for traj_file, topology_file in zip(traj_file_paths, top_file_paths):
-            
-            # Find name of trajectory file
-            traj_name = Path(traj_file).stem
-            
-            # Find name of topology file
-            top_name = Path(topology_file).stem
-            
-            # Check if they have the same name
-            if traj_name != top_name:
-                logger.error(f"Trajectory file does not have a corresponding topology file with the same name: {traj_name}")
-                sys.exit(1)
-                
-    # If we have a single topology file, we use it for all trajectories
-    if len(top_file_paths) == 1 and len(traj_file_paths) > 1:
-        top_file_paths = top_file_paths * len(traj_file_paths)
-    
-    # Check if we have the same number of topology files as trajectory files
-    if len(traj_file_paths) != len(top_file_paths):
-        logger.error(f"Number of topology files is different from the number of trajectory files ({len(top_file_paths)} vs {len(traj_file_paths)}).")
-        sys.exit(1)
-            
-    return traj_file_paths, top_file_paths
-
-def check_ref_data(ref_trajectory_data: Union[str, None], ref_topology_data: Union[str, None]) -> Tuple[List[str], List[str]]:
-    """
-    Function that checks (if given) the existence of the optional reference data files.
-    
-    Inputs
-    ------
-    
-        ref_trajectory_data (str): Path to the folder with reference data.
-        ref_topology_data   (str): Path to the folder with topology files of the reference data. Should have the same name as the corresponding reference file in the reference folder.
-    """      
-    
-    logger = logging.getLogger("deep_cartograph")
-    
-    if ref_trajectory_data is None and ref_topology_data is not None:
-        logger.error("Reference topology data provided without reference trajectory data.")
-        sys.exit(1)
-    elif ref_trajectory_data is not None and ref_topology_data is None:
-        logger.error("Reference trajectory data provided without reference topology data.")
-        sys.exit(1)
-    elif ref_trajectory_data is None and ref_topology_data is None:
-        logger.debug("No reference data provided.")
-        return [], []
-    
-    # Both reference trajectory and topology data are provided
-    
-    # Check reference data 
-    if os.path.isdir(ref_trajectory_data):
-        # List the files in the reference trajectory folder
-        ref_traj_paths = [os.path.join(ref_trajectory_data, f) for f in os.listdir(ref_trajectory_data) if os.path.isfile(os.path.join(ref_trajectory_data, f))]
-    elif os.path.isfile(ref_trajectory_data):
-        # Single reference trajectory file
-        ref_traj_paths = [ref_trajectory_data]
-    elif not os.path.exists(ref_trajectory_data):
-        logger.error(f"Reference trajectory data not found: {ref_trajectory_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Reference trajectory data should be a file or a folder: {ref_trajectory_data}")
-        sys.exit(1)
-        
-    # Sort them alphabetically
-    ref_traj_paths.sort()
-    
-    # Check if there are any
-    if len(ref_traj_paths) == 0:
-        logger.error("Reference trajectory folder is empty: %s", ref_trajectory_data)
-        sys.exit(1)
-        
-    # Check reference topology data
-    if os.path.isdir(ref_topology_data):
-        # List the files in the reference topology folder
-        ref_top_paths = [os.path.join(ref_topology_data, f) for f in os.listdir(ref_topology_data) if os.path.isfile(os.path.join(ref_topology_data, f))]
-    elif os.path.isfile(ref_topology_data):
-        # Single reference topology file
-        ref_top_paths = [ref_topology_data]
-    elif not os.path.exists(ref_topology_data):
-        logger.error(f"Reference topology data not found: {ref_topology_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Reference topology data should be a file or a folder: {ref_topology_data}")
-        sys.exit(1)
-        
-    # Sort them alphabetically
-    ref_top_paths.sort()
-
-    # Check if there are any
-    if len(ref_top_paths) == 0:
-        logger.error("Reference topology folder is empty: %s", ref_topology_data)
-        sys.exit(1)
-    
-    # Check if we have the same number of reference topology files as reference trajectory files
-    if len(ref_traj_paths) != len(ref_top_paths):
-        logger.error(f"Number of reference topology files is different from the number of reference trajectory files ({len(ref_top_paths)} vs {len(ref_traj_paths)}).")
-        sys.exit(1)
-        
-    # Check if each reference trajectory has a corresponding reference topology file
-    for ref_traj_path, ref_top_path in zip(ref_traj_paths, ref_top_paths):
-            
-        # Find name of reference trajectory file
-        ref_traj_name = Path(ref_traj_path).stem
-        
-        # Find name of reference topology file
-        ref_top_name = Path(ref_top_path).stem
-        
-        # Check if they have the same name
-        if ref_traj_name != ref_top_name:
-            logger.error(f"Reference trajectory file does not have a corresponding reference topology file with the same name: {ref_traj_name}")
-            sys.exit(1)
-            
-    return ref_traj_paths, ref_top_paths
     
          
 def set_logger(verbose: bool):
@@ -423,6 +249,8 @@ def main():
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
     args = parser.parse_args()
+    
+    from deep_cartograph.modules.common import read_configuration, get_unique_path
 
     # Set logger
     set_logger(verbose=args.verbose)
