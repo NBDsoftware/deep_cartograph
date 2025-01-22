@@ -1,16 +1,20 @@
 from pydantic import BaseModel
 
-from deep_cartograph.yaml_schemas.compute_features import ComputeFeatures
-from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
+from deep_cartograph.yaml_schemas.analyze_geometry import AnalyzeGeometrySchema
+from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
+from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
 
 class DeepCartograph(BaseModel):
     
+    # Schema for the geometric analysis
+    analyze_geometry: AnalyzeGeometrySchema = AnalyzeGeometrySchema()
+    
     # Schema for the computation of features
-    compute_features: ComputeFeatures = ComputeFeatures()
+    compute_features: ComputeFeaturesSchema = ComputeFeaturesSchema()
 
     # Schema for the filtering of features
-    filter_features: FilterFeatures = FilterFeatures()
+    filter_features: FilterFeaturesSchema = FilterFeaturesSchema()
 
     # Schema for the training of the colvars file
     train_colvars: TrainColvarsSchema = TrainColvarsSchema()

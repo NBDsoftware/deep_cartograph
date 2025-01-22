@@ -81,6 +81,14 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     
     # Check reference input folders
     ref_trajectories, ref_topologies = check_ref_data(ref_trajectory_data, ref_topology_data)
+    
+    # Step 0: Analyze geometry
+    step0_output_folder = os.path.join(output_folder, 'analyze_geometry')
+    analyze_geometry(
+        configuration = configuration['analyze_geometry'], 
+        trajectories = trajectories, 
+        topologies = topologies, 
+        output_folder = step0_output_folder)
 
     # Step 1: Compute features
     step1_parent_path = os.path.join(output_folder, 'compute_features')

@@ -536,3 +536,59 @@ def generate_colors(num_colors: int, base_colormap: str) -> list:
     colors = base_cmap(np.linspace(0, 1, num_colors))
     
     return colors
+
+def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: str, y_label: str, x_label: str, figure_path: str):
+    """
+    Plot each array in y_data vs the corresponding array in x_data and save the figure to a file.
+    
+    Inputs
+    ------
+    
+        y_data:     dictionary with the data to plot
+        x_data:     dictionary with the x values for each data
+        title:      title of the plot
+        y_label:    label of the y axis
+        x_label:    label of the x axis
+        figure_path: path where the figure will be saved 
+    """
+    
+    # Create figure
+    fig, ax = plt.subplots()
+
+    x_limits = []
+    y_limits = []
+    
+    # For each column in data
+    for key in y_data.keys():
+        
+        # Plot the data
+        ax.plot(x_data[key], y_data[key], label=key)
+        
+        # Get limits
+        x_limits.append(np.min(x_data[key]))
+        x_limits.append(np.max(x_data[key]))
+        y_limits.append(np.min(y_data[key]))
+        y_limits.append(np.max(y_data[key]))
+    
+    # Set axis limits
+    ax.set_xlim(min(x_limits), max(x_limits))
+    ax.set_ylim(0, max(y_limits)+max(y_limits)*0.05)
+    
+    # Set axis labels
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    
+    # Set title
+    ax.set_title(title)
+    
+    # Add legend
+    ax.legend()
+    
+    # Save figure
+    fig.savefig(figure_path, dpi=300)
+    
+    # Close figure
+    plt.close()
+
+    return
+    

@@ -1,0 +1,29 @@
+# analysis:
+#   RMSD:                                       # Root mean square deviation analysis
+#     analysis_name:                            # Name of the analysis
+#       title: 'Backbone RMSD'                  # Title of the plot
+#       selection: 'protein and name CA'        # Selection of atoms to compute the RMSD
+#       fit_selection: 'protein and name CA'    # Selection of atoms to fit the trajectory before computing the RMSD
+#   RMSF:                                       # Root mean square fluctuation analysis
+#     analysis_name:                            # Name of the analysis
+#       title: 'Backbone RMSF'                  # Title of the plot
+#       selection: 'protein and name CA'        # Selection of atoms to compute the RMSF
+#       fit_selection: 'protein and name CA'    # Selection of atoms to fit the trajectory before computing the RMSF
+# dt_per_frame: 40                              # Time in picoseconds per frame in the trajectory
+
+analysis:
+  RMSD:
+    backbone_rmsd:
+      title: 'Backbone RMSD'
+      selection: 'protein and name CA'
+      fit_selection: 'protein and name CA'
+    peptide_rmsd:
+      title: 'Peptide RMSD'
+      selection: 'resid 625:634 and name CA'
+      fit_selection: 'protein and name CA'
+  RMSF:
+    backbone_rmsf:
+      title: 'Backbone RMSF'
+      selection: 'protein and name CA'
+      fit_selection: 'protein and name CA'
+dt_per_frame: 40                   

@@ -1,3 +1,20 @@
+analysis:
+  RMSD:
+    backbone_rmsd:
+      title: 'Backbone RMSD'
+      selection: 'protein and name CA'
+      fit_selection: 'protein and name CA'
+    peptide_rmsd:
+      title: 'Peptide RMSD'
+      selection: 'resid 625:634 and name CA'
+      fit_selection: 'protein and name CA'
+  RMSF:
+    backbone_rmsf:
+      title: 'Backbone RMSF'
+      selection: 'protein and name CA'
+      fit_selection: 'protein and name CA'
+dt_per_frame: 40         
+
 compute_features:
   plumed_settings:
     timeout: 172800

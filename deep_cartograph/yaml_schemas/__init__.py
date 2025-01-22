@@ -1,4 +1,5 @@
 # Export Tool and Main schemas
-from .compute_features import ComputeFeatures
-from .filter_features import FilterFeatures
+from .analyze_geometry import AnalyzeGeometrySchema
+from .compute_features import ComputeFeaturesSchema
+from .filter_features import FilterFeaturesSchema
 from .train_colvars import TrainColvarsSchema

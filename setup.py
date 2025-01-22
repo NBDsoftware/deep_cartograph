@@ -25,6 +25,7 @@ setup(name='deep_cartograph',
             "compute_features=deep_cartograph.tools.compute_features.compute_features:main",
             "filter_features=deep_cartograph.tools.filter_features.filter_features:main",
             "train_colvars=deep_cartograph.tools.train_colvars.train_colvars:main",
+            "analyze_geometry=deep_cartograph.tools.analyze_geometry.analyze_geometry:main",
         ]
     },
     include_package_data=True)

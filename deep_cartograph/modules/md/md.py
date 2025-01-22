@@ -5,9 +5,12 @@ import glob
 import logging
 import numpy as np
 import pandas as pd
-from typing import List, Union
+from typing import List
 from pathlib import Path
+
 import MDAnalysis as mda
+import MDAnalysis.analysis.rms
+import MDAnalysis.analysis.align
 from MDAnalysis.lib.distances import calc_bonds
 
 # Set logger
@@ -793,3 +796,82 @@ def create_pdb(structure_path, file_name):
     u.atoms.write(file_name)
 
     return
+
+
+# Analysis
+def RMSD(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
+    """
+    Calculate the RMSD of the trajectory with respect to a reference structure.
+
+    Input
+    -----
+        trajectory_path   (str): path to the trajectory file.
+        topology_path     (str): path to the topology file.
+        rmsd_selection    (str): selection of atoms to calculate the RMSD.
+        fitting_selection (str): selection of atoms to fit the trajectory to.
+    
+    Output
+    ------
+        rmsd (np.array): array with the RMSD values for each frame.
+    """
+
+    # Load trajectory
+    try:
+        u = mda.Universe(topology_path, trajectory_path)
+    except Exception as e:
+        logger.error(f"Error loading trajectory {trajectory_path}. {e}")
+        sys.exit(1)
+        
+    ref = mda.Universe(topology_path)
+    
+    R = MDAnalysis.analysis.rms.RMSD(u, ref, select=fitting_selection, groupselections=[selection]).run()
+    
+    rmsd = R.results.rmsd.T[3]
+    
+    return rmsd
+ 
+def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
+    """
+    Calculate the RMSF of the trajectory with respect to the average structure
+
+    Input
+    -----
+        trajectory_path (str): path to the trajectory file.
+        topology_path   (str): path to the topology file.
+        selection       (str): selection of atoms to calculate the RMSF.
+    
+    Output
+    ------
+        rmsf (np.array): array with the RMSF values for each residue
+    """
+
+    # Load trajectory
+    try:
+        u = mda.Universe(topology_path, trajectory_path)
+    except Exception as e:
+        logger.error(f"Error loading trajectory {trajectory_path}. {e}")
+        sys.exit(1)
+        
+    # Align trajectory to the average structure
+    average = MDAnalysis.analysis.align.AverageStructure(u, u, select=fitting_selection, ref_frame=0).run()
+    ref = average.results.universe
+    MDAnalysis.analysis.align.AlignTraj(u, ref, select=fitting_selection, in_memory=True).run()
+        
+    # Select the atoms to compute the RMSF for
+    rmsf_atoms = u.select_atoms(selection)
+    
+    # Calculate the RMSF
+    R = MDAnalysis.analysis.rms.RMSF(rmsf_atoms).run()
+
+    rmsf_per_atom = R.results.rmsf
+    
+    print(f"RMSF per atom: {rmsf_per_atom}")    
+    print(f"Shape of RMSF per atom: {rmsf_per_atom.shape}")
+    
+    residues = list(set(rmsf_atoms.resnums))
+    
+    rmsf_per_residue = []
+    for residue in residues:
+        rmsf_per_residue.append(np.mean(rmsf_per_atom[rmsf_atoms.resnums == residue]))
+    
+    return rmsf_per_residue, residues
