@@ -69,7 +69,7 @@ class PlumedEnvironment(BaseModel):
     # List of commands to run before running the plumed command
     env_commands: List[str] = []
 
-class ComputeFeatures(BaseModel):
+class ComputeFeaturesSchema(BaseModel):
     
     # Plumed settings
     plumed_settings: PlumedSettings = PlumedSettings()

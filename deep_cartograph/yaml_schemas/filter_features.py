@@ -25,7 +25,7 @@ class SamplingSettings(BaseModel):
     # Relaxation time of the system in number of samples
     relaxation_time: int = 1
 
-class FilterFeatures(BaseModel):
+class FilterFeaturesSchema(BaseModel):
         
         # Definition of filter settings
         filter_settings: FilterSettings = FilterSettings()

@@ -47,7 +47,7 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], o
 
     from deep_cartograph.tools.filter_features.filtering import Filter
     from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_list, find_feature_names
-    from deep_cartograph.yaml_schemas.filter_features import FilterFeatures
+    from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
 
     logger = logging.getLogger("deep_cartograph")
     
@@ -68,7 +68,7 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], o
     create_output_folder(output_folder)
 
     # Validate configuration
-    configuration = validate_configuration(configuration, FilterFeatures, output_folder)
+    configuration = validate_configuration(configuration, FilterFeaturesSchema, output_folder)
     
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
