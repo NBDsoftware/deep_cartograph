@@ -140,7 +140,7 @@ def set_logger(verbose: bool):
 def main():
     
     import argparse
-    from deep_cartograph.modules.common import create_output_folder, get_unique_path, read_configuration
+    from deep_cartograph.modules.common import get_unique_path, read_configuration
 
     parser = argparse.ArgumentParser("Deep Cartograph: Compute features", description="Compute features from a trajectory using PLUMED.")
     
