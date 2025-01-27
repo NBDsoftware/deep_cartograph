@@ -865,9 +865,6 @@ def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selec
 
     rmsf_per_atom = R.results.rmsf
     
-    print(f"RMSF per atom: {rmsf_per_atom}")    
-    print(f"Shape of RMSF per atom: {rmsf_per_atom.shape}")
-    
     residues = list(set(rmsf_atoms.resnums))
     
     rmsf_per_residue = []
