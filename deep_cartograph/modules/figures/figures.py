@@ -547,8 +547,8 @@ def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: s
     Inputs
     ------
     
-        y_data:     dictionary with the data to plot
-        x_data:     dictionary with the x values for each data
+        y_data:     dictionary with the y data to plot
+        x_data:     dictionary with the x values for each y data
         title:      title of the plot
         y_label:    label of the y axis
         x_label:    label of the x axis
@@ -557,6 +557,9 @@ def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: s
     
     # Create figure
     fig, ax = plt.subplots()
+    
+    # Increase the figure size
+    fig.set_size_inches(10, 5)
 
     x_limits = []
     y_limits = []
@@ -564,12 +567,17 @@ def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: s
     # For each column in data
     for key in y_data.keys():
         
+        # Find the corresponding x data
+        x_array = x_data.get(key)
+        if x_array is None:
+            raise ValueError(f"No x values provided for {key}")
+        
         # Plot the data
-        ax.plot(x_data[key], y_data[key], label=key)
+        ax.plot(x_array, y_data[key], label=key, linewidth=1)
         
         # Get limits
-        x_limits.append(np.min(x_data[key]))
-        x_limits.append(np.max(x_data[key]))
+        x_limits.append(np.min(x_array))
+        x_limits.append(np.max(x_array))
         y_limits.append(np.min(y_data[key]))
         y_limits.append(np.max(y_data[key]))
     
