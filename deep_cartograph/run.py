@@ -84,11 +84,15 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     
     # Step 0: Analyze geometry
     step0_output_folder = os.path.join(output_folder, 'analyze_geometry')
-    analyze_geometry(
-        configuration = configuration['analyze_geometry'], 
-        trajectories = trajectories, 
-        topologies = topologies, 
-        output_folder = step0_output_folder)
+    
+    if os.path.exists(step0_output_folder):
+        logger.info("Analyzed geometry folder already exists. Skipping analysis of geometry.")
+    else:
+        analyze_geometry(
+            configuration = configuration['analyze_geometry'], 
+            trajectories = trajectories, 
+            topologies = topologies, 
+            output_folder = step0_output_folder)
 
     # Step 1: Compute features
     step1_parent_path = os.path.join(output_folder, 'compute_features')
