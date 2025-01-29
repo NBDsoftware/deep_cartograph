@@ -242,8 +242,8 @@ def clusters_scatter_plot(data: pd.DataFrame, column_labels: List[str], cluster_
     Inputs
     ------
 
-        data:         data with the trajectory projected on the 2D space
-        column_labels:     labels of the CVs used to project the trajectory
+        data:            data with the trajectory projected on the 2D space
+        column_labels:   labels of the CVs used to project the trajectory
         cluster_label:   label of the data used to color the markers
         settings:        dictionary with the settings of the plot
         file_path:       path where the figure will be saved
@@ -257,13 +257,16 @@ def clusters_scatter_plot(data: pd.DataFrame, column_labels: List[str], cluster_
         num_bins = settings.get('num_bins', 50)
         bw_adjust = settings.get('bandwidth', 0.5)
 
+        # Sort data so that cluster -1 is plotted first
+        sorted_data = data.sort_values(by=cluster_label, ascending=True)
+
         # Create a JointGrid object with a colormap
-        ax = sns.JointGrid(data=data, x=column_labels[0], y=column_labels[1])
+        ax = sns.JointGrid(data=sorted_data, x=column_labels[0], y=column_labels[1])
 
         # Create a scatter plot of the data, color-coded by the cluster
         scatter = ax.plot_joint(
             sns.scatterplot, 
-            data=data,
+            data=sorted_data,
             hue=cluster_label, 
             palette=cluster_colors, 
             alpha=alpha, 
