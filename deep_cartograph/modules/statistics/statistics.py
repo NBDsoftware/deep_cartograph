@@ -4,7 +4,7 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, Literal
 from sklearn.cluster import HDBSCAN
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -140,7 +140,8 @@ def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.nda
         cluster_labels, centroids = kmeans_clustering(features, settings['num_clusters'], settings['n_init'], initial_centroids)
     
     elif settings['algorithm'] == 'hdbscan':
-        cluster_labels, centroids = hdbscan_clustering(features, settings['min_cluster_size'], settings['min_samples'], settings['cluster_selection_epsilon'])
+        cluster_labels, centroids = hdbscan_clustering(features, settings['min_cluster_size'], settings['max_cluster_size'], settings['min_samples'], 
+                                                       settings['cluster_selection_epsilon'], settings['cluster_selection_method'])
     
     elif settings['algorithm'] == 'hierarchical':
         cluster_labels, centroids = hierarchical_clustering(features, None, settings['num_clusters'], settings['linkage'])
@@ -190,7 +191,9 @@ def kmeans_clustering(feature_matrix: np.ndarray, num_clusters: int, n_init: int
 
     return clusters, centroids
 
-def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, min_samples: int, cluster_selection_epsilon: float) -> Tuple[np.array, np.array]:
+def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, max_cluster_size: Union[None, int], 
+                       min_samples: int, cluster_selection_epsilon: float, cluster_selection_method: Literal["eom", "leaf"]
+                       ) -> Tuple[np.array, np.array]:
     """
     Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
     using the HDBSCAN algorithm.
@@ -201,8 +204,10 @@ def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, min_samp
         feature_matrix      (numpy array): matrix with the features of each frame of the simulation
         min_cluster_size            (int): minimum number of samples in a group for that group to be considered a cluster; 
                                            groupings smaller than this size will be left as noise 
+        max_cluster_size            (int): a limit to the size of clusters returned by the "eom" cluster selection algorithm, no limit if None
         min_samples                 (int): number of samples in a neighborhood for a point to be considered as a core point
         cluster_selection_epsilon (float):  a distance threshold. Clusters below this value will be merged.
+        cluster_selection_method (string): the method used to select clusters from the condensed tree.
     
     Outputs
     -------
@@ -210,9 +215,6 @@ def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, min_samp
         clusters (numpy array): array with the cluster assignment for each frame of the simulation
         centroids (numpy array): array with the estimated centroids for each cluster
     """
-
-    # Find max cluster size as 50% of the number of samples
-    max_cluster_size = int(0.5 * feature_matrix.shape[0])
 
     # Find number of CPU cores requested in SLURM
     n_cores = int(os.environ.get('SLURM_CPUS_PER_TASK', 1))
@@ -237,9 +239,10 @@ def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, min_samp
 
     # Initialize HDBSCAN object
     hdb = HDBSCAN(min_cluster_size = min_cluster_size, min_samples = min_samples, n_jobs = n_jobs, store_centers = "centroid",
-                  cluster_selection_epsilon = cluster_selection_epsilon, max_cluster_size = max_cluster_size)
+                  cluster_selection_epsilon = cluster_selection_epsilon, max_cluster_size = max_cluster_size,
+                  cluster_selection_method = cluster_selection_method, allow_single_cluster=False)
     
-    # pip install hdbscan version
+    # "pip install hdbscan" version 
     # hdb = HDBSCAN(min_cluster_size = min_cluster_size, min_samples = min_samples,
     #               cluster_selection_epsilon = cluster_selection_epsilon, max_cluster_size = max_cluster_size)
     

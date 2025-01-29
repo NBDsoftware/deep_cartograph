@@ -130,8 +130,10 @@ figures:
 #   linkage:                          (str) Linkage criterion to use ('ward', 'single', 'average', 'complete') (only for hierarchical)
 #   n_init:                           (int) Number of times the k-means algorithm is run with different centroid seeds (only for kmeans)
 #   min_cluster_size:                 (int) Minimum number of samples in a group for that group to be considered a cluster; groupings smaller than this size will be left as noise (only for hdbscan)
+#   max_cluster_size:                 (int) Maximum number of samples in a group for that group to be considered a cluster; If null, there is no limit (only for hdbscan)
 #   min_samples:                      (int) Number of samples in a neighborhood for a point to be considered as a core point (only for hdbscan)
 #   cluster_selection_epsilon:        (float) A distance threshold. Clusters below this value will be merged (only for hdbscan)
+#   cluster_selection_method:         (str) Method to select the number of clusters ('eom', 'leaf') (only for hdbscan)
 
 #   Note that:
 #     min_cluster_size should be set to the smallest size grouping that you wish to consider a cluster.
@@ -145,6 +147,8 @@ clustering:
   num_clusters: 3                  
   linkage: complete                
   n_init: 20                    
-  min_cluster_size: 5              
-  min_samples: 3                  
-  cluster_selection_epsilon: 0     
+  min_cluster_size: 5               # Increase if some of the clusters are too small
+  max_cluster_size: null          
+  min_samples: 3                    # Increase to obtain more conservative clustering restricted to more dense areas
+  cluster_selection_epsilon: 0      # Increase to merge more clusters
+  cluster_selection_method: eom     # Choose 'leaf' to obtain many small homogeneous clusters
