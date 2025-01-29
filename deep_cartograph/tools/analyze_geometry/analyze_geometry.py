@@ -31,7 +31,7 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
             (Optional) Path to the output folder
     """
 
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration
+    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_data
     from deep_cartograph.modules.figures import plot_data
     from deep_cartograph.modules.md import RMSD, RMSF
     
@@ -94,9 +94,9 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
 
             # Save figure with results
             plot_data(y_data, x_data, title, y_label, x_label, figure_path)
-                      
             
-            
+            # Save csv with results
+            save_data(y_data, x_data, y_label, x_label, output_folder)
 
     # End timer
     elapsed_time = time.time() - start_time

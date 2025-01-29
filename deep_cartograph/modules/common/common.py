@@ -471,6 +471,40 @@ def save_list(list_to_save: list, path_to_save: str) -> None:
 
     return
 
+def save_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], y_label: str, x_label: str, folder_path: str):
+    """
+    Save the data to files.
+
+    Parameters
+    ----------
+
+    y_data : Dict[str, np.array]
+        Dictionary with the y data to save
+    x_data : Dict[str, np.array]
+        Dictionary with the corresponding x data
+    y_label : str
+        Label for the y data
+    x_label : str
+        Label for the x data
+    folder_path : str
+        Path to the folder where the data will be saved
+    """
+    
+    # For each key in y_data
+    for key in y_data.keys():
+        
+        # Find the corresponding x data
+        x_array = x_data.get(key)
+        if x_array is None:
+            raise ValueError(f"No x values provided for {key}")
+        
+        # File path
+        file_path = os.path.join(folder_path, f"{key}.csv")
+        
+        # Save the data
+        np.savetxt(file_path, np.column_stack((x_array, y_data[key])), delimiter=",", header=f"{x_label},{y_label}", comments="")
+    
+
 def read_list(path_to_read: str) -> list:
     """
     Function that reads a list from a file.
