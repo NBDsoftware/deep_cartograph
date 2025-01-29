@@ -153,11 +153,15 @@ class Clustering(BaseModel):
     n_init: int = 20
     # Minimum number of samples in a group for that group to be considered a cluster; groupings smaller than this size will be left as noise (only for hdbscan)
     min_cluster_size: int = 5
+    # A limit to the size of clusters returned by the "eom" cluster selection algorithm, no limit if None (only for hdbscan)
+    max_cluster_size: Union[int, None] = None
     # Number of samples in a neighborhood for a point to be considered as a core point (only for hdbscan)
     min_samples: int = 3
     # A distance threshold. Clusters below this value will be merged (only for hdbscan)
     cluster_selection_epsilon: float = 0
-
+    # The method used to select clusters from the condensed tree."eom" selects the most persistent cluster while “leaf” provides the most fine grained and homogeneous ones
+    cluster_selection_method: Literal["eom", "leaf"] = "eom"
+    
 class TrainColvarsSchema(BaseModel):
     
     # List of Collective Variables to train/calculate
