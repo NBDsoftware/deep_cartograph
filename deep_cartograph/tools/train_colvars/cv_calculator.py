@@ -825,6 +825,7 @@ class PCACalculator(LinearCVCalculator):
         Compute Principal Component Analysis (PCA) on the input features. 
         """
         
+        # NOTE: This could still be useful for large datasets?
         # Choose between deterministic and non-deterministic PCA
         # if pca_lowrank_q < self.num_features:
              # Non-deterministic PCA using randomized SVD
