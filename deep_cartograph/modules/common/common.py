@@ -266,6 +266,9 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     else:
         logger.error(f"Trajectory data should be a file or a folder: {trajectory_data}")
         sys.exit(1)
+        
+    # Remove any hidden files
+    traj_file_paths = [f for f in traj_file_paths if not Path(f).name.startswith('.')]
     
     # Sort them alphabetically 
     traj_file_paths.sort()
@@ -287,6 +290,9 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     else:
         logger.error(f"Topology data should be a file or a folder: {topology_data}")
         sys.exit(1)
+        
+    # Remove any hidden files
+    top_file_paths = [f for f in top_file_paths if not Path(f).name.startswith('.')]
         
     # Sort them alphabetically
     top_file_paths.sort()
