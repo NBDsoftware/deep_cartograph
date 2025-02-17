@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from scipy.sparse import block_diag
 from typing import Dict, List, Tuple, Union, Literal
 from sklearn.decomposition import PCA       
 
@@ -585,7 +586,7 @@ class NonLinearCVCalculator(CVCalculator):
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
-                model = cv_classes_map[self.cv_name](self.nn_layers, options=self.cv_options)
+                model = nonlinear_cv_map[self.cv_name](self.nn_layers, options=self.cv_options)
 
                 # Set optimizer name
                 model._optimizer_name = self.opt_name
@@ -650,7 +651,7 @@ class NonLinearCVCalculator(CVCalculator):
             
             if os.path.exists(self.checkpoint.best_model_path):
                 # Load the best model
-                self.cv = cv_classes_map[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
+                self.cv = nonlinear_cv_map[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
                 os.remove(self.checkpoint.best_model_path)
                 
                 # Find the score of the best model
@@ -880,11 +881,11 @@ class TICACalculator(LinearCVCalculator):
 
         # Use TICA to compute slow linear combinations of the input features
         # Here out_features is the number of eigenvectors to keep
-        tica_cv = TICA(in_features = self.num_features, out_features=self.cv_dimension)
+        tica_algorithm = TICA(in_features = self.num_features, out_features=self.cv_dimension)
 
         try:
             # Compute TICA
-            tica_eigvals, tica_eigvecs = tica_cv.compute(data=[self.training_input_dtset['data'], self.training_input_dtset['data_lag']], save_params = True, remove_average = True)
+            tica_eigvals, tica_eigvecs = tica_algorithm.compute(data=[self.training_input_dtset['data'], self.training_input_dtset['data_lag']], save_params = True, remove_average = True)
         except Exception as e:
             logger.error(f'TICA could not be computed. Error message: {e}')
             return
@@ -1075,10 +1076,8 @@ cv_calculators_map = {
     'deep_tica': DeepTICACalculator
 }
 
-cv_classes_map = {
-    'pca': PCA,
+nonlinear_cv_map = {
     'ae': AutoEncoderCV,
-    'tica': TICA,
     'deep_tica': DeepTICA
 }
 
