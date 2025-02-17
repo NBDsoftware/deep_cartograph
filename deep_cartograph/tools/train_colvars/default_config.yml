@@ -1,6 +1,8 @@
-# cvs:                           List of Collective Variables to calculate
+# cvs:                           List of Collective Variables to calculate: pca, ae, tica, deep_tica or htica
 # common:                        Common settings for the Collective Variables
 #   dimension:                    (int) Number of dimensions to calculate
+#   num_subspaces:                (int) Number of subspaces to calculate (only for htica) - increase to reduce the memory usage
+#   subspaces_dimension:          (int) Dimension of the subspaces to calculate (only for htica) - reduce to reduce the memory usage
 #   features_normalization:       (str) Normalization of the input features, e.g. 'mean_std', 'min_max', null
 #   input_colvars:              Settings for the input colvars file reading with the time series of the input features
 #     start:                      (int) Start index to read the input features (df.iloc[start:stop:stride])
@@ -84,6 +86,9 @@ ae:
     optimizer:
       kwargs: 
         lr: 0.01
+htica:
+  num_subspaces: 10
+  subspaces_dimension: 5
 
 # figures:                          Settings for additional figures
 #   fes:                              Settings for the Free Energy Surface calculation

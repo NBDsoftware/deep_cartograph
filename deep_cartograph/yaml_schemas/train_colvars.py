@@ -85,10 +85,14 @@ class CommonCollectiveVariable(BaseModel):
     features_normalization: Literal['mean_std', 'min_max', 'none'] = 'mean_std'
     # Input colvars
     input_colvars: InputColvars = InputColvars()
-    # Architecture settings (used when applicable)
+    # Architecture settings (used only with NN-based Collective Variables)
     architecture: Architecture = Architecture()
-    # Training settings (used when applicable)
+    # Training settings (used only with NN-based Collective Variables)
     training: Trainings = Trainings()
+    # Number of sub-spaces (used only with Hierarchical TICA)
+    num_subspaces: int = 10
+    # Dimension of the sub-spaces (used only with Hierarchical TICA)
+    subspaces_dimension: int = 5
 
 class FesFigure(BaseModel):
       
@@ -165,7 +169,7 @@ class Clustering(BaseModel):
 class TrainColvarsSchema(BaseModel):
     
     # List of Collective Variables to train/calculate
-    cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = ['pca', 'ae', 'tica', 'deep_tica']
+    cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = ['pca', 'ae', 'tica', 'htica', 'deep_tica']
     # Common settings for the Collective Variables
     common: CommonCollectiveVariable = CommonCollectiveVariable()
     # Settings for additional figures

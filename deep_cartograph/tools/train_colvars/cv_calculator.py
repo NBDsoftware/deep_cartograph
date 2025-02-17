@@ -891,7 +891,105 @@ class TICACalculator(LinearCVCalculator):
 
         # Save the first cv_dimension eigenvectors as CVs
         self.cv = tica_eigvecs.numpy()
+  
+class HTICACalculator(LinearCVCalculator):
+    """ 
+    Hierarchical Time-lagged independent component analysis calculator.
+    
+    See: 
+    
+    Pérez-Hernández, Guillermo, and Frank Noé. “Hierarchical Time-Lagged Independent Component Analysis: 
+    Computing Slow Modes and Reaction Coordinates for Large Molecular Systems.” Journal of Chemical Theory 
+    and Computation 12, no. 12 (December 13, 2016): 6118–29. https://doi.org/10.1021/acs.jctc.6b00738.
+    """
+    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+        """
+        Initializes the HTICA calculator.
+        """
         
+        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        
+        self.cv_name = 'htica'
+        
+        self.num_subspaces = configuration['num_subspaces']
+        self.subspaces_dimension = configuration['subspaces_dimension']
+        
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
+        self.training_input_dtset = create_timelagged_dataset(self.normalized_training_data.numpy(), lag_time=self.architecture_config['lag_time'])
+        
+        self.initialize()
+        
+    
+    def compute_cv(self):
+        """
+        Compute Hierarchical Time-lagged Independent Component Analysis (TICA) on the input features. 
+        
+        Initial space of features (num_features) -> TICA LEVEL 1 (subspaces_dimension x num_subspaces) -> TICA LEVEL 2 (CV_dimension)
+        
+            1. Divide the original dataset into num_subspaces
+            2. Compute TICA on each sub-space (TICA LEVEL 1)
+            3. Project each sub-space onto the TICA eigenvectors of LEVEL 1
+            3. Construct the sparse - block diagonal - matrix transforming the original features into TICA LEVEL 1
+            4. Compute TICA on the concatenated projected data (TICA LEVEL 2)
+            5. Obtain the transformation matrix from features to TICA LEVEL 2 (final CV)
+        """
+        data_tensor = self.training_input_dtset['data']
+        data_lag_tensor = self.training_input_dtset['data_lag'] 
+        
+        # Split the data tensor into 10 tensors using torch_split
+        data_tensors = torch.split(data_tensor, self.num_features//self.num_subspaces, dim=1)
+        
+        # Split the data lag tensor into 10 tensors using torch_split
+        data_lag_tensors = torch.split(data_lag_tensor, self.num_features//self.num_subspaces, dim=1)
+        
+        # Initialize the eigenvectors and eigenvalues
+        level_1_eigvecs = []     
+        
+        # Projected data
+        projected_data = []
+        projected_data_lag = []
+        
+        # Compute TICA on each of these pairs of tensors
+        for data, data_lag in zip(data_tensors, data_lag_tensors):
+            
+            # Initialize the TICA object
+            tica_algorithm = TICA(in_features = data.shape[1], out_features=self.subspaces_dimension)
+            
+            try:
+                # Compute TICA
+                _, eigvecs = tica_algorithm.compute(data=[data, data_lag], save_params = True, remove_average = True)
+            except Exception as e:
+                logger.error(f'TICA could not be computed. Error message: {e}')
+                return
+            
+            # Save the eigenvectors and eigenvalues
+            level_1_eigvecs.append(eigvecs.numpy())
+            
+            # Project each of the tensors onto the eigenvectors
+            projected_data.append(torch.matmul(data, eigvecs))
+            projected_data_lag.append(torch.matmul(data_lag, eigvecs))
+        
+        # Create the matrix that converts from the space of features to TICA LEVEL 1
+        Transform_level_1_TICA = block_diag(level_1_eigvecs, format='csr') 
+        
+        # Concatenate the projected tensors
+        projected_data = torch.concatenate(projected_data, axis=1)
+        projected_data_lag = torch.concatenate(projected_data_lag, axis=1)
+        
+        # Apply TICA to the concatenated dataset
+        tica_algorithm = TICA(in_features = projected_data.shape[1], out_features=self.cv_dimension)
+        
+        try:
+            # Compute TICA
+            _, level_2_eigvecs = tica_algorithm.compute(data=[projected_data, projected_data_lag], save_params = True, remove_average = True)
+        except Exception as e:
+            logger.error(f'TICA could not be computed. Error message: {e}')
+            return
+        
+        # Obtain the transformation matrix from features to TICA LEVEL 2
+        self.cv = Transform_level_1_TICA @ level_2_eigvecs
+           
 class AECalculator(NonLinearCVCalculator):
     """
     Autoencoder calculator.
@@ -973,6 +1071,7 @@ cv_calculators_map = {
     'pca': PCACalculator,
     'ae': AECalculator,
     'tica': TICACalculator,
+    'htica': HTICACalculator,
     'deep_tica': DeepTICACalculator
 }
 
@@ -987,6 +1086,7 @@ cv_names_map = {
     'pca': 'PCA',
     'ae': 'AE',
     'tica': 'TICA',
+    'htica': 'HTICA',
     'deep_tica': 'DeepTICA'
 }
 
@@ -994,5 +1094,6 @@ cv_components_map = {
     'pca': 'PC',
     'ae': 'AE',
     'tica': 'TIC',
+    'htica': 'HTIC',
     'deep_tica': 'DeepTIC'
 }
