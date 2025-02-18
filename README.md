@@ -1,4 +1,9 @@
-# Deep Cartograph
+Deep Cartograph
+===============
+
+<img src="deep_cartograph/data/images/DeepCarto_logo.png" width="200">
+
+---
 
 This package can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages a custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar) to compute or train the different collective variables. See the original publication of the mlcolvar library [here](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
 
