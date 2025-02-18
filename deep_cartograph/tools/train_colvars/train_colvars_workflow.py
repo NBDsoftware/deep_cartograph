@@ -30,7 +30,7 @@ class TrainColvarsWorkflow:
                  ref_colvars_paths: Union[List[str], None] = None, 
                  ref_labels: Union[List[str], None] = None,
                  cv_dimension: Union[int, None] = None,
-                 cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = None,
+                 cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = None,
                  trajectory_paths: Union[List[str], None] = None,
                  topology_paths: Union[List[str], None] = None, 
                  samples_per_frame: Union[float, None] = 1,
@@ -74,7 +74,7 @@ class TrainColvarsWorkflow:
         self._validate_files()
 
         # CV related attributes
-        self.cvs: List[Literal['pca', 'ae', 'tica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
+        self.cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
         self.cv_dimension: int = cv_dimension
         
     def _validate_files(self):
@@ -115,7 +115,7 @@ class TrainColvarsWorkflow:
                 sys.exit(1)
         
                 
-    def calculate_cv(self, cv: Literal['pca', 'ae', 'tica', 'deep_tica']) -> CVCalculator:
+    def calculate_cv(self, cv: Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']) -> CVCalculator:
         """
         Runs the calculation of the requested collective variables using the corresponding calculator.
         

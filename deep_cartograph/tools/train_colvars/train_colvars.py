@@ -60,7 +60,7 @@ def set_logger(verbose: bool):
 
 def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], feature_constraints: Union[List[str], str, None] = None, 
                   ref_colvars_paths: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
-                  cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, trajectories: Union[List[str], None] = None, 
+                  cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, trajectories: Union[List[str], None] = None, 
                   topologies: Union[List[str], None] = None, samples_per_frame: Union[float, None] = 1, output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
@@ -96,7 +96,7 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
             Dimension of the CVs to train or compute, if None, the value in the configuration file is used
             
         cvs:                 
-            List of collective variables to train or compute (pca, ae, tica, deep_tica), if None, the ones in the configuration file are used
+            List of collective variables to train or compute (pca, ae, tica, htica, deep_tica), if None, the ones in the configuration file are used
             
         trajectories:        
             Path to the trajectory files that will be clustered
@@ -174,7 +174,7 @@ def main():
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help='Dimension of the CV to train or compute', required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica)', required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, htica, deep_tica)', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help='Path to the output folder', required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Set the logging level to DEBUG', default=False)
 

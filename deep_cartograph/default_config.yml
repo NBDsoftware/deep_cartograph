@@ -51,6 +51,8 @@ train_colvars:
   cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
     dimension: 2
+    num_subspaces: 10
+    subspaces_dimension: 5
     features_normalization: 'mean_std'
     input_colvars: 
       start: 0

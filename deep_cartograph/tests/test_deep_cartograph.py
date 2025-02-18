@@ -39,9 +39,11 @@ def get_config():
             relaxation_time: 1  
           
     train_colvars:
-      cvs: [ 'pca', 'tica', 'deep_tica', 'ae'] 
+      cvs: [ 'pca', 'tica', 'deep_tica', 'htica', 'ae'] 
       common:
         dimension: 2
+        num_subspaces: 10
+        subspaces_dimension: 5
         input_colvars: 
           start: 0
           stop: null
@@ -155,7 +157,7 @@ def test_deep_cartograph():
     
     # For each CV, check if the computed and reference colvars files are equal
     test_passed = True
-    for cv in ['pca', 'ae', 'tica', 'deep_tica']:
+    for cv in get_config()['train_colvars']['cvs']:
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
       computed_projection_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
       reference_df = pd.read_csv(reference_projection_path)

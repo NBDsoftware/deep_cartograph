@@ -12,9 +12,11 @@ data_path = os.path.join(tests_path, "data")
 
 def get_config():
     yaml_content = """
-  cvs: ['pca', 'deep_tica', 'tica', 'ae']
+  cvs: ['pca', 'deep_tica', 'htica', 'tica', 'ae']
   common:
     dimension: 2
+    num_subspaces: 10
+    subspaces_dimension: 5
     input_colvars: 
       start: 0
       stop: null

@@ -13,7 +13,7 @@ from typing import Dict, List, Literal, Union
 
 def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: str, ref_trajectory_data: Union[str, None] = None, 
                     ref_topology_data: Union[str, None] = None, label_reference: bool = False, dimension: Union[int, None] = None, 
-                    cvs: Union[List[Literal['pca', 'ae', 'tica', 'deep_tica']], None] = None, 
+                    cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, 
                     restart: bool = False, output_folder: Union[str, None] = None) -> None:
     """
     Function that maps a set of trajectories onto a set of collective variables.
@@ -43,7 +43,7 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
             (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
         
         cvs:                   
-            (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'deep_tica'], overwrites the value in the configuration if provided
+            (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'htica', 'deep_tica'], overwrites the value in the configuration if provided
         
         output_folder:         
             (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
@@ -248,7 +248,7 @@ def main():
     # Options
     parser.add_argument('-restart', dest='restart', action='store_true', help="Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat.", default=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute, overwrites the configuration input YML.", required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, deep_tica), overwrites the configuration input YML.', required=False)
+    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, htica, deep_tica), overwrites the configuration input YML.', required=False)
     parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
