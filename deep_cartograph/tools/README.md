@@ -8,6 +8,7 @@ Each tool can be used to perform a specific task. The tools are designed to be m
 
 ## List of Tools
 
+- **analyze_geometry**: perform some simple geometry analysis like RMSD or RMSF.
 - **compute_features**: compute features from a trajectory.
 - **filter_features**: filter features based on bi-modality, standard deviation or entropy of their distribution.
 - **train_colvars**: compute and train different collective variables from data.

@@ -3,23 +3,29 @@ Deep Cartograph
 
 <img src="deep_cartograph/data/images/DeepCarto_logo.png" width="200">
 
+Deep cartograph is a package to analyze and enhance MD simulations.
+
 ---
 
-This package can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages a custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar) to compute or train the different collective variables. See the original publication of the mlcolvar library [here](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
+Deep cartograph can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages a custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar) to compute or train the different collective variables [1](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
 
-Starting from a trajectory and topology files, deep cartograph can be used to:
+Starting from a trajectory and topology files, Deep cartograph can be used to:
 
-1. Compute a set of features to encode the trajectory in a lower dimensional space invariant to rotations and translations.
-2. Filter and cluster the features to keep only the most relevant ones. Based on the standard deviation, the entropy, the Hartigan's dip test for unimodality and the mutual information between features.
-3. Compute and train different collective variables (CVs) using the filtered features.
-4. Project the trajectory onto the CV and cluster it using hierarchical, kmeans or hdbscan algorithms.
+  1. Featurize the trajectory into a lower dimensional space invariant to rotations and translations.
+  2. Filter the features.
+  3. Compute and train different collective variables (CVs) using the filtered features.
+  4. Project and cluster the trajectory in the CV space.
+  5. (On-going) Produce a PLUMED input file to enhance the sampling.
+
+<img src="deep_cartograph/data/images/DeepCarto_summary.png" width="800">
+
+---
+
 
 ### Project structure
 
-- **data**: contains the data used for the tests and the examples.
 - **deep_cartograph**: contains all the tools and modules that form part of the deep_cartograph package.
-- **examples**: contains examples of how to use the package (work in progress).
-- **tests**: contains the tests of the package (to do).
+- **examples**: contains examples of how to use the package.
 
 ## Installation
 
@@ -50,10 +56,11 @@ pip install .
 
 ## Usage
 
-The main workflow can be used with `deep_cartograph/run.py`, see available options:
+The main workflow can be used calling `deep_carto` within the environment:
 
 ```
-usage: Deep Cartograph [-h] -conf CONFIGURATION_PATH -traj TRAJECTORY -top TOPOLOGY [-ref REFERENCE_FOLDER] [-use_rl] [-dim DIMENSION] [-cvs CVS [CVS ...]] -out OUTPUT_FOLDER [-v]
+usage: Deep Cartograph [-h] -conf CONFIGURATION_PATH -traj_data TRAJECTORY_DATA -top_data TOPOLOGY_DATA [-ref_traj_data REF_TRAJECTORY_DATA] [-ref_topology_data REF_TOPOLOGY_DATA] [-label_reference]
+                       [-restart] [-dim DIMENSION] [-cvs CVS [CVS ...]] [-out OUTPUT_FOLDER] [-v]
 
 Map trajectories onto Collective Variables.
 
@@ -61,17 +68,21 @@ options:
   -h, --help            show this help message and exit
   -conf CONFIGURATION_PATH, -configuration CONFIGURATION_PATH
                         Path to configuration file (.yml)
-  -traj TRAJECTORY, -trajectory TRAJECTORY
-                        Path to trajectory file, for which the features are computed.
-  -top TOPOLOGY, -topology TOPOLOGY
-                        Path to topology file.
-  -ref REFERENCE_FOLDER, -reference REFERENCE_FOLDER
-                        Path to folder with reference data. It should contain structures or trajectories.
-  -use_rl, -use_reference_lab
-                        Use labels for reference data (names of the files in the reference folder)
+  -traj_data TRAJECTORY_DATA
+                        Path to trajectory or folder with trajectories to compute the CVs.
+  -top_data TOPOLOGY_DATA
+                        Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in
+                        -traj_data.
+  -ref_traj_data REF_TRAJECTORY_DATA
+                        Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
+  -ref_topology_data REF_TOPOLOGY_DATA
+                        Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in
+                        -ref_traj_data.
+  -label_reference      Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
+  -restart              Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat.
   -dim DIMENSION, -dimension DIMENSION
-                        Dimension of the CV to train or compute
-  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, deep_tica)
+                        Dimension of the CV to train or compute, overwrites the configuration input YML.
+  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, htica, deep_tica), overwrites the configuration input YML.
   -out OUTPUT_FOLDER, -output OUTPUT_FOLDER
                         Path to the output folder
   -v, -verbose          Set the logging level to DEBUG
