@@ -357,7 +357,7 @@ class LinearCVCalculator(CVCalculator):
         super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
                 
         # Main attributes
-        self.cv: Union[np.array, None] = None
+        self.cv: Union[torch.tensor, None] = None
         
         # Compute normalization layer using training data statistics
         training_data_stats = Statistics(self.training_input_dtset[:]['data']).to_dict()
@@ -383,7 +383,7 @@ class LinearCVCalculator(CVCalculator):
         """
         
         weights_path = os.path.join(self.output_path, f'weights.txt')
-        np.savetxt(weights_path, self.cv)
+        np.savetxt(weights_path, self.cv.numpy())
         
         mean_path = os.path.join(self.output_path, f'features_mean.txt')
         np.savetxt(mean_path, self.features_mean)
@@ -412,9 +412,9 @@ class LinearCVCalculator(CVCalculator):
                 ref_tensor = self.features_normalization(ref_tensor)
                 
                 # Project the reference data onto the CV space
-                projected_ref = np.matmul(ref_tensor.numpy(), self.cv)
+                projected_ref = ref_tensor @ self.cv
                 
-                self.projected_ref.append(self.cv_normalization(torch.tensor(projected_ref)).numpy())  
+                self.projected_ref.append(self.cv_normalization(projected_ref).numpy())  
   
     def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
         """
@@ -448,17 +448,17 @@ class LinearCVCalculator(CVCalculator):
         colvars_tensor = self.features_normalization(colvars_tensor)
         
         # Project the features onto the CV space and return the resulting array
-        projected_colvars = np.matmul(colvars_tensor.numpy(), self.cv)
+        projected_colvars = colvars_tensor @ self.cv
         
-        return self.cv_normalization(torch.tensor(projected_colvars)).numpy()
+        return self.cv_normalization(projected_colvars).numpy()
             
     def normalize_cv(self):
         
         # Project the normalized training data onto the CV space
-        projected_training_data = np.matmul(self.normalized_training_data.numpy(), self.cv)
+        projected_training_data = self.normalized_training_data @ self.cv
         
         # Compute statistics of the projected training data
-        stats = Statistics(torch.tensor(projected_training_data))
+        stats = Statistics(projected_training_data)
         
         # Find the normalization for the CV
         self.cv_normalization =  Normalization(self.cv_dimension, mode='min_max', stats = stats )
@@ -848,7 +848,7 @@ class PCACalculator(LinearCVCalculator):
         pca.fit(self.normalized_training_data.numpy())
         
         # Save the eigenvectors as CVs
-        self.cv = pca.components_.T
+        self.cv = torch.tensor(pca.components_.T)
         
         # Follow a criteria for the sign of the eigenvectors - first weight of each eigenvector should be positive
         for i in range(self.cv_dimension):
@@ -886,13 +886,13 @@ class TICACalculator(LinearCVCalculator):
 
         try:
             # Compute TICA
-            tica_eigvals, tica_eigvecs = tica_algorithm.compute(data=[self.training_input_dtset['data'], self.training_input_dtset['data_lag']], save_params = True, remove_average = True)
+            _, tica_eigvecs = tica_algorithm.compute(data=[self.training_input_dtset['data'], self.training_input_dtset['data_lag']], save_params = True, remove_average = True)
         except Exception as e:
             logger.error(f'TICA could not be computed. Error message: {e}')
             return
 
         # Save the first cv_dimension eigenvectors as CVs
-        self.cv = tica_eigvecs.numpy()
+        self.cv = tica_eigvecs
   
 class HTICACalculator(LinearCVCalculator):
     """ 
@@ -990,7 +990,7 @@ class HTICACalculator(LinearCVCalculator):
             return
         
         # Obtain the transformation matrix from features to TICA LEVEL 2
-        self.cv = Transform_level_1_TICA @ level_2_eigvecs
+        self.cv = torch.tensor(Transform_level_1_TICA @ level_2_eigvecs)
            
 class AECalculator(NonLinearCVCalculator):
     """
