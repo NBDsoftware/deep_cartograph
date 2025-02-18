@@ -233,6 +233,8 @@ class CVCalculator:
         
         # If the CV was computed successfully
         if self.cv is not None:
+            
+            self.set_labels()
 
             self.normalize_cv()
             
@@ -243,8 +245,6 @@ class CVCalculator:
             self.cv_specific_tasks()
             
             self.save_cv()
-            
-            self.set_labels()
         
     def compute_cv(self):
         """
@@ -294,7 +294,8 @@ class CVCalculator:
                 os.makedirs(projected_ref_folder)
         
             for i, ref in enumerate(self.projected_ref):
-                np.savetxt(os.path.join(projected_ref_folder ,f'{self.ref_names[i]}.txt'), ref)
+                ref = pd.DataFrame(ref, columns=self.get_labels())
+                ref.to_csv(os.path.join(projected_ref_folder,f'{self.ref_names[i]}.csv'), index=False, float_format='%.4f')
     
     def set_labels(self):
         """
@@ -322,7 +323,7 @@ class CVCalculator:
     
     def get_labels(self) -> List[str]:
         """
-        Returns the labels of the features.
+        Returns the labels of the collective variable.
         """
         
         return self.cv_labels
