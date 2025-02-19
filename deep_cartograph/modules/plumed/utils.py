@@ -267,7 +267,7 @@ def run_driver_command(driver_command: str, plumed_settings: dict, plumed_timeou
 # ---------------------------
 #
 # Return lists with feature names and the atom-wise definition to be used in a PLUMED input file
-def get_dihedral_labels(topology_path: str, dihedrals_definition: dict, name: str):
+def get_dihedral_labels(topology_path: str, dihedrals_definition: dict):
     '''
     This function does the following:
     
@@ -279,7 +279,6 @@ def get_dihedral_labels(topology_path: str, dihedrals_definition: dict, name: st
 
         topology_path        : path to the topology file.
         dihedrals_definition : dictionary containing the definition of the group of dihedrals.
-        name                 : name of the dihedral group in the plumed file.
 
     Output
     ------
@@ -301,11 +300,11 @@ def get_dihedral_labels(topology_path: str, dihedrals_definition: dict, name: st
     for label in atomic_definitions:
         for key, value in replace_chars.items():
             label = label.replace(key, value)
-        dihedral_names.append(f"{name}_{label}")
+        dihedral_names.append(label)
 
     return dihedral_names, atomic_definitions
 
-def get_distance_labels(topology_path: str, distances_definition: dict, name: str):
+def get_distance_labels(topology_path: str, distances_definition: dict):
     '''
     This function does the following:
     
@@ -318,7 +317,6 @@ def get_distance_labels(topology_path: str, distances_definition: dict, name: st
 
         topology_path        : path to the topology file.
         distances_definition : dictionary containing the definition of the group of distances.
-        name                 : name of the distance group in the plumed file.
     
     Output
     ------
@@ -344,7 +342,7 @@ def get_distance_labels(topology_path: str, distances_definition: dict, name: st
     for label in atomic_definitions:
         for key, value in replace_chars.items():
             label = label.replace(key, value)
-        distance_names.append(f"{name}_{label}")
+        distance_names.append(f"dist_{label}")
 
     return distance_names, atomic_definitions
 

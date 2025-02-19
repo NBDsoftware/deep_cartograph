@@ -97,18 +97,18 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
         distance_group_names = configuration['features']['distance_groups'].keys()
 
         # Iterate over groups
-        for distance_group_name in distance_group_names:    
+        for group_name in distance_group_names:    
 
             # Comment name of group
-            plumed_file.write(f"# {distance_group_name} distances \n")
+            plumed_file.write(f"# {group_name} distances \n")
 
             # Find group definition
-            distance_group = configuration['features']['distance_groups'][distance_group_name]
+            distance_group = configuration['features']['distance_groups'][group_name]
 
             # Find atom and command labels for all pairs in this group
-            distance_names, atomic_definitions = plumed_utils.get_distance_labels(plumed_topology_path, distance_group, distance_group_name)
+            distance_names, atomic_definitions = plumed_utils.get_distance_labels(plumed_topology_path, distance_group)
 
-            logger.info(f"Found {len(atomic_definitions)} features for {distance_group_name}")
+            logger.info(f"Found {len(atomic_definitions)} features for {group_name}")
             
             # Iterate over labels
             for command_label, atom_label in zip(distance_names, atomic_definitions):
@@ -138,21 +138,21 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
         dihedral_group_names = configuration['features']['dihedral_groups'].keys()
 
         # Iterate over groups
-        for dihedral_group_name in dihedral_group_names:
+        for group_name in dihedral_group_names:
 
             # Comment name of group
-            plumed_file.write(f"# {dihedral_group_name} dihedrals \n")
+            plumed_file.write(f"# {group_name} dihedrals \n")
 
             # Find group definition
-            dihedral_group = configuration['features']['dihedral_groups'][dihedral_group_name]
+            dihedral_group = configuration['features']['dihedral_groups'][group_name]
 
             # Find atom and command labels for all dihedrals in this group
-            dihedral_names, atomic_definitions = plumed_utils.get_dihedral_labels(plumed_topology_path, dihedral_group, dihedral_group_name)
+            dihedral_names, atomic_definitions = plumed_utils.get_dihedral_labels(plumed_topology_path, dihedral_group)
             
             if dihedral_group.get('periodic_encoding', True):
-                logger.info(f"Found {2*len(atomic_definitions)} features for {dihedral_group_name}") # Each dihedral has 2 features (sin and cos)
+                logger.info(f"Found {2*len(atomic_definitions)} features for {group_name}") # Each dihedral has 2 features (sin and cos)
             else:
-                logger.info(f"Found {len(atomic_definitions)} features for {dihedral_group_name}")
+                logger.info(f"Found {len(atomic_definitions)} features for {group_name}")
 
             # Iterate over labels
             for command_label, atom_label in zip(dihedral_names, atomic_definitions):
@@ -197,16 +197,16 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
         distance_to_center_group_names = configuration['features']['distance_to_center_groups'].keys()
 
         # Iterate over groups
-        for distance_to_center_group_name in distance_to_center_group_names:
+        for group_name in distance_to_center_group_names:
 
             # Comment name of group
-            plumed_file.write(f"# {distance_to_center_group_name} distances to com \n")
+            plumed_file.write(f"# {group_name} distances to com \n")
 
             # Find group definition
-            distance_to_center_group = configuration['features']['distance_to_center_groups'][distance_to_center_group_name]
+            distance_to_center_group = configuration['features']['distance_to_center_groups'][group_name]
 
             # Get the CENTER command
-            center_command_label = f"{distance_to_center_group_name}_com"
+            center_command_label = f"{group_name}_com"
             center_command = plumed_command.center(center_command_label, md.get_indices(plumed_topology_path, distance_to_center_group['center_selection']))
 
             # Write CENTER command to PLUMED input file
@@ -215,7 +215,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
             # Find atoms in selection to compute the distance to the CENTER 
             atoms = md.get_indices(plumed_topology_path, distance_to_center_group['selection'])
 
-            logger.info(f"Found {len(atoms)} features for {distance_to_center_group_name}")
+            logger.info(f"Found {len(atoms)} features for {group_name}")
 
             # Iterate over atoms
             for atom in atoms:
