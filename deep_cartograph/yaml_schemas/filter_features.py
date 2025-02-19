@@ -27,7 +27,7 @@ class SamplingSettings(BaseModel):
 
 class FilterFeaturesSchema(BaseModel):
         
-        # Definition of filter settings
-        filter_settings: FilterSettings = FilterSettings()
-        # Definition of sampling settings
-        sampling_settings: SamplingSettings = SamplingSettings()
+    # Definition of filter settings
+    filter_settings: FilterSettings = FilterSettings()
+    # Definition of sampling settings
+    sampling_settings: SamplingSettings = SamplingSettings()

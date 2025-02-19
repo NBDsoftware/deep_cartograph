@@ -1,17 +1,16 @@
-# Input files
-input_paths:
-  features_to_exclude: null   # Path to file with list of order parameters names to exclude from the analysis (None by default)
-  features_to_include: null   # Path to file with list of order parameters names to include in the analysis (None by default)
+# filter_features:
+#   filter_settings: 
+#     compute_diptest:            Compute Hartigan's dip test
+#     compute_entropy:            Compute entropy of the features
+#     compute_std:                Compute standard deviation of the features
+#     diptest_significance_level: Significance level for the dip test (0 to skip filter, reduce to filter out more features)
+#     entropy_quantile:           Entropy quantile to use for filtering (0 to skip filter, reduce to filter out more features)
+#     std_quantile:               Standard deviation quantile to use for filtering (0 to skip filter, reduce to filter out more features)
 
 filter_settings:
-  compute_diptest: True              # Compute Hartigan's dip test (True by default)
-  compute_entropy: True              # Compute entropy of the order parameters (True by default)
-  compute_std: True                  # Compute standard deviation of the order parameters (True by default)
-  diptest_significance_level: 0.05   # Hartigan's dip test significance level (0.05 by default, 0 to skip filter)
-  entropy_quantile: 0                # Entropy quantile to use for filtering (0.1 by default, 0 to skip filter)
-  std_quantile: 0                    # Standard deviation quantile to use for filtering (0.1 by default, 0 to skip filter)
-  
-sampling_settings:
-  num_samples: null                # Number of samples to use for each order parameter (all by default)
-  total_num_samples: null          # Total number of samples per order parameter in the colvars file (Required if num_samples is used)
-  relaxation_time: 1               # Relaxation time of the system in number of samples (1 by default)
+  compute_diptest: True              
+  compute_entropy: True              
+  compute_std: True                  
+  diptest_significance_level: 0.05   
+  entropy_quantile: 0                
+  std_quantile: 0                   
