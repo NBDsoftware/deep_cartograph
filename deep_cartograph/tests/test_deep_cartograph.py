@@ -25,7 +25,6 @@ def get_config():
               selection: "all"
               periodic_encoding: True
               search_mode: virtual
-              atoms_format: name
 
     filter_features:
         filter_settings:

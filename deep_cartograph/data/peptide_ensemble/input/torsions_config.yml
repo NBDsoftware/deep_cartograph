@@ -10,7 +10,6 @@ compute_features:
           selection: "all"
           periodic_encoding: True
           search_mode: real
-          atoms_format: name
 
 filter_features:       
   filter_settings:

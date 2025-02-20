@@ -13,13 +13,11 @@ compute_features:
           second_stride: 10
           skip_neigh_residues: False
           skip_bonded_atoms: True
-          atoms_format: name
       dihedral_groups:
         tor:
           selection: "all"
           periodic_encoding: True
           search_mode: real
-          atoms_format: name
 
 filter_features:       
   filter_settings:

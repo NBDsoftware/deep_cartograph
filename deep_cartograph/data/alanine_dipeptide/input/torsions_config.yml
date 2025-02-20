@@ -10,7 +10,6 @@ compute_features:
           selection: "not name H*"
           periodic_encoding: True
           search_mode: real
-          atoms_format: name
 
 filter_features:       
   filter_settings:

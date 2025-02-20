@@ -23,7 +23,6 @@ def get_config_virtual_dihedrals():
             selection: "all"
             periodic_encoding: True
             search_mode: virtual
-            atoms_format: name
     """
     return yaml.safe_load(yaml_content)
   
@@ -44,7 +43,6 @@ def get_config_distances():
             second_stride: 10
             skip_neigh_residues: False
             skip_bonded_atoms: True
-            atoms_format: name
     """
     return yaml.safe_load(yaml_content)
 

@@ -15,7 +15,6 @@ compute_features:
           selection: "all"
           periodic_encoding: True
           search_mode: virtual
-          atoms_format: name
 
 # This section contains the settings for the filtering of the features
 # See deep_cartograph/deep_cartograph/tools/filter_features/default_config.yml for more details

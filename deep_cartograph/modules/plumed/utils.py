@@ -289,10 +289,9 @@ def get_dihedral_labels(topology_path: str, dihedrals_definition: dict):
 
     # Read dihedral group definition
     selection = dihedrals_definition.get('selection', 'all')
-    atoms_format = dihedrals_definition.get('atoms_format', 'index')
     search_mode = dihedrals_definition.get('search_mode', 'real')
 
-    atomic_definitions = md.find_dihedrals(topology_path, selection, search_mode, atoms_format)
+    atomic_definitions = md.find_dihedrals(topology_path, selection, search_mode)
     
     # Define command labels
     dihedral_names = []
@@ -332,9 +331,8 @@ def get_distance_labels(topology_path: str, distances_definition: dict):
     stride2 = distances_definition.get('second_stride', 1)
     skip_neighbors = distances_definition.get('skip_neigh_residues', False)
     skip_bonded_atoms = distances_definition.get('skip_bonded_atoms', False)
-    atoms_format = distances_definition.get('atoms_format', 'index')
 
-    atomic_definitions = md.find_distances(topology_path, selection1, selection2, stride1, stride2, skip_neighbors, skip_bonded_atoms, atoms_format)
+    atomic_definitions = md.find_distances(topology_path, selection1, selection2, stride1, stride2, skip_neighbors, skip_bonded_atoms)
     
     # Define command labels
     distance_names = []

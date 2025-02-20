@@ -15,8 +15,6 @@ class DistanceGroup(BaseModel):
     skip_neigh_residues: bool = False
     # If True, skip distances between atoms that are bonded
     skip_bonded_atoms: bool = True
-    # Format of the ATOMS field in the distance plumed command
-    atoms_format: Literal["name", "index"] = "name"
 
 class DihedralGroup(BaseModel):
     
@@ -26,8 +24,6 @@ class DihedralGroup(BaseModel):
     periodic_encoding: bool = True
     # Mode to search for the dihedrals.
     search_mode: Literal["virtual", "protein_backbone", "real"] = "real"
-    # Format of the ATOMS field in the torsions plumed command.
-    atoms_format: Literal["name", "index"] = "name"
 
 class DistanceToCenterGroup(BaseModel):
 

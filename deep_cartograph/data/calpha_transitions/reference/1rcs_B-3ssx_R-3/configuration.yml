@@ -9,7 +9,6 @@ compute_features:
     features:
       dihedral_groups:
         tor:
-          atoms_format: name
           periodic_encoding: true
           search_mode: virtual
           selection: all
