@@ -194,73 +194,63 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
 
     return driver_command 
 
-def run_driver_command(driver_command: str, plumed_settings: dict, plumed_timeout: int) -> None:
+def run_plumed(plumed_command: str, plumed_settings: dict, plumed_timeout: int) -> None:
     """
-    Function that runs a PLUMED DRIVER command. It adds the necessary environment variables and modules
-    before calling the plumed binary with the PLUMED DRIVER command.
+    Runs PLUMED through command line, setting up the necessary environment variables and modules.
 
     Inputs
     ------
 
-        driver_command  (str):               PLUMED DRIVER command
-        plumed_settings (dict):              settings for PLUMED (binaries, kernel, etc.)
-        plumed_timeout  (int):               timeout for PLUMED in seconds
+        plumed_command  (str):               PLUMED command to execute (See Command Line Tools in PLUMED manual)
+        plumed_settings (dict):              (Optional) Settings for PLUMED (binaries, kernel, etc.)
+        plumed_timeout  (int):               (Optional) timeout for PLUMED in seconds
+    
+    Returns
+    -------
+    
+        tuple: (stdout, stderr) from the PLUMED execution
     """
 
     all_commands = []
-
-    plumed_binary = "plumed"
-
-    # If settings are given
-    if plumed_settings is not None:
-
-        # Add environment commands
-        if plumed_settings.get('env_commands', []) != []:
-            
-            # Join environment commands with &&
-            env_commands = " && ".join(plumed_settings.get('env_commands'))
-
-            # Add environment commands to all commands
-            all_commands.append(env_commands)
-                
-        # Set environment variable PLUMED_KERNEL
-        if plumed_settings.get('kernel_path') is not None:
-            os.environ['PLUMED_KERNEL'] = plumed_settings.get('kernel_path')
-
-        # Add bin path
-        if plumed_settings.get('bin_path') is not None:
-            plumed_binary = plumed_settings.get('bin_path')
-
-    # Add binary to driver command
-    driver_command = plumed_binary + " " + driver_command
-
-    # Add driver command to all commands
-    all_commands.append(driver_command)
-
-    # Join all commands with &&
-    all_commands = " && ".join(all_commands)
-
-    # Log execution information
-    logger.info(f"Executing PLUMED driver command: {all_commands}")
-
-    # Find level of logging
-    if logger.isEnabledFor(logging.DEBUG):
-        # Execute PLUMED redirecting output to the log file
-        completed_process = subprocess.run(args=all_commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=plumed_timeout) # cwd=str(Path(input_path).parent),
+    plumed_binary = plumed_settings.get('bin_path', 'plumed') if plumed_settings else 'plumed'
+    
+    if plumed_settings:
+        if plumed_settings.get('env_commands'):
+            all_commands.append(" && ".join(plumed_settings.get('env_commands')))
         
-        # Send standard output to the log file
-        logger.info(completed_process.stdout.decode('utf-8'))
-    else:
-        # Execute PLUMED without redirecting output
-        completed_process = subprocess.run(args=all_commands, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=plumed_timeout) # cwd=str(Path(input_path).parent), 
+        if plumed_settings.get('kernel_path'):
+            os.environ['PLUMED_KERNEL'] = plumed_settings.get('kernel_path')
+    
+    all_commands.append(f"{plumed_binary} {plumed_command}")
+    command_str = " && ".join(all_commands)
+    
+    logger.info(f"Executing PLUMED command: {command_str}")
 
-    # Check if PLUMED failed
-    if completed_process.returncode != 0:
-        logger.error("PLUMED failed! :( \n")
-        logger.error(completed_process.stderr.decode('utf-8'))
-        sys.exit()
-
-    return
+    try:
+        # Execute PLUMED redirecting output to the log file
+        completed_process = subprocess.run(args=command_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=plumed_timeout, text=True) 
+        
+        stdout, stderr = completed_process.stdout, completed_process.stderr
+        
+        if logger.isEnabledFor(logging.DEBUG):
+            # Send standard output to the log file 
+            logger.info(stdout)
+            
+        # Check if PLUMED failed
+        if completed_process.returncode != 0:
+            logger.error("PLUMED execution failed! \n")
+            logger.error(stderr)
+            sys.exit(1)
+            
+        return stdout, stderr
+    
+    except subprocess.TimeoutExpired:
+        logger.error("PLUMED execution timed out!")
+        return None, "TimeoutExpired"
+    
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return None, str(e)
 
 
 # Get labels for features/cvs

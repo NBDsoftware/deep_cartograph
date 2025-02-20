@@ -84,7 +84,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     plumed_command = plumed_utils.get_driver_command(plumed_input_path, trajectory, plumed_topology)
 
     # Execute plumed command
-    plumed_utils.run_driver_command(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
+    plumed_utils.run_plumed(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
 
     # End timer
     elapsed_time = time.time() - start_time
