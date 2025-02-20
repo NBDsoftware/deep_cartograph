@@ -69,7 +69,8 @@ class CVCalculator:
         self.configuration: Dict = configuration
         self.architecture_config: Dict = configuration['architecture']
         self.training_reading_settings: Dict = configuration['input_colvars']
-        self.features_normalization: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
+        self.feats_norm_mode: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
+        self.feats_normalization: Union[Normalization, None] = None
         
         # Read the data
         self.read_training_data(colvars_paths)
@@ -359,22 +360,18 @@ class LinearCVCalculator(CVCalculator):
         # Main attributes
         self.cv: Union[torch.tensor, None] = None
         
-        # Compute normalization layer using training data statistics
-        training_data_stats = Statistics(self.training_input_dtset[:]['data']).to_dict()
-        stats_length = len(training_data_stats["mean"])
-        if self.features_normalization == 'min_max':
-            self.features_normalization = Normalization(self.num_features, mode='min_max', stats=training_data_stats)
-        elif self.features_normalization == 'mean_std':
-            self.features_normalization = Normalization(self.num_features, mean=training_data_stats["mean"], range=training_data_stats["std"])
-        elif self.features_normalization == 'none':
-            self.features_normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length)   )
+        # Compute training data statistics
+        self.feats_statistics: Dict = Statistics(self.training_input_dtset[:]['data']).to_dict()
+        
+        # Set the features normalization object
+        if self.feats_norm_mode == 'none':
+            stats_length = len(self.feats_statistics["mean"])
+            self.feats_normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length))
+        else:
+            self.feats_normalization = Normalization(self.num_features, mode=self.feats_norm_mode, stats=self.feats_statistics)
 
         # Normalize the training data
-        self.normalized_training_data: torch.Tensor = self.features_normalization(self.training_input_dtset[:]['data'])
-
-        # Save mean and std - these will be part of the final cv definition
-        self.features_mean: torch.Tensor = training_data_stats["mean"]
-        self.features_std: torch.Tensor = training_data_stats["std"]
+        self.normalized_training_data: torch.Tensor = self.feats_normalization(self.training_input_dtset[:]['data'])
     
     # Main methods
     def save_cv(self):
@@ -385,11 +382,12 @@ class LinearCVCalculator(CVCalculator):
         weights_path = os.path.join(self.output_path, f'weights.txt')
         np.savetxt(weights_path, self.cv.numpy())
         
-        mean_path = os.path.join(self.output_path, f'features_mean.txt')
-        np.savetxt(mean_path, self.features_mean)
-        
-        std_path = os.path.join(self.output_path, f'features_std.txt')
-        np.savetxt(std_path, self.features_std)
+        if self.feats_norm_mode == 'mean_std':
+            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.feats_statistics['mean'])
+            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.feats_statistics['std'])
+        elif self.feats_norm_mode == 'min_max':
+            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.feats_statistics['max'])
+            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.feats_statistics['min'])
         
         logger.info(f'Collective variable weights saved to {weights_path}')
 
@@ -409,7 +407,7 @@ class LinearCVCalculator(CVCalculator):
                 ref_tensor = ref_dtset[:]['data']
                 
                 # Normalize the reference data
-                ref_tensor = self.features_normalization(ref_tensor)
+                ref_tensor = self.feats_normalization(ref_tensor)
                 
                 # Project the reference data onto the CV space
                 projected_ref = ref_tensor @ self.cv
@@ -445,7 +443,7 @@ class LinearCVCalculator(CVCalculator):
         colvars_tensor = colvars_dataset[:]['data']
         
         # Normalize the features
-        colvars_tensor = self.features_normalization(colvars_tensor)
+        colvars_tensor = self.feats_normalization(colvars_tensor)
         
         # Project the features onto the CV space and return the resulting array
         projected_colvars = colvars_tensor @ self.cv
@@ -524,11 +522,11 @@ class NonLinearCVCalculator(CVCalculator):
         self.nn_options: Dict = {'activation': 'shifted_softplus', 'dropout': self.dropout} 
         
         # Normalization of features in the Non-linear models: min_max or mean_std
-        if self.features_normalization == 'min_max':
+        if self.feats_norm_mode == 'min_max':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
-        elif self.features_normalization == 'mean_std':
+        elif self.feats_norm_mode == 'mean_std':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std'}}
-        elif self.features_normalization == 'none':
+        elif self.feats_norm_mode == 'none':
             self.cv_options: Dict = {'norm_in' : None}
         
         # Optimizer
