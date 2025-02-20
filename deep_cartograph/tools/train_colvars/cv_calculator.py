@@ -34,16 +34,21 @@ class CVCalculator:
     """
     Base class for collective variables calculators.
     """
-    def __init__(self, colvars_paths: List[str], feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the base CV calculator.
+        
+        NOTE: for the comparison of different topologies, we will need the topologies to make sure that the features are 
+        equivalent and all the colvars files can be used together to learn a CV. 
         
         Parameters
         ----------
         
         colvars_paths : str
             List of paths to colvars files with the main data used for training
+        topology_paths : str
+            List of paths to topology files corresponding to the colvars files
         feature_constraints : Union[List[str], str]
             List with the features to use for the training or str with regex to filter feature names.
         ref_colvars_paths : Union[List[str], None]
@@ -56,7 +61,7 @@ class CVCalculator:
         
         # Training data
         self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in training_reading_settings
-
+        
         self.num_features: int = None
         self.num_samples: int = None
         
@@ -66,8 +71,8 @@ class CVCalculator:
         # Filter dictionary
         self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
         
-        # List of features used for training (features in the colvars file after filtering)
-        self.features: List[str] = self.read_features(colvars_paths[0])          
+        # List of features used for training (features in the colvars file after filtering) NOTE: this will be a list of lists when we consider different topologies
+        self.features: List[str] = self.read_features(colvars_paths[0])      
         
         # Configuration
         self.configuration: Dict = configuration
@@ -81,6 +86,9 @@ class CVCalculator:
         self.read_reference_data(ref_colvars_paths)
         
         self.ref_names: List[str] = [Path(path).stem for path in ref_colvars_paths] if ref_colvars_paths else []
+        
+        # Topologies
+        self.topologies: List[str] = topology_paths
         
         # General CV attributes
         self.cv_dimension: int = configuration['dimension']
