@@ -150,7 +150,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
             dihedral_names, atomic_definitions = plumed_utils.get_dihedral_labels(plumed_topology_path, dihedral_group, dihedral_group_name)
             
             if dihedral_group.get('periodic_encoding', True):
-                logger.info(f"Found {2*len(atomic_definitions)} features for {dihedral_group_name}") # Each dihedral has 2 features (sin and cos)
+                logger.info(f"Found {2*len(atomic_definitions)} features for {dihedral_group_name}, (sin and cos of each of the {len(atomic_definitions)} torsion angles)")
             else:
                 logger.info(f"Found {len(atomic_definitions)} features for {dihedral_group_name}")
 
