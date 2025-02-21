@@ -344,27 +344,44 @@ def get_traj_flag(traj_path):
     Get trajectory flag from trajectory path. Depending on the extension of the trajectory,
     the flag will be different.
     """ 
-
-    # Extensions and flags supported by PLUMED
-    supported_extensions = {
-        ".xyz" : "--ixyz",
-        ".gro" : "--igro",
-        ".dlp4": "--idlp4",
-        ".xtc" : "--ixtc",
-        ".trr" : "--itrr",
+    
+    # Extensions supported by the molfile plugin
+    molfile_extensions = {
         ".dcd" : "--mf_dcd",
         ".crd" : "--mf_crd",
         ".pdb" : "--mf_pdb",
+        ".crdbox" : "--mf_crdbox",
+        ".gro" : "--mf_gro",
+        ".g96" : "--mf_g96",
+        ".trr" : "--mf_trr",
+        ".trj" : "--mf_trj",
+        ".xtc" : "--mf_xtc"
+    }
+    
+    # Extensions supported by the xdrfile plugin
+    xdrfile_extensions = {
+        ".xtc" : "--ixtc",
+        ".trr" : "--itrr"
     }
 
+    # Extensions and flags supported by PLUMED
+    other_extensions = {
+        ".xyz" : "--ixyz",
+        ".gro" : "--igro",
+        ".dlp4": "--idlp4"
+    }
     # Get extension
     extension = Path(traj_path).suffix
-
-    # Check if extension is supported
-    if extension not in supported_extensions.keys():
+        
+    # Get flag
+    traj_flag = molfile_extensions.get(extension)
+    if traj_flag is None:
+        traj_flag = xdrfile_extensions.get(extension)
+        if traj_flag is None:
+            traj_flag = other_extensions.get(extension)
+    
+    if traj_flag is None:
         raise Exception("Extension of trajectory not supported by PLUMED.")
-    else:
-        traj_flag = supported_extensions[extension]
 
     return traj_flag
 
