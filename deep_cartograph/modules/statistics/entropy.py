@@ -58,7 +58,7 @@ def entropy_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd
         from scipy.stats import entropy
         import numpy as np
 
-        from deep_cartograph.modules.common import read_colvars
+        import deep_cartograph.modules.plumed as plumed
 
         # Iterate over the features
         feature_entropies = []
@@ -66,7 +66,7 @@ def entropy_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd
         for name in feature_names:
 
             # Read the feature time series
-            feature_df = read_colvars(colvars_paths, [name])
+            feature_df = plumed.colvars.read(colvars_paths, [name])
             
             # Compute the histogram of the feature
             hist, bin_edges = np.histogram(feature_df[name].to_numpy(), bins=100, density=True)
