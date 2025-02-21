@@ -84,6 +84,9 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
 
     # Execute plumed command
     plumed.cli.run_plumed(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
+    
+    # Check output file
+    plumed.colvars.check(colvars_path)
 
     # End timer
     elapsed_time = time.time() - start_time

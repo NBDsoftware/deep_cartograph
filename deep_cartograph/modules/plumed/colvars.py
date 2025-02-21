@@ -123,3 +123,33 @@ def read(colvars_paths: Union[List[str], str], feature_names: List[str], stratif
         merged_df = pd.concat([merged_df, colvars_df], ignore_index=True)
 
     return merged_df
+
+def check(colvars_path: str):
+    ''' 
+    Check colvars file content.
+
+        - Check the file is not empty
+        - Check the file doesn't contain NaN values
+    
+    Inputs
+    ------
+
+        colvars_path    (str):          COLVARS file path
+    '''
+    # Check that the file exists
+    if not os.path.exists(colvars_path):
+        logger.error(f"COLVARS file not found: {colvars_path}")
+        sys.exit(1)
+    
+    # Read file
+    colvars_df = pd.read_csv(colvars_path, sep='\s+', dtype=np.float32, comment='#', header=None)
+    
+    # Check if the file is empty
+    if colvars_df.empty:
+        logger.error(f"COLVARS file is empty: {colvars_path}")
+        sys.exit(1)
+
+    # Check if the file contains NaN values
+    if colvars_df.isnull().values.any():
+        logger.error(f"COLVARS file contains NaN values: {colvars_path}")
+        sys.exit(1)
