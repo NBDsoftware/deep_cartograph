@@ -15,7 +15,6 @@ def get_config_virtual_dihedrals():
     plumed_settings:
       traj_stride: 1
       moltype: protein
-      input_name: torsions
       whole_molecule_selection: all
       features:
         dihedral_groups:
@@ -33,7 +32,6 @@ def get_config_distances():
     plumed_settings:
       traj_stride: 1
       moltype: protein
-      input_name: distances
       whole_molecule_selection: all
       features:
         distance_groups:

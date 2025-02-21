@@ -47,7 +47,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     ###############
 
     # Define plumed input file name
-    plumed_file_path = os.path.join(output_folder, f"{configuration['input_name']}.dat") 
+    plumed_file_path = os.path.join(output_folder, f"plumed_input.dat") 
     plumed_file = open(plumed_file_path, "w")
 
     ###################
