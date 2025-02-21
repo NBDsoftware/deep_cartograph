@@ -3,7 +3,6 @@
 #   traj_stride:                Trajectory stride for the calculation of features
 #   moltype:                    Molecule type: protein, dna or rna
 #   whole_molecule_selection:   Selection of atoms that define the molecules that should be whole to compute the descriptors.
-#   input_name:                 Name of the input file to be used in the PLUMED input file (without the .dat extension)
 #   features:                   Definition of features to be included in the PLUMED input file
 #     distance_groups:          Groups of distance features.
 #       group_name:             Name of the group. All pairwise distances between atoms in the two selections are included
@@ -29,7 +28,6 @@ plumed_settings:
   timeout: 172800 
   traj_stride: 1
   moltype: protein
-  input_name: distances
   whole_molecule_selection: all
   features:
     distance_groups:

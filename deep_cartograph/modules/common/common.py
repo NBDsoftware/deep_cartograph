@@ -510,6 +510,52 @@ def save_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], y_label:
         # Save the data
         np.savetxt(file_path, np.column_stack((x_array, y_data[key])), delimiter=",", header=f"{x_label},{y_label}", comments="")
     
+def write_as_csv(dataframe, path):
+    """
+    Writes a pandas DataFrame to a CSV file keeping the same column names but in PLUMED format.
+    Note that the time column is assumed to be in ns and will be converted to ps!
+
+    If the file already exists, it will append the new data to the existing file.
+
+    Inputs
+    ------
+
+        dataframe   (pandas DataFrame):    DataFrame to be written
+        path                     (str):    path to the CSV file including the file name
+
+    """
+
+    # Convert time from ns to ps
+    dataframe["time"] = dataframe["time"] * 1000
+
+    # Check if file already exists
+    if not os.path.isfile(path):
+
+        # Create csv file with header line
+        header_line = "#! FIELDS " + " ".join(dataframe.columns)
+        with open(path, 'w') as csv_file:
+            csv_file.write(header_line + "\n")
+    
+    else:
+        # Erase first dataframe row and add time offset
+        # Find last time in csv file
+        with open(path, 'r') as csv_file:
+            last_line = csv_file.readlines()[-1]
+        last_time = float(last_line.split()[0])
+
+        # Erase first row - repeated sample for same initial conditions 
+        dataframe = dataframe.drop(dataframe.index[0])
+
+        # Add time offset to dataframe
+        dataframe["time"] = dataframe["time"] + last_time
+
+    # Close csv file
+    csv_file.close()
+
+    # Append data to csv file
+    dataframe.to_csv(path, mode='a', header=False, index=False, sep=' ', float_format='%.6f')
+
+    return
 
 def read_list(path_to_read: str) -> list:
     """
@@ -601,56 +647,6 @@ def get_unique_path(path: str):
 
         # Return original path
         return path
-    
-def read_colvars(colvars_paths: Union[List[str], str], feature_names: List[str], stratified_samples: Union[List[int], None] = None ) -> pd.DataFrame:
-    """ 
-    Read the data of the features in the feature_names list from the colvars file.
-    If stratified_samples is not None, only read the samples corresponding to the indices in stratified_samples list.
-    
-    Inputs
-    ------
-
-        colvars_paths:           List of paths to the colvar files with the time series data of the features
-        feature_names:          List of names feature names to read, should be present in all the colvars files
-        stratified_samples:     List of indices of the samples to use starting at 1
-    
-    Outputs
-    -------
-
-        features_df:            Dataframe with the time series data of the features
-    """
-    
-    if isinstance(colvars_paths, str):
-        colvars_paths = [colvars_paths]
-    
-    merged_df = pd.DataFrame()
-    for path in colvars_paths:
-        
-        # Check if the file exists
-        if not os.path.exists(path):
-            logger.error(f"Colvars file not found: {path}")
-            sys.exit(1)
-
-        # Read first line of colvars file excluding "#! FIELDS"
-        with open(path, 'r') as file:
-            column_names = file.readline().split()[2:]
-            
-        # Check if there are any features
-        if len(column_names) == 0:
-            logger.error(f'No features found in the colvars file: {path}')
-            sys.exit(1)
-
-        if stratified_samples is None:
-            # Read colvar file using pandas, read only the columns of the features to analyze
-            colvars_df = pd.read_csv(path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, names=column_names)
-        else:
-            # Read colvar file using pandas, read only the columns of the features to analyze and only the rows in stratified_samples
-            colvars_df = pd.read_csv(path, sep='\s+', dtype=np.float32, comment='#', header=0, usecols=feature_names, skiprows= lambda x: x not in stratified_samples, names=column_names)
-
-        # Concatenate this dataframe to the merged dataframe
-        merged_df = pd.concat([merged_df, colvars_df], ignore_index=True)
-
-    return merged_df
 
 # Related to training
 def closest_power_of_two(n: int) -> int:

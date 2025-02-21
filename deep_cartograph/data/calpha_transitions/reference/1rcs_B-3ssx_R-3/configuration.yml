@@ -14,7 +14,6 @@ compute_features:
           selection: all
       distance_groups: {}
       distance_to_center_groups: {}
-    input_name: torsions
     moltype: protein
     traj_stride: 1
     whole_molecule_selection: all

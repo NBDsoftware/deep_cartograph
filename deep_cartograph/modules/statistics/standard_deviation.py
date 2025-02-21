@@ -36,7 +36,8 @@ def std_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd.Dat
         """
 
         import numpy as np
-        from deep_cartograph.modules.common import read_colvars
+        
+        import deep_cartograph.modules.plumed as plumed
 
         # Iterate over the features
         feature_stds = []
@@ -44,7 +45,7 @@ def std_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd.Dat
         for name in feature_names:
 
            # Read the feature time series
-            feature_df = read_colvars(colvars_paths, [name])
+            feature_df = plumed.colvars.read(colvars_paths, [name])
 
             # Compute and append the std to the list
             feature_stds.append(round(np.std(feature_df[name].to_numpy()), 3))

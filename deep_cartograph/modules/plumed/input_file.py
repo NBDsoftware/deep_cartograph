@@ -4,9 +4,7 @@ import logging
 from typing import Dict, Tuple
 
 # Import local modules
-from deep_cartograph.modules.plumed.command import command as plumed_command
-from deep_cartograph.modules.plumed import utils as plumed_utils
-from deep_cartograph.modules.common import common
+import deep_cartograph.modules.plumed as plumed
 from deep_cartograph.modules.md import md
 
 # Set logger
@@ -47,7 +45,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     ###############
 
     # Define plumed input file name
-    plumed_file_path = os.path.join(output_folder, f"{configuration['input_name']}.dat") 
+    plumed_file_path = os.path.join(output_folder, f"plumed_input.dat") 
     plumed_file = open(plumed_file_path, "w")
 
     ###################
@@ -73,14 +71,14 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     ################
 
     # Write MOLINFO keyword - to use shortcuts for atoms
-    molinfo_command = plumed_command.molinfo(plumed_topology_path, configuration['moltype'])
+    molinfo_command = plumed.command.molinfo(plumed_topology_path, configuration['moltype'])
     plumed_file.write(molinfo_command)
 
     # Get the indices of the molecules that should be made whole
     whole_mol_indices = md.get_indices(plumed_topology_path, configuration['whole_molecule_selection'])
 
     # Write WHOLEMOLECULES keyword
-    wholemolecules_command = plumed_command.wholemolecules(whole_mol_indices)
+    wholemolecules_command = plumed.command.wholemolecules(whole_mol_indices)
     plumed_file.write(wholemolecules_command)
 
     #############
@@ -106,7 +104,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
             distance_group = configuration['features']['distance_groups'][group_name]
 
             # Find atom and command labels for all pairs in this group
-            distance_names, atomic_definitions = plumed_utils.get_distance_labels(plumed_topology_path, distance_group)
+            distance_names, atomic_definitions = plumed.utils.get_distance_labels(plumed_topology_path, distance_group)
 
             logger.info(f"Found {len(atomic_definitions)} features for {group_name}")
             
@@ -114,7 +112,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
             for command_label, atom_label in zip(distance_names, atomic_definitions):
 
                 # Get distance command
-                distance_command = plumed_command.distance(command_label, atom_label)
+                distance_command = plumed.command.distance(command_label, atom_label)
 
                 # Write distance command to PLUMED input file
                 plumed_file.write(distance_command)
@@ -145,12 +143,11 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
 
             # Find group definition
             dihedral_group = configuration['features']['dihedral_groups'][group_name]
-
-            # Find atom and command labels for all dihedrals in this group
-            dihedral_names, atomic_definitions = plumed_utils.get_dihedral_labels(plumed_topology_path, dihedral_group)
+                
+            dihedral_names, atomic_definitions = plumed.utils.get_dihedral_labels(plumed_topology_path, dihedral_group)
             
             if dihedral_group.get('periodic_encoding', True):
-                logger.info(f"Found {2*len(atomic_definitions)} features for {group_name}") # Each dihedral has 2 features (sin and cos)
+                logger.info(f"Found {2*len(atomic_definitions)} features for {group_name}, (sin and cos of each of the {len(atomic_definitions)} torsion angles)") # Each dihedral has 2 features (sin and cos)
             else:
                 logger.info(f"Found {len(atomic_definitions)} features for {group_name}")
 
@@ -160,8 +157,8 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
                 if dihedral_group.get('periodic_encoding', True):
 
                     # Get the commands for the sinus and cosinus of the torsion angle
-                    sin_command = plumed_command.sin(f"sin_{command_label}", atom_label)
-                    cos_command = plumed_command.cos(f"cos_{command_label}", atom_label)
+                    sin_command = plumed.command.sin(f"sin_{command_label}", atom_label)
+                    cos_command = plumed.command.cos(f"cos_{command_label}", atom_label)
 
                     # Write commands to PLUMED input file
                     plumed_file.write(sin_command)
@@ -173,7 +170,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
 
                 else:
                     # Get the command for the torsion angle
-                    dihedral_command = plumed_command.torsion(command_label, atom_label)
+                    dihedral_command = plumed.command.torsion(command_label, atom_label)
 
                     # Write torsion command to PLUMED input file
                     plumed_file.write(dihedral_command)
@@ -207,7 +204,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
 
             # Get the CENTER command
             center_command_label = f"{group_name}_com"
-            center_command = plumed_command.center(center_command_label, md.get_indices(plumed_topology_path, distance_to_center_group['center_selection']))
+            center_command = plumed.command.center(center_command_label, md.get_indices(plumed_topology_path, distance_to_center_group['center_selection']))
 
             # Write CENTER command to PLUMED input file
             plumed_file.write(center_command)
@@ -222,7 +219,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
                 
                 # Get distance command
                 distance_command_label = f"d_{atom}_{center_command_label}"
-                distance_command = plumed_command.distance(distance_command_label, [atom, center_command_label])
+                distance_command = plumed.command.distance(distance_command_label, [atom, center_command_label])
 
                 # Write distance command to PLUMED input file
                 plumed_file.write(distance_command)
@@ -234,7 +231,7 @@ def track_features(configuration: Dict, topology_path: str, colvars_path: str, o
     all_command_labels = distance_commands + dihedral_commands + distance_to_center_commands
 
     # Print command
-    print_command = plumed_command.print(all_command_labels, colvars_path, configuration.get('traj_stride', 1))
+    print_command = plumed.command.print(all_command_labels, colvars_path, configuration.get('traj_stride', 1))
 
     # Write print command to PLUMED input file
     plumed_file.write(print_command)

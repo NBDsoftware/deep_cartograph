@@ -1,5 +1,5 @@
 from deep_cartograph.tools.compute_features import compute_features
-from deep_cartograph.modules.plumed.utils import read_as_pandas
+from deep_cartograph.modules.plumed.colvars import read_as_pandas
 import importlib.resources as resources
 from deep_cartograph import tests
 import shutil
@@ -15,7 +15,6 @@ def get_config_virtual_dihedrals():
     plumed_settings:
       traj_stride: 1
       moltype: protein
-      input_name: torsions
       whole_molecule_selection: all
       features:
         dihedral_groups:
@@ -32,7 +31,6 @@ def get_config_distances():
     plumed_settings:
       traj_stride: 1
       moltype: protein
-      input_name: distances
       whole_molecule_selection: all
       features:
         distance_groups:

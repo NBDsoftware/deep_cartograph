@@ -39,7 +39,8 @@ def diptest_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd
         
         from diptest import diptest
         import numpy as np
-        from deep_cartograph.modules.common import read_colvars
+        
+        import deep_cartograph.modules.plumed as plumed
         
         # Iterate over the features
         hdt_pvalues = []
@@ -47,7 +48,7 @@ def diptest_calculator(colvars_paths: List[str], feature_names: List[str]) -> pd
         for name in feature_names:
 
            # Read the feature time series
-            feature_df = read_colvars(colvars_paths, [name])
+            feature_df = plumed.colvars.read(colvars_paths, [name])
             
             # Compute the p-value of the Hartigan Dip test
             hdt_pvalue = diptest(np.array(feature_df[name].to_numpy()))[1]

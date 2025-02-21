@@ -17,7 +17,6 @@ def get_config():
       plumed_settings:
         traj_stride: 1
         moltype: protein
-        input_name: torsions
         whole_molecule_selection: all
         features:
           dihedral_groups:
