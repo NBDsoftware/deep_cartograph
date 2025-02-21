@@ -40,10 +40,9 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
             Path to the output colvars file with the time series of the features.
     """
 
-    from deep_cartograph.modules.plumed import utils as plumed_utils
-    from deep_cartograph.modules.plumed.input_file import input_file as plumed_input
     from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist
     from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
+    import deep_cartograph.modules.plumed as plumed 
 
     # Set logger
     logger = logging.getLogger("deep_cartograph")
@@ -78,13 +77,13 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
         colvars_path = os.path.join(output_folder, 'colvars.dat')
 
     # Build PLUMED input
-    plumed_input_path, plumed_topology = plumed_input.track_features(configuration['plumed_settings'], topology, colvars_path, output_folder)
+    plumed_input_path, plumed_topology = plumed.input_file.track_features(configuration['plumed_settings'], topology, colvars_path, output_folder)
 
     # Construct plumed command
-    plumed_command = plumed_utils.get_driver_command(plumed_input_path, trajectory, plumed_topology)
+    plumed_command = plumed.cli.get_driver_command(plumed_input_path, trajectory, plumed_topology)
 
     # Execute plumed command
-    plumed_utils.run_plumed(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
+    plumed.cli.run_plumed(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
 
     # End timer
     elapsed_time = time.time() - start_time

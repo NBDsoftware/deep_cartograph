@@ -1,5 +1,5 @@
 from deep_cartograph.tools.compute_features import compute_features
-from deep_cartograph.modules.plumed.utils import read_as_pandas
+from deep_cartograph.modules.plumed.colvars import read_as_pandas
 import importlib.resources as resources
 from deep_cartograph import tests
 import shutil
