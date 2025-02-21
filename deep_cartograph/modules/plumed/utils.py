@@ -183,7 +183,7 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
         traj_path = os.path.abspath(traj_path)
         driver_command.append(traj_path)
 
-    # Find the number of atoms in the system if topology is given (some traj formats do not need this)
+    # Find the number of atoms if topology is given (some traj formats do not need this)
     if topology_path is not None:
         num_atoms = md.get_number_atoms(topology_path)
         driver_command.append("--natoms")
