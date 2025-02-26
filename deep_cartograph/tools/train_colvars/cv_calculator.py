@@ -119,72 +119,6 @@ class CVCalculator:
         create_output_folder(self.output_path)
         
         logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
-    
-    def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
-        """
-        Create the filter dictionary to select the features to use from the feature constraints.
-
-        Parameters
-        ----------
-
-        feature_constraints: Union[List[str], str]
-            List of features to use or regex to select the features
-        
-        Returns
-        -------
-        
-        feature_filter : dict
-            Dictionary with the filter to select the features
-        """
-
-        if isinstance(feature_constraints, list):
-            # List of features is given
-            feature_filter = dict(items=feature_constraints)
-
-        elif isinstance(feature_constraints, str):
-            # Regex is given
-            feature_filter = dict(regex=feature_constraints)
-            
-        else:
-            # No constraints are given
-            feature_filter = None
-        
-        return feature_filter
-    
-    def read_features(self, colvars_path: str) -> List[str]:
-        """ 
-        Read the list of feature names from the colvars file and filter the list based on the feature constraints.
-        
-        Parameters
-        ----------
-        
-        colvars_path : str
-            Path to the colvars file
-        
-        Returns
-        -------
-            features : List[str]
-                List of feature names after filtering
-        """
-        from deep_cartograph.modules.plumed.utils import read_column_names
-        
-        # Find all the features in the colvars file
-        features = read_column_names(colvars_path)
-        
-        # Filter the features based on the constraints, if any
-        if self.feature_filter:
-            if self.feature_filter.keys() == 'items':
-                features = [feat for feat in features if feat in self.feature_filter['items']]
-            elif self.feature_filter.keys() == 'regex':
-                features = [feat for feat in features if re.search(self.feature_filter['regex'], feat)]
-        
-        # Additional regex used by create_dataset_from_files()
-        default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
-        
-        # Filter the features based on the default regex
-        features = [feat for feat in features if re.search(default_regex, feat)]
-        
-        return features
         
     def cv_ready(self) -> bool:
         """
@@ -267,6 +201,72 @@ class CVCalculator:
             sys.exit(1)
             
         return colvars_dataset
+    
+    def read_features(self, colvars_path: str) -> List[str]:
+        """ 
+        Read the list of feature names from the colvars file and filter the list based on the feature constraints.
+        
+        Parameters
+        ----------
+        
+        colvars_path : str
+            Path to the colvars file
+        
+        Returns
+        -------
+            features : List[str]
+                List of feature names after filtering
+        """
+        from deep_cartograph.modules.plumed.colvars import read_column_names
+        
+        # Find all the features in the colvars file
+        features = read_column_names(colvars_path)
+        
+        # Filter the features based on the constraints, if any
+        if self.feature_filter:
+            if self.feature_filter.keys() == 'items':
+                features = [feat for feat in features if feat in self.feature_filter['items']]
+            elif self.feature_filter.keys() == 'regex':
+                features = [feat for feat in features if re.search(self.feature_filter['regex'], feat)]
+        
+        # Additional regex used by create_dataset_from_files()
+        default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
+        
+        # Filter the features based on the default regex
+        features = [feat for feat in features if re.search(default_regex, feat)]
+        
+        return features
+    
+    def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
+        """
+        Create the filter dictionary to select the features to use from the feature constraints.
+
+        Parameters
+        ----------
+
+        feature_constraints: Union[List[str], str]
+            List of features to use or regex to select the features
+        
+        Returns
+        -------
+        
+        feature_filter : dict
+            Dictionary with the filter to select the features
+        """
+
+        if isinstance(feature_constraints, list):
+            # List of features is given
+            feature_filter = dict(items=feature_constraints)
+
+        elif isinstance(feature_constraints, str):
+            # Regex is given
+            feature_filter = dict(regex=feature_constraints)
+            
+        else:
+            # No constraints are given
+            feature_filter = None
+        
+        return feature_filter
     
     # Main methods
     def run(self, cv_dimension: Union[int, None] = None):
