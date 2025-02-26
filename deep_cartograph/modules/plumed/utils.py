@@ -166,7 +166,7 @@ def check_CRYST1_record(pdb_path, output_folder) -> str:
         pdb_path    (str):  path to the PDB file with the CRYST1 record removed if needed
     """
     
-    dummy_cryst1 = "CRYST1    1.000    1.000    1.000  90.00  90.00  90.00"
+    dummy_cryst1 = "CRYST1    1.000    1.000    1.000  90.00  90.00  90.00" # NOTE: Maybe check for the values of the box dimensions and angles rather than the specific string
 
     # Read PDB file
     with open(pdb_path, 'r') as pdb_file:
