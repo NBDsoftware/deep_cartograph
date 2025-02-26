@@ -396,13 +396,13 @@ class LinearCVCalculator(CVCalculator):
     Linear collective variables calculator (e.g. PCA)
     """
     
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """ 
         Initializes a linear CV calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
                 
         # Main attributes
         self.cv: Union[torch.tensor, None] = None
@@ -515,20 +515,19 @@ class LinearCVCalculator(CVCalculator):
         np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), stats_dict['max'])
         np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), stats_dict['min'])
         
-        
 # Subclass for non-linear collective variables calculators
 class NonLinearCVCalculator(CVCalculator):
     """
     Non-linear collective variables calculator (e.g. Autoencoder)
     """
     
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """ 
         Initializes a non-linear CV calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         # Main attributes
         self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
@@ -855,13 +854,13 @@ class PCACalculator(LinearCVCalculator):
     Principal component analysis calculator.
     """
 
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the PCA calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'pca'
         
@@ -905,13 +904,13 @@ class TICACalculator(LinearCVCalculator):
     Time-lagged independent component analysis calculator.
     """
     
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the TICA calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'tica'
         
@@ -949,13 +948,13 @@ class HTICACalculator(LinearCVCalculator):
     Computing Slow Modes and Reaction Coordinates for Large Molecular Systems.” Journal of Chemical Theory 
     and Computation 12, no. 12 (December 13, 2016): 6118–29. https://doi.org/10.1021/acs.jctc.6b00738.
     """
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the HTICA calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'htica'
         
@@ -1041,13 +1040,13 @@ class AECalculator(NonLinearCVCalculator):
     """
     Autoencoder calculator.
     """
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the Autoencoder calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'ae'
         
@@ -1064,13 +1063,13 @@ class DeepTICACalculator(NonLinearCVCalculator):
     """
     DeepTICA calculator.
     """
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the DeepTICA calculator.
         """      
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'deep_tica'
         

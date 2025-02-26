@@ -137,6 +137,7 @@ class TrainColvarsWorkflow:
         
         # Construct the corresponding CV calculator
         calculator = cv_calculators_map[cv](self.colvars_paths, 
+                                    self.topology_paths,
                                     self.feature_constraints, 
                                     self.ref_colvars_paths, 
                                     cv_configuration,
