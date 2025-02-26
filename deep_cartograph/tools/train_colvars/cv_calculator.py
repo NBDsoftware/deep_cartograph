@@ -361,6 +361,13 @@ class CVCalculator:
         
         raise NotImplementedError
         
+    def write_plumed_input(self):
+        """ 
+        Create a plumed input file that computes the collective variable from the features. Implement in subclasses.
+        """
+        
+        raise NotImplementedError
+
     # Getters
     def get_projected_ref(self) -> List[np.ndarray]:
         """
