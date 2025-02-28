@@ -13,88 +13,16 @@ logger = logging.getLogger(__name__)
 # Set constants
 DEFAULT_FMT = '%14.10f'
 
-# Get labels for features/cvs
-# ---------------------------
-#
-# Return lists with feature names and the atom-wise definition to be used in a PLUMED input file
-def get_dihedral_labels(topology_path: str, dihedrals_definition: dict):
-    '''
-    This function does the following:
+        
+def to_atomgroup(entity_name: str) -> str:
+    """ 
+    Convert entity name to atom group: @CA_1 -> @CA-1
     
-        1. Finds rotatable dihedrals involving heavy atoms in a selection of a PDB structure.
-        2. Returns two lists with the names and atoms of each dihedral (dihedral_names and atomic_definitions respectively)
-
-    Inputs
-    ------
-
-        topology_path        : path to the topology file.
-        dihedrals_definition : dictionary containing the definition of the group of dihedrals.
-
-    Output
-    ------
-
-        dihedral_names        (list): list of command labels for each dihedral.
-        atomic_definitions    (list): list of atom labels for each dihedral.
-    '''
-
-    # Read dihedral group definition
-    selection = dihedrals_definition.get('selection', 'all')
-    search_mode = dihedrals_definition.get('search_mode', 'real')
-
-    atomic_definitions = md.find_dihedrals(topology_path, selection, search_mode)
+    Replaces "_" by "-".
+    """        
+    return entity_name.replace("_", "-")
     
-    # Define command labels
-    dihedral_names = []
-    replace_chars = {',': '-', ' ': '', "-": "_"}
-    for label in atomic_definitions:
-        for key, value in replace_chars.items():
-            label = label.replace(key, value)
-        dihedral_names.append(label)
 
-    return dihedral_names, atomic_definitions
-
-def get_distance_labels(topology_path: str, distances_definition: dict):
-    '''
-    This function does the following:
-    
-        1. Finds pairs of atoms in a selection of a PDB structure
-        2. Returns two lists with the names and atoms of each distance (distance_names and atomic_definitions respectively)
-
-
-    Input
-    -----
-
-        topology_path        : path to the topology file.
-        distances_definition : dictionary containing the definition of the group of distances.
-    
-    Output
-    ------
-
-        distance_names        (list): list of command labels for each distance.
-        atomic_definitions    (list): list of atom labels for each distance.
-    '''
-
-    # Read distance group definition
-    selection1 = distances_definition.get('first_selection', 'all')
-    selection2 = distances_definition.get('second_selection', 'all')
-    stride1 = distances_definition.get('first_stride', 1)
-    stride2 = distances_definition.get('second_stride', 1)
-    skip_neighbors = distances_definition.get('skip_neigh_residues', False)
-    skip_bonded_atoms = distances_definition.get('skip_bonded_atoms', False)
-
-    atomic_definitions = md.find_distances(topology_path, selection1, selection2, stride1, stride2, skip_neighbors, skip_bonded_atoms)
-    
-    # Define command labels
-    distance_names = []
-    replace_chars = {',': '-', ' ': '', "-": "_"}
-    for label in atomic_definitions:
-        for key, value in replace_chars.items():
-            label = label.replace(key, value)
-        distance_names.append(f"dist_{label}")
-
-    return distance_names, atomic_definitions
-
-# OTHER
 def get_traj_flag(traj_path):
     """
     Get trajectory flag from trajectory path. Depending on the extension of the trajectory,

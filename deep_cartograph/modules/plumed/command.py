@@ -302,7 +302,7 @@ def print(arguments, file_path, stride = 1, fmt = "%.4f"):
     ------
 
         arguments       (list of str):      arguments
-        file_path       (str):              file name
+        file_path       (str):              output colvars file path
         stride          (int):              stride
 
     Outputs

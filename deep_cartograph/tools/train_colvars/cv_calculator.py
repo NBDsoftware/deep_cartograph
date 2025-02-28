@@ -521,7 +521,14 @@ class LinearCVCalculator(CVCalculator):
         # Save the max/min values of each dimension - part of the final cv definition
         np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), stats_dict['max'])
         np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), stats_dict['min'])
+    
+    def write_plumed_input(self):
+        """
+        Creates a plumed input file that computes the collective variable from the features.
+        """
         
+        
+    
 # Subclass for non-linear collective variables calculators
 class NonLinearCVCalculator(CVCalculator):
     """

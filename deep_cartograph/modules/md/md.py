@@ -5,13 +5,15 @@ import glob
 import logging
 import numpy as np
 import pandas as pd
-from typing import List
+from typing import List, Dict
 from pathlib import Path
 
 import MDAnalysis as mda
 import MDAnalysis.analysis.rms
 import MDAnalysis.analysis.align
 from MDAnalysis.lib.distances import calc_bonds
+
+import deep_cartograph.modules.plumed as plumed
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -59,13 +61,11 @@ def get_indices(topology: str, selection: str = None) -> list:
 
 def find_distances(topology_path: str, selection1: str, selection2: str, stride1: int, stride2: int, skip_neighbors: bool, skip_bonded_atoms: bool) -> List[str]:
     '''
-    This function does the following:
-
-        1. Finds two selections of atoms in the topology.
-        2. Find all the pairwise distances between the atoms in the selections skipping bonded atoms or atoms pertaining to neighboring residues if requested.
-        3. Returns a list with the distance labels in the format specified by the user.
-
-    The format for the atomic_definitions will be: "@atom_name-atom_resid,@atom_name-atom_resid"
+    The function finds all the pairwise distances between two selections in the topology, skipping bonded atoms or atoms pertaining to neighboring residues if requested.
+    
+    It returns a list of strings defining those distances: 
+    
+    @atom1Name_atom1Resid-@atom2Name_atom2Resid
 
     Input
     -----
@@ -81,7 +81,7 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
     Output
     ------
 
-        atomic_definitions : list of distance labels.
+        all_labels : list of labels.
     '''
 
     # Load topology
@@ -122,7 +122,7 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
     if not skip_neighbors:
         logger.warning("Distances between atoms in the same residue or neighboring residues will be included. These are unlikely to contain relevant information. To exclude them use 'skip_neigh_residues: True'.")
 
-    atomic_definitions = []
+    all_labels = []
 
     # Create all possible pairs of atoms without repetition
     for first_atom in first_atoms:
@@ -131,13 +131,17 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
             
             # Check both atoms are different
             if first_atom.index != second_atom.index:
+                
+                # Create entities
+                entity1 = f"@{first_atom.name}_{first_atom.resid}"
+                entity2 = f"@{second_atom.name}_{second_atom.resid}"
 
                 # Create atomic label for this distance
-                atom_label = f"@{first_atom.name}-{first_atom.resid},@{second_atom.name}-{second_atom.resid}"
-                equivalent_atom_label = f"@{second_atom.name}-{second_atom.resid},@{first_atom.name}-{first_atom.resid}"
+                label = f"{entity1}-{entity2}"
+                equivalent_label = f"{entity2}-{entity1}"
 
                 # Check distance is not repeated
-                if atom_label not in atomic_definitions and equivalent_atom_label not in atomic_definitions:
+                if label not in all_labels and equivalent_label not in all_labels:
                     
                     # Check atoms are not bonded 
                     if skip_bonded_atoms:
@@ -156,26 +160,23 @@ def find_distances(topology_path: str, selection1: str, selection2: str, stride1
                             continue
 
                     # If previous checks are passed, add the distance to the list
-                    atomic_definitions.append(atom_label)
+                    all_labels.append(label)
                     
-    return atomic_definitions
+    return all_labels
 
 def find_dihedrals(topology_path: str, selection: str, search_mode: str) -> List[str]:
     '''
-    This function does the following:
-
-        1. Finds a selection of atoms in the topology.
-        2. Keeps just the heavy atoms in the selection.
-        4. Finds all real or virtual dihedrals in the selection. See search_mode.
-        5. Returns a list with the dihedral labels in the format specified by the user.
+    This function finds all real or virtual dihedrals in a selection of heavy atoms from a given topology.
     
-    The format for the atomic_definitions will be: "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
+    It returns a list of strings defining those dihedral angles:
+    
+    @atom1Name_atom1Resid-@atom2Name_atom2Resid-@atom3Name_atom3Resid-@atom4Name_atom4Resid
 
-    search_mode can be one of the following:
+    The 'search_mode' controls the type of dihedrals to search for:
 
-        virtual:          find all virtual dihedrals in the selection assuming the atoms in the topology are connected and in order. Intended for coarse-grained models (e.g. C-alpha atoms).
-        protein_backbone: find all backbone dihedrals in the selection assuming the system is a protein with standard residues. Intended for all-atom protein models.
-        real:             find all real dihedrals in the selection. Each dihedral will be defined by a set of 4 bonded atoms. Intended for all-atom models.
+        virtual:          find all virtual dihedrals in the selection assuming the atoms in the topology are connected in order. Intended for coarse-grained models (e.g. C-alpha atoms).
+        protein_backbone: find all backbone dihedrals (psi, phi) in the selection assuming the system is a protein with standard residues. Intended for all-atom protein models.
+        real:             find all real dihedrals between heavy atoms in the selection. Each dihedral will be defined by a set of 4 bonded atoms. Intended for all-atom models.
 
     Input
     -----
@@ -187,35 +188,40 @@ def find_dihedrals(topology_path: str, selection: str, search_mode: str) -> List
     Output
     ------
 
-        atomic_definitions (list): list of dihedral labels.
+        dihedral_labels (list): list of dihedral labels.
     '''
     
     if search_mode == "virtual":
     
         # Find virtual dihedrals
-        dihedrals = get_virtual_dihedral_labels(topology_path, selection)
+        dihedral_labels = get_virtual_dihedral(topology_path, selection)
 
     elif search_mode == "protein_backbone":
 
         # Find protein backbone dihedrals
-        dihedrals = get_protein_back_dihedrals(topology_path, selection)
+        dihedral_labels = get_protein_back_dihedrals(topology_path, selection)
     
     elif search_mode == "real":
 
         # Find real dihedrals
-        dihedrals = get_all_real_dihedrals(topology_path, selection)
+        dihedral_labels = get_all_real_dihedrals(topology_path, selection)
 
     else:
 
         raise ValueError(f"search_mode {search_mode} not supported. Options: (virtual, protein_backbone, real)")
 
-    return dihedrals
+    return dihedral_labels
 
-def get_virtual_dihedral_labels(topology_path: str, selection: str) -> List[str]:
+def get_virtual_dihedral(topology_path: str, selection: str) -> List[str]:
     '''
-    Takes as input a path to a topology file and a selection and returns the virtual backbone dihedral plumed labels for all the backbone dihedrals in the selection.
+    Takes as input a path to a topology file and a selection and returns all the virtual dihedrals 
+    between heavy atoms in that selection.
+    
+    The function assumes that the atoms in the topology are connected in order.
 
-    The format for the labels defining each dihedral will be: "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
+    It returns a list of strings defining those dihedral angles:
+    
+    @atom1Name_atom1Resid-@atom2Name_atom2Resid-@atom3Name_atom3Resid-@atom4Name_atom4Resid
 
     Input
     -----
@@ -226,7 +232,7 @@ def get_virtual_dihedral_labels(topology_path: str, selection: str) -> List[str]
     Output
     ------
 
-        atomic_definitions (list): list of dihedral labels.
+        dihedral_labels (list): list of dihedral labels.
     '''
 
     # Load topology
@@ -242,18 +248,18 @@ def get_virtual_dihedral_labels(topology_path: str, selection: str) -> List[str]
     if len(heavy_atoms) == 0:
         raise ValueError(f"Selection: '{selection}' is empty, please review the selection string.")
     
-    atomic_definitions = []
+    dihedral_labels = []
 
     # Iterate over all CA atoms skipping the first 3
     for i in range(3, len(heavy_atoms)):
 
         # Create atom label
-        dihedral_label = f"@{atoms[i-3].name}-{atoms[i-3].resid},@{atoms[i-2].name}-{atoms[i-2].resid},@{atoms[i-1].name}-{atoms[i-1].resid},@{atoms[i].name}-{atoms[i].resid}"
+        label = f"@{atoms[i-3].name}_{atoms[i-3].resid}-@{atoms[i-2].name}_{atoms[i-2].resid}-@{atoms[i-1].name}_{atoms[i-1].resid}-@{atoms[i].name}_{atoms[i].resid}"
 
         # Add atomic definition of the dihedral
-        atomic_definitions.append(dihedral_label)
+        dihedral_labels.append(label)
 
-    return atomic_definitions
+    return dihedral_labels
 
 def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     '''
@@ -261,9 +267,13 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
 
     This will only make sense if the selection is part of a protein.
 
-    The format for the backbone dihedral labels will be the following:
+    It returns a list of strings defining those dihedral angles:
 
-        "@phi-resid,@psi-resid,@omega-resid"
+    @phi_resid
+    
+    @psi_resid
+    
+    @omega_resid
 
     Input
     -----
@@ -274,7 +284,7 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     Output
     ------
 
-        atomic_definitions: list of dihedral labels.
+        dihedral_labels: list of dihedral labels.
     '''
 
     # Load topology
@@ -285,7 +295,7 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
 
     dihedrals = ['phi', 'psi', 'omega']
 
-    atomic_definitions = []
+    dihedral_labels = []
 
     # Find all residues in the list of atoms
     residues = np.unique([atom.resid for atom in atoms])
@@ -297,21 +307,26 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
         for dihedral in dihedrals:
 
             # Create dihedral label
-            dihedral_label = f"@{dihedral}-{residue}"
+            label = f"@{dihedral}_{residue}"
 
             # Add dihedral definition
-            atomic_definitions.append(dihedral_label)
+            dihedral_labels.append(label)
     
-    return atomic_definitions
+    return dihedral_labels
 
 def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
     '''
-    Takes as input a path to a topology and a selection and returns the real dihedral plumed labels for all the dihedrals in the selection.
+    Takes as input a topology path and a selection and returns all the real dihedral angles between heavy atoms in the selection.
 
-    The format for the labels defining each dihedral will be: "@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid,@atom_name-atom_resid"
+    It returns a list of strings defining those dihedral angles: 
+    
+    @atom1Name_atom1Resid-@atom2Name_atom2Resid-@atom3Name_atom3Resid-@atom4Name_atom4Resid
 
     To find the dihedrals, the function looks for all sets of 4 bonded atoms in the list of atoms.
-    If the topology contains bonds, it uses the bonds to find the dihedrals. If the topology does not contain bonds, it uses a distance criterion to guess the bonds.
+    
+    If the topology contains bonds, it uses the bonds to find the dihedrals. 
+    
+    If the topology does not contain bonds, it uses a distance criterion to guess the bonds.
 
     Input
     -----
@@ -322,7 +337,7 @@ def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
     Output
     ------
 
-        atomic_definitions (list): list of dihedral labels.
+        dihedral_labels (list): list of dihedral labels.
     '''
     # Load topology
     u = mda.Universe(topology_path)
@@ -401,7 +416,7 @@ def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
     # Extract bonds from the topology
     all_bonds = u.bonds
 
-    atomic_definitions = []
+    dihedral_labels = []
 
     # Iterate over all bonds 
     for bond in all_bonds:
@@ -434,10 +449,10 @@ def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
                             equivalent_dihedral_label = f"@{heavy_atom_dict[j_neighbor].name}-{heavy_atom_dict[j_neighbor].resid},@{heavy_atom_dict[j_index].name}-{heavy_atom_dict[j_index].resid},@{heavy_atom_dict[i_index].name}-{heavy_atom_dict[i_index].resid},@{heavy_atom_dict[i_neighbor].name}-{heavy_atom_dict[i_neighbor].resid}"
                             
                             # Check dihedral is not repeated
-                            if dihedral_label not in atomic_definitions and equivalent_dihedral_label not in atomic_definitions:
-                                atomic_definitions.append(dihedral_label)
+                            if dihedral_label not in dihedral_labels and equivalent_dihedral_label not in dihedral_labels:
+                                dihedral_labels.append(dihedral_label)
 
-    return atomic_definitions    
+    return dihedral_labels    
 
 def get_number_atoms(topology: str, selection: str = None) -> int:
     """
@@ -467,6 +482,178 @@ def get_number_atoms(topology: str, selection: str = None) -> int:
     num_atoms = len(atoms)
 
     return num_atoms
+
+def get_dihedral_labels(topology_path: str, dihedrals_definition: Dict) -> List[str]:
+    '''
+    This function finds the rotatable dihedrals involving heavy atoms in a selection of a PDB structure
+    and returns a list with the labels.
+
+    Inputs
+    ------
+
+        topology_path        : path to the topology file.
+        dihedrals_definition : dictionary containing the definition of the group of dihedrals.
+
+    Output
+    ------
+
+        dihedral_labels (list): list of dihedral labels.
+    '''
+
+    # Read dihedral group definition
+    selection = dihedrals_definition.get('selection', 'all')
+    search_mode = dihedrals_definition.get('search_mode', 'real')
+
+    atom_labels = find_dihedrals(topology_path, selection, search_mode)
+    
+    # Define command labels
+    dihedral_names = []
+    for label in atom_labels:
+        
+        if dihedrals_definition.get('periodic_encoding', True):
+            dihedral_names.append(f"sin-{label}")
+            dihedral_names.append(f"cos-{label}")
+        else:
+            dihedral_names.append(f"tor-{label}")
+
+    return dihedral_names
+
+def get_distance_labels(topology_path: str, distances_definition: Dict) -> List[str]:
+    '''
+    This function returns the list of distance labels for a group of distances defined in a dictionary.
+
+    Input
+    -----
+
+        topology_path        : path to the topology file.
+        distances_definition : dictionary containing the definition of the group of distances.
+    
+    Output
+    ------
+
+        distance_labels (list): list of distance labels.
+    '''
+
+    # Read distance group definition
+    selection1 = distances_definition.get('first_selection', 'all')
+    selection2 = distances_definition.get('second_selection', 'all')
+    stride1 = distances_definition.get('first_stride', 1)
+    stride2 = distances_definition.get('second_stride', 1)
+    skip_neighbors = distances_definition.get('skip_neigh_residues', False)
+    skip_bonded_atoms = distances_definition.get('skip_bonded_atoms', False)
+
+    atom_labels = find_distances(topology_path, selection1, selection2, stride1, stride2, skip_neighbors, skip_bonded_atoms)
+    
+    # Define command labels
+    distance_labels = []
+    for label in atom_labels:
+        distance_labels.append(f"dist-{label}")
+
+    return distance_labels
+
+def get_features_list(features_configuration: Dict, topology_path: str) -> List:
+    """
+    Get a list of feature labels from a features_configuration dictionary and a topology file.
+    
+    The labels can be used both as a name for the feature and as a definition of the feature. I.e. there is a 
+    unique label for each feature.
+    
+    Each PLUMED feature should have a unique label, such that there is a bijective mapping between the
+    PLUMED command computing the feature and the label of the feature.
+    
+    Input
+    -----
+        features_configuration (dict): dictionary containing the features to extract organized by groups.
+        topology_path          (str): path to the topology file.
+    
+    Output
+    ------
+        features_labels (list): list containing the feature labels.
+    """
+
+    features_labels = []
+    
+    #############
+    # DISTANCES #
+    #############
+    
+    # Check for distance groups
+    if features_configuration.get('distance_groups'):
+
+        # Find list of groups
+        distance_group_names = features_configuration['distance_groups'].keys()
+
+        # Iterate over groups
+        for group_name in distance_group_names:    
+
+            # Find group definition
+            group_definition = features_configuration['distance_groups'][group_name]
+
+            # Find labels for all distances in the group
+            distance_labels = get_distance_labels(topology_path, group_definition)
+
+            # Log number of distances found
+            logger.info(f"Found {len(distance_labels)} features for {group_name}")
+            
+            # Add labels to the list
+            features_labels.extend(distance_labels)
+
+    #############
+    # DIHEDRALS #
+    #############
+
+    # Check for dihedral groups
+    if features_configuration.get('dihedral_groups'):
+
+        # Find list of groups
+        dihedral_group_names = features_configuration['dihedral_groups'].keys()
+
+        # Iterate over groups
+        for group_name in dihedral_group_names:
+
+            # Find group definition
+            group_definition = features_configuration['dihedral_groups'][group_name]
+                
+            dihedral_labels = get_dihedral_labels(topology_path, group_definition)
+            
+            # Log number of dihedrals found
+            logger.info(f"Found {len(dihedral_labels)} features for {group_name} (sin and cos of each dihedral for periodic encoding)")
+            
+            # Add labels to the list
+            features_labels.extend(dihedral_labels)
+
+    ######################
+    # DISTANCE TO CENTER #
+    ######################
+
+    # Check for distance to com groups
+    if features_configuration.get('distance_to_center_groups'):
+
+        # Find the list of groups
+        distance_to_center_group_names = features_configuration['distance_to_center_groups'].keys()
+
+        # Iterate over groups
+        for group_name in distance_to_center_group_names:
+
+            # Find group definition
+            group_definition = features_configuration['distance_to_center_groups'][group_name]
+
+            # Get the CENTER command
+            center_command_label = f"center_{to_entity_name(group_definition['center_selection'])}"
+
+            # Find atoms in selection to compute the distance to the CENTER 
+            atoms = get_indices(topology_path, group_definition['selection'])
+
+            # Create labels
+            center_labels = [f"dist-{atom}-{center_command_label}" for atom in atoms]
+
+            logger.info(f"Found {len(center_labels)} features for {group_name}")
+            
+            # Add labels to the list
+            features_labels.extend(center_labels)
+    
+    return features_labels
+    
 
 # Working with trajectories
 def extract_frames(trajectory_path: str, topology_path: str, traj_frames: list, 
@@ -828,3 +1015,60 @@ def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selec
         rmsf_per_residue.append(np.mean(rmsf_per_atom[rmsf_atoms.resnums == residue]))
     
     return rmsf_per_residue, residues
+
+# Other
+def to_entity_name(mda_selection: str) -> str:
+    """ 
+    Transform an MDanalysis selection string into an entity name string.
+    
+    Parameters
+    ----------
+    
+    mda_selection : str
+        MDAnalysis selection string.
+    
+    Returns
+    -------
+    
+    entity_name : str
+        Cleaned entity name.
+    """
+    
+    for key, value in mda_to_entity_map.items():
+        mda_selection = mda_selection.replace(key, value)
+        
+    return mda_selection
+    
+def to_mda_selection(entity_name: str) -> str:
+    """  
+    Transform an entity name string into an MDAnalysis selection string.
+    
+    Parameters
+    ----------
+    
+    entity_name : str
+        Entity name string.
+        
+    Returns
+    -------
+    
+    mda_selection : str
+        MDAnalysis selection string.
+    """
+    
+    for key, value in mda_to_entity_map.items():
+        entity_name = entity_name.replace(value, key)
+        
+    return entity_name
+    
+mda_to_entity_map = {
+    ' ': '_',
+    ':': 'to',
+    '-': 'minus',
+    '<': 'lt',
+    '>': 'gt',
+    '==': 'eq',
+    '<=': 'leq',
+    '>=': 'geq',
+    '!=': 'neq'
+}

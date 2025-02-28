@@ -43,6 +43,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist
     from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
     import deep_cartograph.modules.plumed as plumed 
+    import deep_cartograph.modules.md as md
 
     # Set logger
     logger = logging.getLogger("deep_cartograph")
@@ -75,12 +76,19 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     # Create colvars path if not provided
     if colvars_path is None:
         colvars_path = os.path.join(output_folder, 'colvars.dat')
+        
+    # Set plumed input path
+    plumed_input_path = os.path.join(output_folder, 'plumed_input.dat')
+    
+    # Find list of features to compute with PLUMED
+    features_list = md.get_features_list(configuration['plumed_settings']['features'], topology)
 
-    # Build PLUMED input
-    plumed_input_path, plumed_topology = plumed.input_file.track_features(configuration['plumed_settings'], topology, colvars_path, output_folder)
+    # Create the corresponding PLUMED Builder
+    plumed_builder = plumed.input.TrackFeaturesBuilder(plumed_input_path, topology, features_list, configuration['plumed_settings'])
+    plumed_builder.build(colvars_path)
 
-    # Construct plumed command
-    plumed_command = plumed.cli.get_driver_command(plumed_input_path, trajectory, plumed_topology)
+    # Construct plumed driver command
+    plumed_command = plumed.cli.get_driver_command(plumed_input_path, trajectory, topology)
 
     # Execute plumed command
     plumed.cli.run_plumed(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
