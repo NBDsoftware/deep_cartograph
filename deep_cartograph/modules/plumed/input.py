@@ -34,13 +34,23 @@ class Builder:
             feature_list (list):
                 List of features to be tracked.
         """
+        # Path to the contents of the input file
+        self.input_content: str = ""
+        
+        # Path to the input file
         self.input_path: str = input_path
+        
+        # Path to the topology file used by PLUMED (MOLINFO command)
         self.topology_path: str = topology_path
+        
+        # List of features to be tracked
         self.feature_list: List[str] = feature_list
         
-        self.configuration: Dict = configuration
+        # List of variables to be printed in a COLVAR file
+        self.print_args: List[str] = []
         
-        self.input_content: str = ""
+        # Configuration dictionary
+        self.configuration: Dict = configuration
     
     def write(self):
         """
@@ -51,7 +61,7 @@ class Builder:
             
     def build(self):
         """
-        Build the base content of the PLUMED input file.
+        Build the base content of the PLUMED input file. This method should be overridden by subclasses.
         """
         
         # Write Header title
@@ -73,7 +83,7 @@ class Builder:
         self.input_content += "# Features\n"
         
         # Write center commands first - Some features might need to use the geometric center of a group of atoms
-        self.write_center_commands()
+        self.add_center_commands()
         
         # Write feature commands
         for feature in self.feature_list:
@@ -161,7 +171,7 @@ class Builder:
             logger.error(f"Feature {feature} not recognized.")
             sys.exit(1)
 
-    def write_center_commands(self):
+    def add_center_commands(self):
         
         written_centers = []
         
@@ -187,6 +197,15 @@ class Builder:
                         # Save the center
                         written_centers.append(entity)
              
+    def add_print_command(self, colvars_path: str, stride: int):
+        """ 
+        Add the print command to the PLUMED input file.
+        """
+        # Leave a blank line
+        self.input_content += "\n"
+        
+        self.input_content += plumed.command.print(self.print_args, colvars_path, stride)
+        
 class TrackFeaturesBuilder(Builder):
     """
     Builder class to track a collection of features during an MD simulation or trajectory.
@@ -200,11 +219,11 @@ class TrackFeaturesBuilder(Builder):
         """
         super().build()
         
-        # Leave a blank line
-        self.input_content += "\n"
+        # Add features to print arguments
+        self.print_args = self.feature_list
         
-        # Write the print command
-        self.input_content += plumed.command.print(self.feature_list, colvars_path, self.configuration.get('traj_stride', 1))
+        # Add the print command
+        self.add_print_command(colvars_path, self.configuration.get('traj_stride', 1))
         
         # Write the file
         self.write()
