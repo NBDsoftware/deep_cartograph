@@ -81,7 +81,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     plumed_input_path = os.path.join(output_folder, 'plumed_input.dat')
     
     # Set plumed topology path
-    plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
+    plumed_topology_path = os.path.abspath(os.path.join(output_folder, 'plumed_topology.pdb'))
     
      # Create new topology file
     md.create_pdb(topology, plumed_topology_path)
