@@ -80,11 +80,17 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     # Set plumed input path
     plumed_input_path = os.path.join(output_folder, 'plumed_input.dat')
     
+    # Set plumed topology path
+    plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
+    
+     # Create new topology file
+    md.create_pdb(topology, plumed_topology_path)
+    
     # Find list of features to compute with PLUMED
-    features_list = md.get_features_list(configuration['plumed_settings']['features'], topology)
+    features_list = md.get_features_list(configuration['plumed_settings']['features'], plumed_topology_path)
 
     # Create the corresponding PLUMED Builder
-    plumed_builder = plumed.input.TrackFeaturesBuilder(plumed_input_path, topology, features_list, configuration['plumed_settings'])
+    plumed_builder = plumed.input.TrackFeaturesBuilder(plumed_input_path, plumed_topology_path, features_list, configuration['plumed_settings'])
     plumed_builder.build(colvars_path)
 
     # Construct plumed driver command
