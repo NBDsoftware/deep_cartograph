@@ -69,7 +69,7 @@ def get_traj_flag(traj_path):
 
     return traj_flag
 
-def check_CRYST1_record(pdb_path, output_folder) -> str:
+def sanitize_CRYST1_record(pdb_path, output_folder) -> str:
     """
     Check if a PDB file has a meaningless CRYST1 record and remove it if so.
     

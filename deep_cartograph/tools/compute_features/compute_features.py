@@ -94,7 +94,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     plumed_builder.build(colvars_path)
 
     # Construct plumed driver command
-    plumed_command = plumed.cli.get_driver_command(plumed_input_path, trajectory, topology)
+    plumed_command = plumed.cli.get_driver_command(plumed_input_path, trajectory, md.get_number_atoms(topology), output_folder)
 
     # Execute plumed command
     plumed.cli.run_plumed(plumed_command, configuration['plumed_environment'], configuration['plumed_settings']['timeout'])
