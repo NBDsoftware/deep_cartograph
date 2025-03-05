@@ -4,6 +4,8 @@ import math
 import logging
 import numpy as np
 
+from typing import List, Union
+
 # Set logger
 logger = logging.getLogger(__name__)
 
@@ -58,15 +60,15 @@ def wholemolecules(indices: List[int]) -> str:
 
     return command
 
-def distance(command_label, atoms) -> str:
+def distance(command_label: str, atoms: Union[List[str], str]) -> str:
     '''
     Function that creates a PLUMED DISTANCE command.
 
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms 
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms 
     
     Outputs
     -------
@@ -96,20 +98,20 @@ def distance(command_label, atoms) -> str:
 
     return distance_command
 
-def torsion(command_label, atoms):
+def torsion(command_label: str, atoms: Union[List[str], str]) -> str:
     '''
     Function that creates a PLUMED TORSION command.
 
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms
+        command_label   :                 command label
+        atoms           :  list of strings or string defining the atoms
 
     Outputs
     -------
 
-        torsion_command (str):                 PLUMED TORSION command
+        torsion_command :                 PLUMED TORSION command
     '''
     
     # Check if atoms is a list of strings or a string
@@ -134,7 +136,7 @@ def torsion(command_label, atoms):
 
     return torsion_command
 
-def sin(command_label, atoms):
+def sin(command_label: str, atoms: Union[List[str], str]) -> str:
     """
     Proxy for the PLUMED ALPHABETA command using a reference angle of -pi/2 radians to convert the cosinus to a sinus.
     
@@ -145,17 +147,17 @@ def sin(command_label, atoms):
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms that define the phi torsion angle
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
     
     Outputs
     -------
 
-        sin_command     (str):                 PLUMED ALPHABETA command for the sinus
+        sin_command     :                 PLUMED ALPHABETA command for the sinus
     """
     return alphabeta(command_label, atoms, reference = -round(math.pi/2,4))
 
-def cos(command_label, atoms):
+def cos(command_label: str, atoms: Union[List[str], str]) -> str:
     """
     Proxy for the PLUMED ALPHABETA command using a reference angle of 0 radians.
     
@@ -166,17 +168,17 @@ def cos(command_label, atoms):
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms that define the phi torsion angle
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
     
     Outputs
     -------
 
-        cos_command     (str):                 PLUMED ALPHABETA command for the cosinus
+        cos_command     :                 PLUMED ALPHABETA command for the cosinus
     """
     return alphabeta(command_label, atoms, reference = 0)
 
-def alphabeta(command_label, atoms, reference):
+def alphabeta(command_label: str, atoms: Union[List[str], str], reference: float) -> str:
     """
     Function that creates an PLUMED ALPHABETA command. The command returns the cosinus moved up and squished between 0 and 1:
     
@@ -187,9 +189,9 @@ def alphabeta(command_label, atoms, reference):
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms that define the phi torsion angle
-        reference       (float):               list of floats defining the reference values
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
+        reference       :  list of floats defining the reference values
     """
 
     # Check if atoms is a list of strings or a string
@@ -247,17 +249,22 @@ def read(command_label, file_path, values, ignore_time):
 
     return read_command
 
-def combine(command_label: str, arguments: list, coefficients: np.array, periodic: bool =False):
+def combine(command_label: str, arguments: List[str], coefficients: Union[np.array, None] = None, parameters:  Union[np.array, None] = None, 
+            powers: Union[np.array, None] = None, periodic: bool = False):
     '''
-    Function that creates a PLUMED COMBINE command.
+    Function that creates a PLUMED COMBINE command. The output from this command is the linear combination of the input arguments:
+    
+        C = Sum_i [ c_i * (x_i - a_i)^p_i ] 
 
     Inputs
     ------
 
-        command_label   (str):              command label
-        arguments       (list of str):      arguments
-        coefficients    (numpy array):      coefficients
-        periodic        (bool):             True if the RC is periodic
+        command_label   :       command label
+        arguments       :       arguments -> x_i
+        coefficients    :       coefficients -> c_i
+        parameters      :       parameters -> a_i
+        powers          :       powers -> p_i
+        periodic        :       True if the RC is periodic
 
     Outputs
     -------

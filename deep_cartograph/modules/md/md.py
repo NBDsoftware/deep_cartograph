@@ -5,7 +5,7 @@ import glob
 import logging
 import numpy as np
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Union
 from pathlib import Path
 
 import MDAnalysis as mda
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 covalent_bond_threshold = 2.0
 
 # Working with structures
-def get_indices(topology: str, selection: str = None) -> list:
+def get_indices(topology: str, selection: Union[str, None] = None) -> list:
     '''
     Function that returns the indices of the atoms in the selection. The indices 
     returned are starting at 1 (as in plumed or in most MD engines) and are of type int.
