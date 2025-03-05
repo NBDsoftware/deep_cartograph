@@ -271,41 +271,30 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
 
         combine_command (str):              PLUMED COMBINE command
     '''
-
-    # Set default values
-    if coefficients is None:
-        coefficients = np.ones(len(arguments))
-    if parameters is None:
-        parameters = np.zeros(len(arguments))
-    if powers is None:
-        powers = np.ones(len(arguments))
     
     # Create COMBINE command
     combine_command = command_label + ": COMBINE ARG=" + ",".join(arguments)
 
-    # Add coefficients keyword
-    combine_command += " COEFFICIENTS="
-
-    # Add coefficients
-    for coefficient in coefficients:
-        combine_command += str(round(coefficient, 5)) + ","
-    combine_command = combine_command[:-1]
+    if coefficients is not None:
+        # Add coefficients
+        combine_command += " COEFFICIENTS="
+        for coefficient in coefficients:
+            combine_command += str(round(coefficient, 5)) + ","
+        combine_command = combine_command[:-1]
     
-    # Add parameters keyword
-    combine_command += " PARAMETERS="
+    if parameters is not None:
+        # Add parameters
+        combine_command += " PARAMETERS="
+        for parameter in parameters:
+            combine_command += str(round(parameter, 5)) + ","
+        combine_command = combine_command[:-1]
     
-    # Add parameters
-    for parameter in parameters:
-        combine_command += str(round(parameter, 5)) + ","
-    combine_command = combine_command[:-1]
-    
-    # Add powers keyword
-    combine_command += " POWERS="
-    
-    # Add powers
-    for power in powers:
-        combine_command += str(round(power, 5)) + ","
-    combine_command = combine_command[:-1]
+    if powers is not None:
+        # Add powers
+        combine_command += " POWERS="
+        for power in powers:
+            combine_command += str(round(power, 5)) + ","
+        combine_command = combine_command[:-1]
 
     # Add periodic keyword
     if periodic:
