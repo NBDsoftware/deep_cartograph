@@ -272,15 +272,16 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
         combine_command (str):              PLUMED COMBINE command
     '''
 
+    # Set default values
+    if coefficients is None:
+        coefficients = np.ones(len(arguments))
+    if parameters is None:
+        parameters = np.zeros(len(arguments))
+    if powers is None:
+        powers = np.ones(len(arguments))
+    
     # Create COMBINE command
-    combine_command = command_label + ": COMBINE ARG="
-
-    # Add arguments
-    for arg in arguments:
-        combine_command += arg + ","
-
-    # Remove last comma
-    combine_command = combine_command[:-1]
+    combine_command = command_label + ": COMBINE ARG=" + ",".join(arguments)
 
     # Add coefficients keyword
     combine_command += " COEFFICIENTS="
@@ -288,16 +289,30 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
     # Add coefficients
     for coefficient in coefficients:
         combine_command += str(round(coefficient, 5)) + ","
-
-    # Remove last comma
+    combine_command = combine_command[:-1]
+    
+    # Add parameters keyword
+    combine_command += " PARAMETERS="
+    
+    # Add parameters
+    for parameter in parameters:
+        combine_command += str(round(parameter, 5)) + ","
+    combine_command = combine_command[:-1]
+    
+    # Add powers keyword
+    combine_command += " POWERS="
+    
+    # Add powers
+    for power in powers:
+        combine_command += str(round(power, 5)) + ","
     combine_command = combine_command[:-1]
 
     # Add periodic keyword
-    if periodic is False:
-        combine_command += " PERIODIC=NO"
-    else:
+    if periodic:
         combine_command += " PERIODIC=YES"
-
+    else:
+        combine_command += " PERIODIC=NO"
+        
     # Add newline
     combine_command += "\n"
     
