@@ -25,6 +25,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
+import deep_cartograph.modules.plumed as plumed
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -299,6 +300,8 @@ class CVCalculator:
             self.cv_specific_tasks()
             
             self.save_cv()
+            
+            self.write_plumed_input()
         
     def compute_cv(self):
         """
@@ -529,7 +532,34 @@ class LinearCVCalculator(CVCalculator):
         """
         Creates a plumed input file that computes the collective variable from the features.
         """
+
+        # Print number of features and CV dimension
+        logger.info(f'Number of features: {self.num_features}')
+        logger.info(f'CV dimension: {self.cv_dimension}')
         
+        # Print shape of the CV
+        logger.info(f'CV shape: {self.cv.shape}')
+        
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_labels': self.cv_labels,
+            'features_norm_mode': self.feats_norm_mode,
+            'features_stats': self.features_stats,
+            'cv_stats': self.cv_stats,
+            'weights': self.cv.numpy()
+        }
+        
+        builder_args = {
+            'input_path': os.path.join(self.output_path, 'plumed_input.dat'),
+            'topology_path': self.topologies[0],
+            'feature_list': self.features,
+            'traj_stride': 1,
+            'cv_type': 'linear',
+            'cv_params': cv_parameters
+        }
+        
+        plumed_builder = plumed.input.CollectiveVariableBuilder(**builder_args)
+        plumed_builder.build()
         
     
 # Subclass for non-linear collective variables calculators
@@ -865,6 +895,30 @@ class NonLinearCVCalculator(CVCalculator):
    
         return projected_colvars
     
+    def write_plumed_input(self):
+        """
+        Creates a plumed input file that computes the collective variable from the features.
+        """
+        
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_labels': self.cv_labels,
+            'features_norm_mode': self.feats_norm_mode, # NOTE: needed?
+            'weights': self.cv
+        }
+        
+        builder_args = {
+            'input_path': os.path.join(self.output_path, 'plumed_input.dat'),
+            'topology_path': self.topologies[0],
+            'feature_list': self.features,
+            'traj_stride': 1,
+            'cv_type': 'nonlinear',
+            'cv_params': cv_parameters
+        }
+        
+        #plumed_builder = plumed.input.CollectiveVariableBuilder(**builder_args)
+        #plumed_builder.build()
+
 # Collective variables calculators
 class PCACalculator(LinearCVCalculator):
     """
