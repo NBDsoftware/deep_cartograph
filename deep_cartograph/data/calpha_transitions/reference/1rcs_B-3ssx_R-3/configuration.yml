@@ -14,9 +14,7 @@ compute_features:
           selection: all
       distance_groups: {}
       distance_to_center_groups: {}
-    moltype: protein
     traj_stride: 1
-    whole_molecule_selection: all
 filter_features:
   filter_settings:
     compute_diptest: true

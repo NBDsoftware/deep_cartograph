@@ -13,6 +13,4 @@ plumed_settings:
         selection: all
     distance_groups: {}
     distance_to_center_groups: {}
-  moltype: protein
   traj_stride: 1
-  whole_molecule_selection: all

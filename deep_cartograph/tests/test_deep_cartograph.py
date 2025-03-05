@@ -16,8 +16,6 @@ def get_config():
     compute_features:
       plumed_settings:
         traj_stride: 1
-        moltype: protein
-        whole_molecule_selection: all
         features:
           dihedral_groups:
             tor:

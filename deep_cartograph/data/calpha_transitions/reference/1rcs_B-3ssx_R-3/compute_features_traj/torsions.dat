@@ -1,4 +1,4 @@
-MOLINFO STRUCTURE=/shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/plumed_topology.pdb MOLTYPE=protein
+MOLINFO STRUCTURE=/shared/scratch/jobs/pnavarro/2023_MDDB/CV_learning/TransAtlasTests/long_trajectories/1rcs_B-3ssx_R-3/deep_cartograph_test/compute_features_traj/plumed_topology.pdb
 WHOLEMOLECULES ENTITY0=1-104 
 # tor dihedrals 
 sin_tor_@CA_504_@CA_505_@CA_506_@CA_507: ALPHABETA ATOMS1=@CA-504,@CA-505,@CA-506,@CA-507 REFERENCE=-1.5708

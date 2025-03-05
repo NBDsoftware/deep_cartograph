@@ -47,10 +47,6 @@ class PlumedSettings(BaseModel):
     timeout: int = 172800
     # Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
     traj_stride: int = 1
-    # Molecule type: protein, dna or rna
-    moltype: str = "protein"
-    # Selection of atoms that define the molecules that should be whole to compute the descriptors (MDAnalysis selection syntax)
-    whole_molecule_selection: str = "all"
     # Definition of features to be included in the PLUMED input file
     features: Features = Features()
 

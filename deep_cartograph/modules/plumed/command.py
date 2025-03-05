@@ -38,14 +38,16 @@ def molinfo(topology: str, moltype: str = None) -> str:
 
     return command
 
-def wholemolecules(indices: list) -> str:
+def wholemolecules(indices: List[int]) -> str:
     '''
     Function that creates a PLUMED WHOLEMOLECULES command.
 
+    NOTE: If needed, this could be extended to consider multiple entities. (e.g. WHOLEMOLECULES ENTITY0=1-10 ENTITY1=11-20)
+    
     Inputs
     ------
 
-        indices     (list of int):  list of molecule indices
+        indices     :  list of molecule indices
 
     Returns
     -------
