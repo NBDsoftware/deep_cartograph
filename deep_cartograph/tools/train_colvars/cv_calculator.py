@@ -532,13 +532,6 @@ class LinearCVCalculator(CVCalculator):
         """
         Creates a plumed input file that computes the collective variable from the features.
         """
-
-        # Print number of features and CV dimension
-        logger.info(f'Number of features: {self.num_features}')
-        logger.info(f'CV dimension: {self.cv_dimension}')
-        
-        # Print shape of the CV
-        logger.info(f'CV shape: {self.cv.shape}')
         
         cv_parameters = {
             'cv_name': self.cv_name,
@@ -558,8 +551,8 @@ class LinearCVCalculator(CVCalculator):
             'cv_params': cv_parameters
         }
         
-        plumed_builder = plumed.input.CollectiveVariableBuilder(**builder_args)
-        plumed_builder.build()
+        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder.build('colvars.dat')
         
     
 # Subclass for non-linear collective variables calculators

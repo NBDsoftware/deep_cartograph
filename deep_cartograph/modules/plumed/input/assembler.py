@@ -14,14 +14,16 @@ logger = logging.getLogger(__name__)
 # Set constants
 DEFAULT_FMT = '%14.10f'
 
-# Base Builders - they write the contents of the PLUMED input file
-class Builder:
+# Assemblers 
+# They assemble the contents of the PLUMED input file into a string
+# They inherit from each other to add more sections 
+class Assembler:
     """
-    Base class to build PLUMED input files.
+    Base class to assemble the contents of a PLUMED input file.
     """
     def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int):
         """ 
-        Minimal attributes to build a PLUMED input file.
+        Minimal attributes to construct a PLUMED input file.
         
         Parameters
         ----------
@@ -55,13 +57,6 @@ class Builder:
         
         # Trajectory stride
         self.traj_stride: int = traj_stride
-    
-    def write(self):
-        """
-        Write the PLUMED input file.
-        """
-        with open(self.input_path, "w") as f:
-            f.write(self.input_content)
             
     def build(self):
         """
@@ -212,10 +207,17 @@ class Builder:
         self.input_content += "\n"
         
         self.input_content += plumed.command.print(self.print_args, colvars_path, stride)
-  
-class CollectiveVariableBuilder(Builder):
+
+    def write(self):
+        """
+        Write the PLUMED input file. This method is not used by the Assembler classes but the Builder classes.
+        """
+        with open(self.input_path, "w") as f:
+            f.write(self.input_content)
+            
+class CollectiveVariableAssembler(Assembler):
     """
-    Builder class to add the calculation of a collective variable to a PLUMED input file.
+    Assembler class to add the calculation of a collective variable to a PLUMED input file.
     """
     def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, 
                  cv_type: str, cv_params: Dict):
@@ -235,9 +237,6 @@ class CollectiveVariableBuilder(Builder):
         Add the collective variable section to the PLUMED input file.
         """
         
-        # Add CV section title
-        self.input_content += "# Collective Variable\n"
-        
         # Add the corresponding CV commands
         if self.cv_type == "linear":
             self.add_linear_cv()
@@ -249,11 +248,7 @@ class CollectiveVariableBuilder(Builder):
     def add_linear_cv(self):
         """ 
         Add a linear collective variable to the PLUMED input file.
-        
-        NOTE: should we validate here the cv params before attempting to build the input file?
         """
-        print("Adding linear CV")  # Debugging
-        print(f"CV params: {self.cv_params}")  # Debugging
         
         # Validate cv params
         self.validate_linear_cv()
@@ -268,22 +263,26 @@ class CollectiveVariableBuilder(Builder):
             features_offset = features_stats['min'].numpy()
             features_scale = features_stats['max'].numpy() - features_stats['min'].numpy()
         elif features_norm_mode == 'none':
-            features_offset = np.array([0.0 for _ in self.feature_list])
-            features_scale = np.array([1.0 for _ in self.feature_list])
+            pass
         else:
             raise ValueError(f"Features normalization mode {features_norm_mode} not recognized.")
         
         # Normalize the input features
-        normalized_feature_list = []
-        for index, feature in enumerate(self.feature_list):
-            normalized_feature = f"norm_{feature}"
-            self.input_content += plumed.command.combine(normalized_feature, feature, [features_scale[index]], [features_offset[index]])
-            normalized_feature_list.append(normalized_feature)
+        if features_norm_mode != 'none': 
+            self.input_content += "\n# Normalized features\n"
+            normalized_feature_list = []
+            for index, feature in enumerate(self.feature_list):
+                normalized_feature = f"feat_{index}"
+                self.input_content += plumed.command.combine(normalized_feature, [feature], [features_scale[index]], [features_offset[index]])
+                normalized_feature_list.append(normalized_feature)
+        else:
+            normalized_feature_list = self.feature_list
         
-        cv_weights = self.cv_params['weights']
-        cv_dimension = cv_weights.shape[1]
-        
-        print(f"CV weights shape: {cv_weights.shape}")  # Debugging
+        # Add a combine command for each component of the CV
+        self.input_content += "\n# Collective variable\n"
+        for i in range(self.cv_params['weights'].shape[1]):
+            self.input_content += plumed.command.combine(self.cv_params['cv_labels'][i], normalized_feature_list, self.cv_params['weights'][:,i])
+            
     
     def validate_linear_cv(self):
         """
@@ -300,13 +299,19 @@ class CollectiveVariableBuilder(Builder):
         if 'weights' not in self.cv_params:
             raise ValueError("Linear CV requires weights.")
         
+        if 'cv_labels' not in self.cv_params:
+            raise ValueError("Linear CV requires CV labels.")
+    
+        # Clean labels
+        self.cv_params['cv_labels'] = [label.replace(' ', '_') for label in self.cv_params['cv_labels']]
+        
         # Check if the weights have the right shape
         if self.cv_params['weights'].shape[0] != len(self.feature_list):
             raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.feature_list)}")
         
-class EnhancedSamplingBuilder(CollectiveVariableBuilder):
+class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
-    Builder class to add enhanced sampling to a PLUMED input file.
+    Assembler class to add enhanced sampling to a PLUMED input file.
     """
     def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, sampling_params: Dict):
         super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params)
@@ -333,72 +338,3 @@ class EnhancedSamplingBuilder(CollectiveVariableBuilder):
         """
         # Placeholder - implement logic based on self.sampling_method and self.sampling_params
         return f"# Apply {self.sampling_method} enhanced sampling here\n"
-  
-
-# Builders - they determine the print arguments and write the PLUMED input file
-class ComputeFeatures(Builder):
-    """
-    Builder class to compute a collection of features during an MD simulation or trajectory.
-    """           
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int):
-        return super().__init__(input_path, topology_path, feature_list, traj_stride)
-    
-    def build(self, colvars_path: str):
-        """ 
-        Override the base build method to include the print command.
-        """
-        super().build()
-        
-        # Add features to print arguments
-        self.print_args = self.feature_list
-        
-        # Add the print command
-        self.add_print_command(colvars_path, self.traj_stride)
-        
-        # Write the file
-        self.write()
-        
-class ComputeCV(CollectiveVariableBuilder):
-    """
-    Builder class to compute a collective variable during an MD simulation or trajectory.
-    """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], configuration: Dict, cv_type: str, cv_params: Dict):
-        return super().__init__(input_path, topology_path, feature_list, configuration, cv_type, cv_params)
-    
-    def build(self, colvars_path: str):
-        """ 
-        Override the base build method to include the print command.
-        """
-        super().build()
-        
-        # Add CV to print arguments
-        self.add_cv_to_print()
-        
-        # Add the print command
-        self.add_print_command(colvars_path, self.traj_stride)
-        
-        # Write the file
-        self.write()
-        
-class ComputeEnhancedSampling(EnhancedSamplingBuilder):
-    """ 
-    Builder class to enhance sampling during an MD simulation.
-    """
-    
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, sampling_params: Dict):
-        return super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params, sampling_method, sampling_params)
-    
-    def build(self, colvars_path: str):
-        """ 
-        Override the base build method to include the print command.
-        """
-        super().build()
-        
-        # Add CV to print arguments
-        self.add_cv_to_print()
-        
-        # Add the print command
-        self.add_print_command(colvars_path, self.traj_stride)
-        
-        # Write the file
-        self.write()
