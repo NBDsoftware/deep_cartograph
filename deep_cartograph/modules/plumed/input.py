@@ -1,8 +1,8 @@
 # Import modules
-import os
 import sys
 import logging
-from typing import Dict, Tuple, List, Union
+import numpy as np
+from typing import Dict, List, Literal
 
 # Import local modules
 import deep_cartograph.modules.plumed as plumed
@@ -176,6 +176,9 @@ class Builder:
             sys.exit(1)
 
     def add_center_commands(self):
+        """ 
+        Write any center command needed to compute the features.
+        """
         
         written_centers = []
         
@@ -209,13 +212,136 @@ class Builder:
         self.input_content += "\n"
         
         self.input_content += plumed.command.print(self.print_args, colvars_path, stride)
-        
-class TrackFeaturesBuilder(Builder):
+  
+class CollectiveVariableBuilder(Builder):
     """
-    Builder class to track a collection of features during an MD simulation or trajectory.
+    Builder class to add the calculation of a collective variable to a PLUMED input file.
+    """
+    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, 
+                 cv_type: str, cv_params: Dict):
+        super().__init__(input_path, topology_path, feature_list, traj_stride)
+        self.cv_type: Literal["linear", "nonlinear"] = cv_type
+        self.cv_params: Dict = cv_params
+    
+    def build(self):
+        """Override the base build method to include the CV section."""
+        super().build()
+        
+        # Add the CV section 
+        self.add_cv_section()
+        
+    def add_cv_section(self):
+        """
+        Add the collective variable section to the PLUMED input file.
+        """
+        
+        # Add CV section title
+        self.input_content += "# Collective Variable\n"
+        
+        # Add the corresponding CV commands
+        if self.cv_type == "linear":
+            self.add_linear_cv()
+        elif self.cv_type == "nonlinear":
+            self.add_nonlinear_cv()
+        else:
+            raise ValueError(f"CV type {self.cv_type} not recognized.")
+        
+    def add_linear_cv(self):
+        """ 
+        Add a linear collective variable to the PLUMED input file.
+        
+        NOTE: should we validate here the cv params before attempting to build the input file?
+        """
+        print("Adding linear CV")  # Debugging
+        print(f"CV params: {self.cv_params}")  # Debugging
+        
+        # Validate cv params
+        self.validate_linear_cv()
+        
+        features_stats = self.cv_params['features_stats']
+        features_norm_mode = self.cv_params['features_norm_mode']
+        
+        if features_norm_mode == 'mean_std':
+            features_offset = features_stats['mean'].numpy()
+            features_scale = features_stats['std'].numpy()
+        elif features_norm_mode == 'min_max':
+            features_offset = features_stats['min'].numpy()
+            features_scale = features_stats['max'].numpy() - features_stats['min'].numpy()
+        elif features_norm_mode == 'none':
+            features_offset = np.array([0.0 for _ in self.feature_list])
+            features_scale = np.array([1.0 for _ in self.feature_list])
+        else:
+            raise ValueError(f"Features normalization mode {features_norm_mode} not recognized.")
+        
+        # Normalize the input features
+        normalized_feature_list = []
+        for index, feature in enumerate(self.feature_list):
+            normalized_feature = f"norm_{feature}"
+            self.input_content += plumed.command.combine(normalized_feature, feature, [features_scale[index]], [features_offset[index]])
+            normalized_feature_list.append(normalized_feature)
+        
+        cv_weights = self.cv_params['weights']
+        cv_dimension = cv_weights.shape[1]
+        
+        print(f"CV weights shape: {cv_weights.shape}")  # Debugging
+    
+    def validate_linear_cv(self):
+        """
+        Validate the parameters of a linear collective variable.
+        """
+        
+        # Check if all required parameters are present
+        if 'features_stats' not in self.cv_params:
+            raise ValueError("Linear CV requires features statistics.")
+        
+        if 'features_norm_mode' not in self.cv_params:
+            raise ValueError("Linear CV requires features normalization mode.")
+        
+        if 'weights' not in self.cv_params:
+            raise ValueError("Linear CV requires weights.")
+        
+        # Check if the weights have the right shape
+        if self.cv_params['weights'].shape[0] != len(self.feature_list):
+            raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.feature_list)}")
+        
+class EnhancedSamplingBuilder(CollectiveVariableBuilder):
+    """
+    Builder class to add enhanced sampling to a PLUMED input file.
+    """
+    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, sampling_params: Dict):
+        super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params)
+        self.sampling_method = sampling_method  # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
+        self.sampling_params = sampling_params  # Parameters for the enhanced sampling method
+    
+    def build(self):
+        """Override the base build method to include the enhanced sampling section."""
+        super().build()
+        
+        # Ensure a CV is defined before applying enhanced sampling
+        if not self.cv_type:
+            raise ValueError("Enhanced sampling requires a collective variable.")
+        
+        # Add enhanced sampling section title
+        self.input_content += "\n# Enhanced Sampling\n"
+        
+        # Generate the enhanced sampling command (to be implemented based on sampling_method)
+        self.input_content += self.get_sampling_command()
+    
+    def get_sampling_command(self) -> str:
+        """
+        Generate the PLUMED command to apply enhanced sampling.
+        """
+        # Placeholder - implement logic based on self.sampling_method and self.sampling_params
+        return f"# Apply {self.sampling_method} enhanced sampling here\n"
+  
+
+# Builders - they determine the print arguments and write the PLUMED input file
+class ComputeFeatures(Builder):
+    """
+    Builder class to compute a collection of features during an MD simulation or trajectory.
     """           
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], configuration: Dict):
-        return super().__init__(input_path, topology_path, feature_list, configuration)
+    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int):
+        return super().__init__(input_path, topology_path, feature_list, traj_stride)
     
     def build(self, colvars_path: str):
         """ 
@@ -227,7 +353,52 @@ class TrackFeaturesBuilder(Builder):
         self.print_args = self.feature_list
         
         # Add the print command
-        self.add_print_command(colvars_path, self.configuration.get('traj_stride', 1))
+        self.add_print_command(colvars_path, self.traj_stride)
+        
+        # Write the file
+        self.write()
+        
+class ComputeCV(CollectiveVariableBuilder):
+    """
+    Builder class to compute a collective variable during an MD simulation or trajectory.
+    """
+    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], configuration: Dict, cv_type: str, cv_params: Dict):
+        return super().__init__(input_path, topology_path, feature_list, configuration, cv_type, cv_params)
+    
+    def build(self, colvars_path: str):
+        """ 
+        Override the base build method to include the print command.
+        """
+        super().build()
+        
+        # Add CV to print arguments
+        self.add_cv_to_print()
+        
+        # Add the print command
+        self.add_print_command(colvars_path, self.traj_stride)
+        
+        # Write the file
+        self.write()
+        
+class ComputeEnhancedSampling(EnhancedSamplingBuilder):
+    """ 
+    Builder class to enhance sampling during an MD simulation.
+    """
+    
+    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, sampling_params: Dict):
+        return super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params, sampling_method, sampling_params)
+    
+    def build(self, colvars_path: str):
+        """ 
+        Override the base build method to include the print command.
+        """
+        super().build()
+        
+        # Add CV to print arguments
+        self.add_cv_to_print()
+        
+        # Add the print command
+        self.add_print_command(colvars_path, self.traj_stride)
         
         # Write the file
         self.write()
