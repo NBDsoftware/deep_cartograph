@@ -307,16 +307,16 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
     
     return combine_command
 
-def print(arguments, file_path, stride = 1, fmt = "%.4f"):
+def print(arguments: List[str], file_path: str, stride: int = 1, fmt: str = "%.4f"):
     '''
     Function that creates a PLUMED PRINT command.
 
     Inputs
     ------
 
-        arguments       (list of str):      arguments
-        file_path       (str):              output colvars file path
-        stride          (int):              stride
+        arguments       :      arguments
+        file_path       :              output colvars file path
+        stride          :              stride
 
     Outputs
     -------
