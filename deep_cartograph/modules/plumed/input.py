@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 # Set constants
 DEFAULT_FMT = '%14.10f'
 
+# Base Builders - they write the contents of the PLUMED input file
 class Builder:
     """
     Base class to build PLUMED input files.
     """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], configuration: Dict):
+    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int):
         """ 
         Minimal attributes to build a PLUMED input file.
         
@@ -33,6 +34,9 @@ class Builder:
                 
             feature_list (list):
                 List of features to be tracked.
+            
+            traj_stride (int):
+                Stride to use when computing the features from a trajectory or MD simulation.
         """
         # Path to the contents of the input file
         self.input_content: str = ""
@@ -49,8 +53,8 @@ class Builder:
         # List of variables to be printed in a COLVAR file
         self.print_args: List[str] = []
         
-        # Configuration dictionary
-        self.configuration: Dict = configuration
+        # Trajectory stride
+        self.traj_stride: int = traj_stride
     
     def write(self):
         """
@@ -67,11 +71,11 @@ class Builder:
         # Write Header title
         self.input_content += "# PLUMED input file generated with Deep Cartograph\n"
         
-        # Write MOLINFO command - to use shortcuts for atoms
-        self.input_content += plumed.command.molinfo(self.topology_path, self.configuration['moltype'])
+        # Write MOLINFO command - to use shortcuts for atom selections
+        self.input_content += plumed.command.molinfo(self.topology_path)
         
-        # Get the indices of the molecules that should be made whole
-        whole_mol_indices = md.get_indices(self.topology_path, self.configuration['whole_molecule_selection'])
+        # Get the indices of the molecules that should be made whole - all by default
+        whole_mol_indices = md.get_indices(self.topology_path)
         
         # Write WHOLEMOLECULES command - to correct for periodic boundary conditions
         self.input_content += plumed.command.wholemolecules(whole_mol_indices)

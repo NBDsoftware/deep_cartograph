@@ -90,7 +90,7 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     features_list = md.get_features_list(configuration['plumed_settings']['features'], plumed_topology_path)
 
     # Create the corresponding PLUMED Builder
-    plumed_builder = plumed.input.TrackFeaturesBuilder(plumed_input_path, plumed_topology_path, features_list, configuration['plumed_settings'])
+    plumed_builder = plumed.input.ComputeFeatures(plumed_input_path, plumed_topology_path, features_list, configuration['plumed_settings']['traj_stride'])
     plumed_builder.build(colvars_path)
 
     # Construct plumed driver command
