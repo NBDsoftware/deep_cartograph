@@ -81,7 +81,7 @@ class CVCalculator:
         self.architecture_config: Dict = configuration['architecture']
         self.training_reading_settings: Dict = configuration['input_colvars']
         self.feats_norm_mode: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
-        self.feats_normalization: Union[Normalization, None] = None
+        self.features_normalization: Union[Normalization, None] = None
         
         # Read the data
         self.read_training_data(colvars_paths)
@@ -421,17 +421,17 @@ class LinearCVCalculator(CVCalculator):
         self.cv: Union[torch.tensor, None] = None
         
         # Compute training data statistics
-        self.feats_statistics: Dict = Statistics(self.training_input_dtset[:]['data']).to_dict()
+        self.features_stats: Dict = Statistics(self.training_input_dtset[:]['data']).to_dict()
         
         # Set the features normalization object
         if self.feats_norm_mode == 'none':
-            stats_length = len(self.feats_statistics["mean"])
-            self.feats_normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length))
+            stats_length = len(self.features_stats["mean"])
+            self.features_normalization: Normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length))
         else:
-            self.feats_normalization = Normalization(self.num_features, mode=self.feats_norm_mode, stats=self.feats_statistics)
+            self.features_normalization: Normalization = Normalization(self.num_features, mode=self.feats_norm_mode, stats=self.features_stats)
 
         # Normalize the training data
-        self.normalized_training_data: torch.Tensor = self.feats_normalization(self.training_input_dtset[:]['data'])
+        self.normalized_training_data: torch.Tensor = self.features_normalization(self.training_input_dtset[:]['data'])
     
     # Main methods
     def save_cv(self):
@@ -443,11 +443,11 @@ class LinearCVCalculator(CVCalculator):
         np.savetxt(weights_path, self.cv.numpy())
         
         if self.feats_norm_mode == 'mean_std':
-            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.feats_statistics['mean'])
-            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.feats_statistics['std'])
+            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'])
+            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'])
         elif self.feats_norm_mode == 'min_max':
-            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.feats_statistics['max'])
-            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.feats_statistics['min'])
+            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'])
+            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'])
         
         logger.info(f'Collective variable weights saved to {weights_path}')
 
@@ -467,7 +467,7 @@ class LinearCVCalculator(CVCalculator):
                 ref_tensor = ref_dtset[:]['data']
                 
                 # Normalize the reference data
-                ref_tensor = self.feats_normalization(ref_tensor)
+                ref_tensor = self.features_normalization(ref_tensor)
                 
                 # Project the reference data onto the CV space
                 projected_ref = ref_tensor @ self.cv
@@ -503,7 +503,7 @@ class LinearCVCalculator(CVCalculator):
         colvars_tensor = colvars_dataset[:]['data']
         
         # Normalize the features
-        colvars_tensor = self.feats_normalization(colvars_tensor)
+        colvars_tensor = self.features_normalization(colvars_tensor)
         
         # Project the features onto the CV space and return the resulting array
         projected_colvars = colvars_tensor @ self.cv
@@ -516,17 +516,14 @@ class LinearCVCalculator(CVCalculator):
         projected_training_data = self.normalized_training_data @ self.cv
         
         # Compute statistics of the projected training data
-        stats = Statistics(projected_training_data)
+        self.cv_stats: Dict = Statistics(projected_training_data).to_dict()
         
         # Find the normalization for the CV
-        self.cv_normalization =  Normalization(self.cv_dimension, mode='min_max', stats = stats )
-        
-        # Get the dictionary with the statistics
-        stats_dict = stats.to_dict()
+        self.cv_normalization: Normalization =  Normalization(self.cv_dimension, mode='min_max', stats = self.cv_stats )
         
         # Save the max/min values of each dimension - part of the final cv definition
-        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), stats_dict['max'])
-        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), stats_dict['min'])
+        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'])
+        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'])
     
     def write_plumed_input(self):
         """
