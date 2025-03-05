@@ -62,7 +62,6 @@ class CVCalculator:
         # Training data
         self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in training_reading_settings
         
-        self.num_features: int = None
         self.num_samples: int = None
         
         # Reference data
@@ -72,7 +71,10 @@ class CVCalculator:
         self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
         
         # List of features used for training (features in the colvars file after filtering) NOTE: this will be a list of lists when we consider different topologies
-        self.features: List[str] = self.read_features(colvars_paths[0])      
+        self.features: List[str] = self.read_features(colvars_paths[0]) 
+        
+        # Number of features
+        self.num_features: int = len(self.features)     
         
         # Configuration
         self.configuration: Dict = configuration
@@ -153,8 +155,11 @@ class CVCalculator:
             return_dataframe=False
         )
         
-        # Find number of features
-        self.num_features = self.training_input_dtset["data"].shape[1]
+        # Check the number of features in the training data is the one expected
+        if not self.num_features == self.training_input_dtset["data"].shape[1]:
+            logger.error(f"""Number of filtered features found from colvars columns ({self.num_features}) does
+                            not match the number of filtered features read from the training dataset ({self.training_input_dtset["data"].shape[1]}). Exiting...""")
+            sys.exit(1)
         logger.info(f'Number of features: {self.num_features}')
 
     def read_reference_data(self, ref_colvars_paths: Union[List[str], None]):
@@ -224,9 +229,10 @@ class CVCalculator:
         
         # Filter the features based on the constraints, if any
         if self.feature_filter:
-            if self.feature_filter.keys() == 'items':
+            if 'items' in self.feature_filter.keys():
                 features = [feat for feat in features if feat in self.feature_filter['items']]
-            elif self.feature_filter.keys() == 'regex':
+            
+            if 'regex' in self.feature_filter.keys():
                 features = [feat for feat in features if re.search(self.feature_filter['regex'], feat)]
         
         # Additional regex used by create_dataset_from_files()
