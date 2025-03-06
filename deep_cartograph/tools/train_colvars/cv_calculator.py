@@ -26,6 +26,7 @@ from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
 import deep_cartograph.modules.plumed as plumed
+import deep_cartograph.modules.md as md
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -71,11 +72,12 @@ class CVCalculator:
         # Filter dictionary
         self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
         
-        # List of features used for training (features in the colvars file after filtering) NOTE: this will be a list of lists when we consider different topologies
-        self.features: List[str] = self.read_features(colvars_paths[0]) 
+        # List of features used for training (features in the colvars file after filtering) 
+        # NOTE: this will be a list of lists when we consider different topologies
+        self.feature_labels: List[str] = None
         
         # Number of features
-        self.num_features: int = len(self.features)     
+        self.num_features: int = None
         
         # Configuration
         self.configuration: Dict = configuration
@@ -156,11 +158,11 @@ class CVCalculator:
             return_dataframe=False
         )
         
-        # Check the number of features in the training data is the one expected
-        if not self.num_features == self.training_input_dtset["data"].shape[1]:
-            logger.error(f"""Number of filtered features found from colvars columns ({self.num_features}) does
-                            not match the number of filtered features read from the training dataset ({self.training_input_dtset["data"].shape[1]}). Exiting...""")
-            sys.exit(1)
+        # Save feature labels
+        self.feature_labels = self.training_input_dtset.feature_names
+        
+        # Save the number of features
+        self.num_features = len(self.feature_labels)
         logger.info(f'Number of features: {self.num_features}')
 
     def read_reference_data(self, ref_colvars_paths: Union[List[str], None]):
@@ -422,6 +424,7 @@ class LinearCVCalculator(CVCalculator):
                 
         # Main attributes
         self.cv: Union[torch.tensor, None] = None
+        self.weights_path: Union[str, None] = None 
         
         # Compute training data statistics
         self.features_stats: Dict = Statistics(self.training_input_dtset[:]['data']).to_dict()
@@ -442,8 +445,10 @@ class LinearCVCalculator(CVCalculator):
         Saves the collective variable linear weights to a text file.
         """
         
-        weights_path = os.path.join(self.output_path, f'weights.txt')
-        np.savetxt(weights_path, self.cv.numpy())
+        # Path to output weights
+        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.txt')
+        
+        np.savetxt(self.weights_path, self.cv.numpy())
         
         if self.feats_norm_mode == 'mean_std':
             np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'])
@@ -452,7 +457,7 @@ class LinearCVCalculator(CVCalculator):
             np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'])
             np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'])
         
-        logger.info(f'Collective variable weights saved to {weights_path}')
+        logger.info(f'Collective variable weights saved to {self.weights_path}')
 
     def project_reference(self):
         """
@@ -580,6 +585,8 @@ class NonLinearCVCalculator(CVCalculator):
         self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
         self.checkpoint: Union[ModelCheckpoint, None] = None
         self.metrics: Union[MetricsCallback, None] = None
+        self.weights_path: Union[str, None] = None
+        self.weights_path: Union[str, None] = None
         
         # Training configuration
         self.training_config: Dict = configuration['training'] 
@@ -839,14 +846,16 @@ class NonLinearCVCalculator(CVCalculator):
         Saves the collective variable non-linear weights to a pytorch script file.
         """
         
+        # Path to output model
+        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.pt')
+        
         if self.cv is None:
             logger.error('No collective variable to save.')
             return
-    
-        weights_path = os.path.join(self.output_path, f'weights.ptc')
-        self.cv.to_torchscript(file_path = weights_path, method='trace') # NOTE: check if this also saves the normalization layer
+
+        self.cv.to_torchscript(file_path = self.weights_path, method='trace') # NOTE: check if this also saves the normalization layer
         
-        logger.info(f'Collective variable weights saved to {weights_path}')
+        logger.info(f'Collective variable weights saved to {self.weights_path}')
 
     def project_reference(self):
         """
@@ -900,24 +909,27 @@ class NonLinearCVCalculator(CVCalculator):
         Creates a plumed input file that computes the collective variable from the features.
         """
         
+        # Save new PLUMED-compliant topology
+        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
+        md.create_pdb(self.topologies[0], plumed_topology_path)
+        
         cv_parameters = {
             'cv_name': self.cv_name,
-            'cv_labels': self.cv_labels,
-            'features_norm_mode': self.feats_norm_mode, # NOTE: needed?
-            'weights': self.cv
+            'cv_dimension': self.cv_dimension,
+            'weights_path': self.weights_path
         }
         
         builder_args = {
-            'input_path': os.path.join(self.output_path, 'plumed_input.dat'),
-            'topology_path': self.topologies[0],
-            'feature_list': self.features,
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
+            'topology_path': plumed_topology_path,
+            'feature_list': self.feature_labels,
             'traj_stride': 1,
             'cv_type': 'non-linear',
             'cv_params': cv_parameters
         }
         
-        #plumed_builder = plumed.input.CollectiveVariableBuilder(**builder_args)
-        #plumed_builder.build()
+        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_out.dat')
 
 # Collective variables calculators
 class PCACalculator(LinearCVCalculator):

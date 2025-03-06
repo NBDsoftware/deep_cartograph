@@ -1,7 +1,7 @@
 # Import modules
+import os
 import sys
 import logging
-import numpy as np
 from typing import Dict, List, Literal
 
 # Import local modules
@@ -334,6 +334,36 @@ class CollectiveVariableAssembler(Assembler):
         # Check that the CV dimension matches the number of components in the weights
         if self.cv_params['cv_dimension'] != self.cv_params['weights'].shape[1]:
             raise ValueError(f"CV dimension {self.cv_params['cv_dimension']} does not match the number of components in the weights {self.cv_params['weights'].shape[1]}")
+        
+    def add_non_linear_cv(self):
+        """ 
+        Add a non-linear collective variable to the PLUMED input file.
+        
+        Note that the feature and CV normalization are included inside the model
+        """
+        
+        self.validate_non_linear_cv()
+    
+        # Compute the CV
+        self.input_content += "\n# Collective variable\n"
+        self.input_content += plumed.command.pytorch_model(self.cv_params['cv_name'], self.feature_list, os.path.abspath(self.cv_params['weights_path']))
+            
+        # Set the final CV labels
+        self.cv_labels = [f"{self.cv_params['cv_name']}.node-{i}" for i in range(self.cv_params['cv_dimension'])]
+        
+    def validate_non_linear_cv(self):
+        """
+        Validate the parameters of a non-linear collective variable.
+        """
+        
+        if 'weights_path' not in self.cv_params:
+            raise ValueError("Non-linear CV requires weights path.")
+        
+        if 'cv_dimension' not in self.cv_params:
+            raise ValueError("Non-linear CV requires CV dimension.")
+        
+        if 'cv_name' not in self.cv_params:
+            self.cv_params['cv_name'] = 'cv'
              
 class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
