@@ -49,20 +49,19 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
         """
         super().build()
         
+        # Check the cv_labels are defined
+        if len(self.cv_labels) == 0:
+            logger.error('No CV labels defined.')
+            sys.exit(1)
+        
         # Add CV to print arguments
-        self.add_cv_to_print()
+        self.print_args.extend(self.cv_labels)
         
         # Add the print command
         self.add_print_command(colvars_path, self.traj_stride)
         
         # Write the file
         self.write()
-    
-    def add_cv_to_print(self):
-        """
-        Add the collective variable to the print arguments.
-        """
-        self.print_args.extend(self.cv_params['cv_labels'])
         
 class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
     """ 
@@ -78,17 +77,16 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
         """
         super().build()
         
+        # Check the cv_labels are defined
+        if len(self.cv_labels) == 0:
+            logger.error('No CV labels defined.')
+            sys.exit(1)
+        
         # Add CV to print arguments
-        self.add_cv_to_print()
+        self.print_args.extend(self.cv_labels)
         
         # Add the print command
         self.add_print_command(colvars_path, self.traj_stride)
         
         # Write the file
         self.write()
-    
-    def add_cv_to_print(self):
-        """
-        Add the collective variable to the print arguments.
-        """
-        self.print_args.extend(self.cv_params['cv_labels'])

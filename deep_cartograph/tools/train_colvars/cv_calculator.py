@@ -533,26 +533,33 @@ class LinearCVCalculator(CVCalculator):
         Creates a plumed input file that computes the collective variable from the features.
         """
         
+        # Save new PLUMED-compliant topology
+        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
+        md.create_pdb(self.topologies[0], plumed_topology_path)
+        
+        # Save CV data to parameters dictionary
         cv_parameters = {
             'cv_name': self.cv_name,
-            'cv_labels': self.cv_labels,
+            'cv_dimension': self.cv_dimension,
             'features_norm_mode': self.feats_norm_mode,
             'features_stats': self.features_stats,
-            'cv_stats': self.cv_stats,
+            'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization
             'weights': self.cv.numpy()
         }
         
+        # Construct builder arguments
         builder_args = {
-            'input_path': os.path.join(self.output_path, 'plumed_input.dat'),
-            'topology_path': self.topologies[0],
-            'feature_list': self.features,
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
+            'topology_path': plumed_topology_path,
+            'feature_list': self.feature_labels,
             'traj_stride': 1,
             'cv_type': 'linear',
             'cv_params': cv_parameters
         }
         
+        # Build the plumed input file
         plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
-        plumed_builder.build('colvars.dat')
+        plumed_builder.build(f'{self.cv_name}_out.dat')
         
     
 # Subclass for non-linear collective variables calculators

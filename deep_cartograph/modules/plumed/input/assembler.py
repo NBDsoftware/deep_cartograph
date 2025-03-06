@@ -224,6 +224,7 @@ class CollectiveVariableAssembler(Assembler):
         super().__init__(input_path, topology_path, feature_list, traj_stride)
         self.cv_type: Literal["linear", "non-linear"] = cv_type
         self.cv_params: Dict = cv_params
+        self.cv_labels: List[str] = []
     
     def build(self):
         """Override the base build method to include the CV section."""
@@ -253,15 +254,15 @@ class CollectiveVariableAssembler(Assembler):
         # Validate cv params
         self.validate_linear_cv()
         
+        # Set up feature normalization
         features_stats = self.cv_params['features_stats']
         features_norm_mode = self.cv_params['features_norm_mode']
-        
         if features_norm_mode == 'mean_std':
             features_offset = features_stats['mean'].numpy()
-            features_scale = features_stats['std'].numpy()
+            features_scale = 1/features_stats['std'].numpy()
         elif features_norm_mode == 'min_max':
-            features_offset = features_stats['min'].numpy()
-            features_scale = features_stats['max'].numpy() - features_stats['min'].numpy()
+            features_offset = (features_stats['min'].numpy() + features_stats['max'].numpy())/2
+            features_scale = 2/(features_stats['max'].numpy() - features_stats['min'].numpy())
         elif features_norm_mode == 'none':
             pass
         else:
@@ -270,20 +271,38 @@ class CollectiveVariableAssembler(Assembler):
         # Normalize the input features
         if features_norm_mode != 'none': 
             self.input_content += "\n# Normalized features\n"
-            normalized_feature_list = []
+            normalized_feature_labels = []
             for index, feature in enumerate(self.feature_list):
                 normalized_feature = f"feat_{index}"
                 self.input_content += plumed.command.combine(normalized_feature, [feature], [features_scale[index]], [features_offset[index]])
-                normalized_feature_list.append(normalized_feature)
+                normalized_feature_labels.append(normalized_feature)
         else:
-            normalized_feature_list = self.feature_list
+            normalized_feature_labels = self.feature_list
         
-        # Add a combine command for each component of the CV
+        # Compute the CV
         self.input_content += "\n# Collective variable\n"
+        cv_labels = []
         for i in range(self.cv_params['weights'].shape[1]):
-            self.input_content += plumed.command.combine(self.cv_params['cv_labels'][i], normalized_feature_list, self.cv_params['weights'][:,i])
+            component_name = f"{self.cv_params['cv_name']}_{i}"
+            self.input_content += plumed.command.combine(component_name, normalized_feature_labels, self.cv_params['weights'][:,i])
+            cv_labels.append(component_name)
+        
+        # Set up CV normalization
+        cv_stats = self.cv_params['cv_stats']
+        cv_offset = (cv_stats['min'].numpy() + cv_stats['max'].numpy())/2
+        cv_scale = 2/(cv_stats['max'].numpy() - cv_stats['min'].numpy())
+        
+        # Normalize the CV
+        self.input_content += "\n# Normalized Collective variable\n"
+        normalized_cv_labels = []
+        for i in range(self.cv_params['weights'].shape[1]):
+            component_name = f"norm_{self.cv_params['cv_name']}_{i}"
+            self.input_content += plumed.command.combine(component_name, [cv_labels[i]], [cv_scale[i]], [cv_offset[i]])
+            normalized_cv_labels.append(component_name)
             
-    
+        # Set the final CV labels
+        self.cv_labels = normalized_cv_labels
+              
     def validate_linear_cv(self):
         """
         Validate the parameters of a linear collective variable.
@@ -299,16 +318,23 @@ class CollectiveVariableAssembler(Assembler):
         if 'weights' not in self.cv_params:
             raise ValueError("Linear CV requires weights.")
         
-        if 'cv_labels' not in self.cv_params:
-            raise ValueError("Linear CV requires CV labels.")
-    
-        # Clean labels
-        self.cv_params['cv_labels'] = [label.replace(' ', '_') for label in self.cv_params['cv_labels']]
+        if 'cv_dimension' not in self.cv_params:    
+            raise ValueError("Linear CV requires CV dimension.")
+        
+        if 'cv_stats' not in self.cv_params:
+            raise ValueError("Linear CV requires CV statistics.")
+        
+        if 'cv_name' not in self.cv_params:
+            self.cv_params['cv_name'] = 'cv'
         
         # Check if the weights have the right shape
         if self.cv_params['weights'].shape[0] != len(self.feature_list):
             raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.feature_list)}")
-        
+
+        # Check that the CV dimension matches the number of components in the weights
+        if self.cv_params['cv_dimension'] != self.cv_params['weights'].shape[1]:
+            raise ValueError(f"CV dimension {self.cv_params['cv_dimension']} does not match the number of components in the weights {self.cv_params['weights'].shape[1]}")
+             
 class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
     Assembler class to add enhanced sampling to a PLUMED input file.
