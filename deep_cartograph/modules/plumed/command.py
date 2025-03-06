@@ -279,21 +279,21 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
         # Add coefficients
         combine_command += " COEFFICIENTS="
         for coefficient in coefficients:
-            combine_command += str(round(coefficient, 5)) + ","
+            combine_command += f"{coefficient:.17g},"
         combine_command = combine_command[:-1]
     
     if parameters is not None:
         # Add parameters
         combine_command += " PARAMETERS="
         for parameter in parameters:
-            combine_command += str(round(parameter, 5)) + ","
+            combine_command += f"{parameter:.17g},"
         combine_command = combine_command[:-1]
     
     if powers is not None:
         # Add powers
         combine_command += " POWERS="
         for power in powers:
-            combine_command += str(round(power, 5)) + ","
+            combine_command += f"{power:.17g},"
         combine_command = combine_command[:-1]
 
     # Add periodic keyword
@@ -395,7 +395,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
     
     # Add grid min values
     for grid_min in grid_mins:
-        histogram_command += str(round(grid_min,3)) + ","
+        histogram_command += f"{grid_min:.17g},"
 
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -405,7 +405,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     # Add grid max values
     for grid_max in grid_maxs:
-        histogram_command += str(round(grid_max,3)) + ","
+        histogram_command += f"{grid_max:.17g},"
 
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -415,7 +415,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     # Add grid bin values
     for grid_bin in grid_bins:
-        histogram_command += str(int(grid_bin)) + ","
+        histogram_command += f"{grid_bin:.17g}," 
     
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -430,7 +430,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
     
         # Add bandwidth values
         for bandwidth in bandwidths:
-            histogram_command += str(round(bandwidth,3)) + ","
+            histogram_command += f"{bandwidth:.17g},"
 
         # Remove last comma
         histogram_command = histogram_command[:-1]
@@ -633,28 +633,28 @@ def metad(command_label, arguments, sigmas, height, biasfactor, temp, pace, grid
     metad_command = metad_command[:-1]
 
     # Add sigmas 
-    metad_command += "\nSIGMA=" + ",".join([str(round(sigma,2)) for sigma in sigmas])
+    metad_command += "\nSIGMA=" + ",".join([f"{sigma:.17g}" for sigma in sigmas])
 
     # Add height
-    metad_command += "\nHEIGHT=" + str(round(height,4))
+    metad_command += "\nHEIGHT=" + f"{height:.17g}"
 
     # Add biasfactor
-    metad_command += "\nBIASFACTOR=" + str(biasfactor)
+    metad_command += "\nBIASFACTOR=" + f"{biasfactor:.17g}"
 
     # Add temperature
-    metad_command += "\nTEMP=" + str(temp)
+    metad_command += "\nTEMP=" + f"{temp:.17g}"
 
     # Add pace
     metad_command += "\nPACE=" + str(pace)
 
     # Add grid mins using .join()
-    metad_command += "\nGRID_MIN=" + ",".join([str(round(grid_min,4)) for grid_min in grid_mins])
+    metad_command += "\nGRID_MIN=" + ",".join([f"{grid_min:.17g}" for grid_min in grid_mins])
 
     # Add grid maxs
-    metad_command += "\nGRID_MAX=" + ",".join([str(round(grid_max,4)) for grid_max in grid_maxs])
+    metad_command += "\nGRID_MAX=" + ",".join([f"{grid_max:.17g}" for grid_max in grid_maxs])
 
     # Add grid bins
-    metad_command += "\nGRID_BIN=" + ",".join([str(grid_bin) for grid_bin in grid_bins])
+    metad_command += "\nGRID_BIN=" + ",".join([f"{grid_bin:.17g}" for grid_bin in grid_bins])
 
     # Add c(t) calculation
     metad_command += "\nCALC_RCT"
