@@ -67,7 +67,7 @@ class Assembler:
         self.input_content += "# PLUMED input file generated with Deep Cartograph\n"
         
         # Write MOLINFO command - to use shortcuts for atom selections
-        self.input_content += plumed.command.molinfo(self.topology_path)
+        self.input_content += plumed.command.molinfo(os.path.abspath(self.topology_path))
         
         # Get the indices of the molecules that should be made whole - all by default
         whole_mol_indices = md.get_indices(self.topology_path)
