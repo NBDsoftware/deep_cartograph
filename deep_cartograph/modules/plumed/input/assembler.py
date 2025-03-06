@@ -222,7 +222,7 @@ class CollectiveVariableAssembler(Assembler):
     def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, 
                  cv_type: str, cv_params: Dict):
         super().__init__(input_path, topology_path, feature_list, traj_stride)
-        self.cv_type: Literal["linear", "nonlinear"] = cv_type
+        self.cv_type: Literal["linear", "non-linear"] = cv_type
         self.cv_params: Dict = cv_params
     
     def build(self):
@@ -240,8 +240,8 @@ class CollectiveVariableAssembler(Assembler):
         # Add the corresponding CV commands
         if self.cv_type == "linear":
             self.add_linear_cv()
-        elif self.cv_type == "nonlinear":
-            self.add_nonlinear_cv()
+        elif self.cv_type == "non-linear":
+            self.add_non_linear_cv()
         else:
             raise ValueError(f"CV type {self.cv_type} not recognized.")
         

@@ -905,7 +905,7 @@ class NonLinearCVCalculator(CVCalculator):
             'topology_path': self.topologies[0],
             'feature_list': self.features,
             'traj_stride': 1,
-            'cv_type': 'nonlinear',
+            'cv_type': 'non-linear',
             'cv_params': cv_parameters
         }
         
