@@ -598,23 +598,23 @@ def external(command_label, arguments, file):
 
     return external_command
 
-def metad(command_label, arguments, sigmas, height, biasfactor, temp, pace, grid_mins, grid_maxs, grid_bins):
+def metad(command_label: str, arguments: List[str], sigmas: List[float], height: float, biasfactor: int, temp: float, pace: int, grid_mins: List[float], grid_maxs: List[float], grid_bins: List[int]) -> str:  
     """
     Function that creates a PLUMED METAD command.
 
     Inputs
     ------
 
-        command_label   (str):                 command label
-        arguments       (list of str):         arguments
-        sigma           (list of  float):      sigmas
-        height          (float):               height
-        biasfactor      (int):                 biasfactor
-        temp            (float):               temperature
-        pace            (int):                 pace
-        grid_mins       (list of float):       grid mins
-        grid_maxs       (list of float):       grid maxs
-        grid_bins       (list of int):         grid bins
+        command_label   :     command label
+        arguments       :     arguments
+        sigmas          :     sigmas
+        height          :     height
+        biasfactor      :     biasfactor
+        temp            :     temperature
+        pace            :     pace
+        grid_mins       :     grid mins
+        grid_maxs       :     grid maxs
+        grid_bins       :     grid bins
     """
 
     # Start METAD command
