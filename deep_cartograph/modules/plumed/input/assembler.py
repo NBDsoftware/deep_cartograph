@@ -306,6 +306,8 @@ class CollectiveVariableAssembler(Assembler):
     def validate_linear_cv(self):
         """
         Validate the parameters of a linear collective variable.
+        
+        NOTE: migrate this to a pydantic model
         """
         
         # Check if all required parameters are present
@@ -354,6 +356,8 @@ class CollectiveVariableAssembler(Assembler):
     def validate_non_linear_cv(self):
         """
         Validate the parameters of a non-linear collective variable.
+        
+        NOTE: migrate this to a pydantic model
         """
         
         if 'weights_path' not in self.cv_params:

@@ -486,6 +486,8 @@ class LinearCVCalculator(CVCalculator):
         """
         Projects the samples from the colvars file onto the CV space.
         
+        NOTE: revisit the need for reading the same data again after training - can't we project the training data instead? 
+        
         Parameters
         ----------
         
@@ -548,7 +550,7 @@ class LinearCVCalculator(CVCalculator):
             'cv_dimension': self.cv_dimension,
             'features_norm_mode': self.feats_norm_mode,
             'features_stats': self.features_stats,
-            'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization
+            'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization for the cv
             'weights': self.cv.numpy()
         }
         
