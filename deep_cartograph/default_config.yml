@@ -32,8 +32,6 @@ dt_per_frame: 40
 #   plumed_settings:
 #     timeout:                    Time out for the PLUMED calculation in seconds
 #     traj_stride:                Trajectory stride for the calculation of features
-#     moltype:                    Molecule type: protein, dna or rna
-#     whole_molecule_selection:   Selection of atoms that define the molecules that should be whole to compute the descriptors.
 #     features:                   Definition of features to be included in the PLUMED input file
 #       distance_groups:          Groups of distance features.
 #         group_name:             Name of the group. All pairwise distances between atoms in the two selections are included
@@ -43,13 +41,11 @@ dt_per_frame: 40
 #           second_stride:        Stride for the second selection. Include only every second_stride-th atom in the selection
 #           skip_neigh_residues:  If True, skip distances involving atoms in consecutive/neighboring residues
 #           skip_bonded_atoms:    If True, skip distances between atoms that are bonded
-#           atoms_format:         Format of the ATOMS field in the distance plumed command. Options: (name or index)
 #       dihedral_groups:          Groups of dihedral features.
 #         group_name:             Name of the group.
 #           selection:            Selection of atoms to be included in this group (MDAnalysis selection syntax)
 #           periodic_encoding:    If True, encode the dihedral angle in a periodic function, i.e. the sin and cos of the angle (to obtain smooth features as 0 and 360 degrees correspond to the same angle)
 #           search_mode:          Mode to search for the dihedrals. Options: (virtual, protein_backbone, real)
-#           atoms_format:         Format of the ATOMS field in the torsions plumed command. Options: (name or index)
 #      distance_to_center_groups: Groups of distances to a geometric center.
 #        group_name:              Name of the group. All distances between atoms in the selection and the geometric center are included.
 #          selection:             Selection of atoms to compute the distance to the geometric center to (MDAnalysis selection syntax)
@@ -62,8 +58,6 @@ dt_per_frame: 40
 compute_features:
   plumed_settings:
     traj_stride: 1
-    moltype: protein
-    whole_molecule_selection: all
     features:
       distance_groups:
         ca_dist:
@@ -139,9 +133,6 @@ filter_features:
 #       optimizer:                   Settings for the optimizer
 #         name:                         (str) Name of the optimizer
 #         kwargs:                       (dict) Keyword arguments for the optimizer
-#       lr_scheduler:                Settings for the learning rate scheduler
-#         name:                         (str) Name of the learning rate scheduler
-#         kwargs:                       (dict) Keyword arguments for the learning rate scheduler
 #       save_loss:                    (bool) Wether to save the training and validation losses after training 
 #       plot_loss:                    (bool) Wether to plot the loss after training
 #   figures:                          Settings for additional figures
@@ -213,7 +204,6 @@ train_colvars:
         kwargs: 
           lr: 1.0e-05
           weight_decay: 0.0
-      lr_scheduler: null
       save_loss: True
       plot_loss: True
   figures:

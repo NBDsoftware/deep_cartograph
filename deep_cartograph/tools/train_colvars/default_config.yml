@@ -28,9 +28,6 @@
 #     optimizer:                   Settings for the optimizer
 #       name:                         (str) Name of the optimizer
 #       kwargs:                       (dict) Keyword arguments for the optimizer
-#     lr_scheduler:                Settings for the learning rate scheduler
-#       name:                         (str) Name of the learning rate scheduler
-#       kwargs:                       (dict) Keyword arguments for the learning rate scheduler
 #     save_loss:                    (bool) Wether to save the training and validation losses after training 
 #     plot_loss:                    (bool) Wether to plot the loss after training
 
@@ -65,17 +62,6 @@ common:
       kwargs: 
         lr: 0.01
         weight_decay: 0.0
-    lr_scheduler:
-      name: ReduceLROnPlateau
-      kwargs:
-        mode: min
-        factor: 0.5
-        patience: 5
-        threshold: 0.05
-        threshold_mode: rel
-        cooldown: 0
-        min_lr: 0.0001
-        eps: 0.000000001
     save_loss: True
     plot_loss: True
 ae:

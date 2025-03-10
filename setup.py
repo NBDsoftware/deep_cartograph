@@ -1,24 +1,32 @@
 from setuptools import setup, find_packages
 
 setup(name='deep_cartograph', 
-    version='0.1', 
+    version='0.1.0', 
     packages=find_packages(),
+    python_requires=">=3.8,<=3.10",
     install_requires=[
         'numpy',
-        'dask',
+        'pytorch<2.3',
         'pandas',
-        'pydantic',
-        'torch',
+        "pydantic",
         'lightning',
-        'mdanalysis',
+        "mdanalysis",
+        'plumed==2.9.0',
         'seaborn',
         'matplotlib',
         'scikit-learn>=1.3',
-        'KDEpy',
-        'diptest',
-        'plumed',
-        'jupyter'   
+        "scipy",
+        'jupyter',
+        "ipython",
+        "ipykernel",
     ],
+    extras_require={
+        "pip_only": [
+            "kdepy",
+            "diptest",
+            "mlcolvar"
+        ]
+    },
     entry_points={
         "console_scripts": [
             "deep_carto=deep_cartograph.run:main",

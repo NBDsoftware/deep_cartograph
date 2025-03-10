@@ -1,15 +1,12 @@
 compute_features:
   plumed_settings:
     traj_stride: 1
-    moltype: protein
-    whole_molecule_selection: all
     features:
       dihedral_groups:
         tor:
           selection: "all"
           periodic_encoding: True
           search_mode: virtual
-          atoms_format: name
 
 filter_features:       
   filter_settings:
@@ -54,7 +51,6 @@ train_colvars:
         kwargs: 
           lr: 1.0e-03
           weight_decay: 0
-      lr_scheduler: null
       save_loss: True
       plot_loss: True
   figures:

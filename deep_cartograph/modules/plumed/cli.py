@@ -2,11 +2,12 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Dict, Union
 
 import logging
 
 from deep_cartograph.modules.md import md
-from deep_cartograph.modules.plumed.utils import get_traj_flag, check_CRYST1_record
+from deep_cartograph.modules.plumed.utils import get_traj_flag, sanitize_CRYST1_record
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 # -------------
 #
 # Returns the corresponding PLUMED driver shell command
-def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: str = None):
+def get_driver_command(plumed_input: str, traj_path: str = None, num_atoms: int = None, output_path: str = None) -> str:
     '''
     Function that creates a PLUMED DRIVER Shell command. It returns the command as a string
 
@@ -28,7 +29,8 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
 
         plumed_input     (str):              PLUMED input file path
         traj_path        (str):              path to trajectory file
-        topology_path    (str):              path to topology file
+        num_atoms        (int):              number of atoms in the system
+        output_path      (str):              path to output folder
 
     Outputs
     -------
@@ -51,22 +53,22 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
     # Add plumed input
     driver_command.append(plumed_input)
 
-    # Add trajectory or noatoms flag
-    if traj_path is None:
-        driver_command.append("--noatoms")
-    else:
+    # Add trajectory or --noatoms flag
+    if traj_path:
+        # Add trajectory
         traj_flag = get_traj_flag(traj_path)
         driver_command.append(traj_flag)
-        
         if Path(traj_path).suffix == ".pdb":
-            traj_path = check_CRYST1_record(traj_path, Path(topology_path).parent)
-            
+            # If the trajectory has a dummy CRYST1 record, we need to remove it
+            traj_path = sanitize_CRYST1_record(traj_path, output_path)
         traj_path = os.path.abspath(traj_path)
         driver_command.append(traj_path)
+    else:
+        # Add --noatoms flag. Don't read in a trajectory. Just use colvar files as specified in the input file
+        driver_command.append("--noatoms")
 
     # Find the number of atoms if topology is given (some traj formats do not need this)
-    if topology_path is not None:
-        num_atoms = md.get_number_atoms(topology_path)
+    if num_atoms:
         driver_command.append("--natoms")
         driver_command.append(str(num_atoms))
 
@@ -75,7 +77,7 @@ def get_driver_command(plumed_input: str, traj_path: str = None, topology_path: 
 
     return driver_command 
 
-def run_plumed(plumed_command: str, plumed_settings: dict, plumed_timeout: int) -> None:
+def run_plumed(plumed_command: str, working_dir: Union[str, None] = None, plumed_settings: Dict = {}, plumed_timeout: int = 604800) -> None:
     """
     Runs PLUMED through command line, setting up the necessary environment variables and modules.
 
@@ -107,29 +109,47 @@ def run_plumed(plumed_command: str, plumed_settings: dict, plumed_timeout: int) 
     
     logger.info(f"Executing PLUMED command: {command_str}")
 
+    # Store the original working directory
+    original_cwd = os.getcwd()
+  
     try:
-        # Execute PLUMED redirecting output to the log file
-        completed_process = subprocess.run(args=command_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=plumed_timeout, text=True) 
-        
+        # Change working directory if specified
+        if working_dir:
+            logger.info(f"Changing working directory to: {working_dir}")
+            os.chdir(working_dir)
+
+        # Execute PLUMED redirecting output
+        completed_process = subprocess.run(
+            args=command_str, 
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            timeout=plumed_timeout, 
+            text=True
+        )
+
         stdout, stderr = completed_process.stdout, completed_process.stderr
-        
+
         if logger.isEnabledFor(logging.DEBUG):
-            # Send standard output to the log file 
             logger.info(stdout)
-            
-        # Check if PLUMED failed
+
         if completed_process.returncode != 0:
-            logger.error("PLUMED execution failed! \n")
+            logger.error("PLUMED execution failed!")
             logger.error(stderr)
             sys.exit(1)
-            
+
         return stdout, stderr
-    
+
     except subprocess.TimeoutExpired:
         logger.error("PLUMED execution timed out!")
         return None, "TimeoutExpired"
-    
+
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return None, str(e)
+
+    finally:
+        # Restore the original working directory
+        os.chdir(original_cwd)
+        logger.info(f"Restored working directory to: {original_cwd}")
 

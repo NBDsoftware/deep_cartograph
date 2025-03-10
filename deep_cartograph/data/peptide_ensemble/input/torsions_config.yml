@@ -1,15 +1,12 @@
 compute_features:
   plumed_settings:
     traj_stride: 1
-    moltype: protein
-    whole_molecule_selection: all
     features:
       dihedral_groups:
         tor:
           selection: "all"
           periodic_encoding: True
           search_mode: real
-          atoms_format: name
 
 filter_features:       
   filter_settings:
@@ -50,17 +47,6 @@ train_colvars:
         kwargs: 
           lr: 0.01
           weight_decay: 0.0
-      lr_scheduler:
-        name: ReduceLROnPlateau
-        kwargs:
-          mode: min
-          factor: 0.5
-          patience: 5
-          threshold: 0.05
-          threshold_mode: rel
-          cooldown: 0
-          min_lr: 1.0e-05
-          eps: 1.0e-09
       save_loss: True
       plot_loss: True
   figures:

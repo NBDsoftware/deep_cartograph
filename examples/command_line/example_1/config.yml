@@ -6,15 +6,12 @@
 compute_features:
   plumed_settings:
     traj_stride: 1    
-    moltype: protein
-    whole_molecule_selection: all
     features:
       dihedral_groups:
         tor:
           selection: "all"
           periodic_encoding: True
           search_mode: virtual
-          atoms_format: name
 
 # This section contains the settings for the filtering of the features
 # See deep_cartograph/deep_cartograph/tools/filter_features/default_config.yml for more details
@@ -62,7 +59,6 @@ train_colvars:
         kwargs: 
           lr: 1.0e-02 
           weight_decay: 0
-      lr_scheduler: null
       save_loss: True
       plot_loss: True
   ae:           

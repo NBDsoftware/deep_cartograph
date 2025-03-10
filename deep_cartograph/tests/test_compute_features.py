@@ -14,15 +14,12 @@ def get_config_virtual_dihedrals():
     yaml_content = """
     plumed_settings:
       traj_stride: 1
-      moltype: protein
-      whole_molecule_selection: all
       features:
         dihedral_groups:
           tor:
             selection: "all"
             periodic_encoding: True
             search_mode: virtual
-            atoms_format: name
     """
     return yaml.safe_load(yaml_content)
   
@@ -31,8 +28,6 @@ def get_config_distances():
     yaml_content = """
     plumed_settings:
       traj_stride: 1
-      moltype: protein
-      whole_molecule_selection: all
       features:
         distance_groups:
           dist:
@@ -42,7 +37,6 @@ def get_config_distances():
             second_stride: 10
             skip_neigh_residues: False
             skip_bonded_atoms: True
-            atoms_format: name
     """
     return yaml.safe_load(yaml_content)
 
@@ -71,10 +65,13 @@ def test_compute_features():
         raise FileNotFoundError(f"Topology file {topology_path} does not exist.")
     if not os.path.exists(reference_colvars_path):
         raise FileNotFoundError(f"Reference colvars file {reference_colvars_path} does not exist.")
-      
-    # Remove output folder if it exists
+        
+    # Try to remove output folder if it exists
     if os.path.exists(output_path):
+      try:
         shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
     
     # Call API
     colvars_path = compute_features(
@@ -95,14 +92,20 @@ def test_compute_features():
     
     # If the test passed, clean the output folder
     if test_passed:
-      shutil.rmtree(output_path)
+      try:
+        shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
       
     # Output files
     output_path = os.path.join(tests_path, "output_compute_features_2")
         
-    # Remove output folder if it exists
+    # Try to remove output folder if it exists
     if os.path.exists(output_path):
+      try:
         shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
     
     print("Testing compute_features with distances ...")
     
@@ -128,5 +131,8 @@ def test_compute_features():
     
     # If the test passed, clean the output folder
     if test_passed:
-      shutil.rmtree(output_path)
+      try:
+        shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
     

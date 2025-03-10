@@ -4,6 +4,8 @@ import math
 import logging
 import numpy as np
 
+from typing import List, Union
+
 # Set logger
 logger = logging.getLogger(__name__)
 
@@ -38,14 +40,16 @@ def molinfo(topology: str, moltype: str = None) -> str:
 
     return command
 
-def wholemolecules(indices: list) -> str:
+def wholemolecules(indices: List[int]) -> str:
     '''
     Function that creates a PLUMED WHOLEMOLECULES command.
 
+    NOTE: If needed, this could be extended to consider multiple entities. (e.g. WHOLEMOLECULES ENTITY0=1-10 ENTITY1=11-20)
+    
     Inputs
     ------
 
-        indices     (list of int):  list of molecule indices
+        indices     :  list of molecule indices
 
     Returns
     -------
@@ -56,15 +60,15 @@ def wholemolecules(indices: list) -> str:
 
     return command
 
-def distance(command_label, atoms) -> str:
+def distance(command_label: str, atoms: Union[List[str], str]) -> str:
     '''
     Function that creates a PLUMED DISTANCE command.
 
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms 
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms 
     
     Outputs
     -------
@@ -94,20 +98,20 @@ def distance(command_label, atoms) -> str:
 
     return distance_command
 
-def torsion(command_label, atoms):
+def torsion(command_label: str, atoms: Union[List[str], str]) -> str:
     '''
     Function that creates a PLUMED TORSION command.
 
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms
+        command_label   :                 command label
+        atoms           :  list of strings or string defining the atoms
 
     Outputs
     -------
 
-        torsion_command (str):                 PLUMED TORSION command
+        torsion_command :                 PLUMED TORSION command
     '''
     
     # Check if atoms is a list of strings or a string
@@ -132,7 +136,7 @@ def torsion(command_label, atoms):
 
     return torsion_command
 
-def sin(command_label, atoms):
+def sin(command_label: str, atoms: Union[List[str], str]) -> str:
     """
     Proxy for the PLUMED ALPHABETA command using a reference angle of -pi/2 radians to convert the cosinus to a sinus.
     
@@ -143,17 +147,17 @@ def sin(command_label, atoms):
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms that define the phi torsion angle
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
     
     Outputs
     -------
 
-        sin_command     (str):                 PLUMED ALPHABETA command for the sinus
+        sin_command     :                 PLUMED ALPHABETA command for the sinus
     """
     return alphabeta(command_label, atoms, reference = -round(math.pi/2,4))
 
-def cos(command_label, atoms):
+def cos(command_label: str, atoms: Union[List[str], str]) -> str:
     """
     Proxy for the PLUMED ALPHABETA command using a reference angle of 0 radians.
     
@@ -164,17 +168,17 @@ def cos(command_label, atoms):
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms that define the phi torsion angle
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
     
     Outputs
     -------
 
-        cos_command     (str):                 PLUMED ALPHABETA command for the cosinus
+        cos_command     :                 PLUMED ALPHABETA command for the cosinus
     """
     return alphabeta(command_label, atoms, reference = 0)
 
-def alphabeta(command_label, atoms, reference):
+def alphabeta(command_label: str, atoms: Union[List[str], str], reference: float) -> str:
     """
     Function that creates an PLUMED ALPHABETA command. The command returns the cosinus moved up and squished between 0 and 1:
     
@@ -185,9 +189,9 @@ def alphabeta(command_label, atoms, reference):
     Inputs
     ------
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms that define the phi torsion angle
-        reference       (float):               list of floats defining the reference values
+        command_label   :  command label
+        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
+        reference       :  list of floats defining the reference values
     """
 
     # Check if atoms is a list of strings or a string
@@ -245,65 +249,74 @@ def read(command_label, file_path, values, ignore_time):
 
     return read_command
 
-def combine(command_label: str, arguments: list, coefficients: np.array, periodic: bool =False):
+def combine(command_label: str, arguments: List[str], coefficients: Union[np.array, None] = None, parameters:  Union[np.array, None] = None, 
+            powers: Union[np.array, None] = None, periodic: bool = False):
     '''
-    Function that creates a PLUMED COMBINE command.
+    Function that creates a PLUMED COMBINE command. The output from this command is the linear combination of the input arguments:
+    
+        C = Sum_i [ c_i * (x_i - a_i)^p_i ] 
 
     Inputs
     ------
 
-        command_label   (str):              command label
-        arguments       (list of str):      arguments
-        coefficients    (numpy array):      coefficients
-        periodic        (bool):             True if the RC is periodic
+        command_label   :       command label
+        arguments       :       arguments -> x_i
+        coefficients    :       coefficients -> c_i
+        parameters      :       parameters -> a_i
+        powers          :       powers -> p_i
+        periodic        :       True if the RC is periodic
 
     Outputs
     -------
 
         combine_command (str):              PLUMED COMBINE command
     '''
-
+    
     # Create COMBINE command
-    combine_command = command_label + ": COMBINE ARG="
+    combine_command = command_label + ": COMBINE ARG=" + ",".join(arguments)
 
-    # Add arguments
-    for arg in arguments:
-        combine_command += arg + ","
-
-    # Remove last comma
-    combine_command = combine_command[:-1]
-
-    # Add coefficients keyword
-    combine_command += " COEFFICIENTS="
-
-    # Add coefficients
-    for coefficient in coefficients:
-        combine_command += str(round(coefficient, 5)) + ","
-
-    # Remove last comma
-    combine_command = combine_command[:-1]
+    if coefficients is not None:
+        # Add coefficients
+        combine_command += " COEFFICIENTS="
+        for coefficient in coefficients:
+            combine_command += f"{coefficient:.17g},"
+        combine_command = combine_command[:-1]
+    
+    if parameters is not None:
+        # Add parameters
+        combine_command += " PARAMETERS="
+        for parameter in parameters:
+            combine_command += f"{parameter:.17g},"
+        combine_command = combine_command[:-1]
+    
+    if powers is not None:
+        # Add powers
+        combine_command += " POWERS="
+        for power in powers:
+            combine_command += f"{power:.17g},"
+        combine_command = combine_command[:-1]
 
     # Add periodic keyword
-    if periodic is False:
-        combine_command += " PERIODIC=NO"
-    else:
+    if periodic:
         combine_command += " PERIODIC=YES"
-
+    else:
+        combine_command += " PERIODIC=NO"
+        
     # Add newline
     combine_command += "\n"
     
     return combine_command
 
-def print(arguments, file_path, stride = 1, fmt = "%.4f"):
+def print(arguments: List[str], file_path: str, stride: int = 1, fmt: str = "%.4f"):
     '''
     Function that creates a PLUMED PRINT command.
 
     Inputs
     ------
 
-        arguments       (list of str):      arguments
-        file_path       (str):              file name
-        stride          (int):              stride
+        arguments       :      arguments
+        file_path       :              output colvars file path
+        stride          :              stride
 
     Outputs
     -------
@@ -382,7 +395,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
     
     # Add grid min values
     for grid_min in grid_mins:
-        histogram_command += str(round(grid_min,3)) + ","
+        histogram_command += f"{grid_min:.17g},"
 
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -392,7 +405,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     # Add grid max values
     for grid_max in grid_maxs:
-        histogram_command += str(round(grid_max,3)) + ","
+        histogram_command += f"{grid_max:.17g},"
 
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -402,7 +415,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     # Add grid bin values
     for grid_bin in grid_bins:
-        histogram_command += str(int(grid_bin)) + ","
+        histogram_command += f"{grid_bin:.17g}," 
     
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -417,7 +430,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
     
         # Add bandwidth values
         for bandwidth in bandwidths:
-            histogram_command += str(round(bandwidth,3)) + ","
+            histogram_command += f"{bandwidth:.17g},"
 
         # Remove last comma
         histogram_command = histogram_command[:-1]
@@ -585,23 +598,23 @@ def external(command_label, arguments, file):
 
     return external_command
 
-def metad(command_label, arguments, sigmas, height, biasfactor, temp, pace, grid_mins, grid_maxs, grid_bins):
+def metad(command_label: str, arguments: List[str], sigmas: List[float], height: float, biasfactor: int, temp: float, pace: int, grid_mins: List[float], grid_maxs: List[float], grid_bins: List[int]) -> str:  
     """
     Function that creates a PLUMED METAD command.
 
     Inputs
     ------
 
-        command_label   (str):                 command label
-        arguments       (list of str):         arguments
-        sigma           (list of  float):      sigmas
-        height          (float):               height
-        biasfactor      (int):                 biasfactor
-        temp            (float):               temperature
-        pace            (int):                 pace
-        grid_mins       (list of float):       grid mins
-        grid_maxs       (list of float):       grid maxs
-        grid_bins       (list of int):         grid bins
+        command_label   :     command label
+        arguments       :     arguments
+        sigmas          :     sigmas
+        height          :     height
+        biasfactor      :     biasfactor
+        temp            :     temperature
+        pace            :     pace
+        grid_mins       :     grid mins
+        grid_maxs       :     grid maxs
+        grid_bins       :     grid bins
     """
 
     # Start METAD command
@@ -620,28 +633,28 @@ def metad(command_label, arguments, sigmas, height, biasfactor, temp, pace, grid
     metad_command = metad_command[:-1]
 
     # Add sigmas 
-    metad_command += "\nSIGMA=" + ",".join([str(round(sigma,2)) for sigma in sigmas])
+    metad_command += "\nSIGMA=" + ",".join([f"{sigma:.17g}" for sigma in sigmas])
 
     # Add height
-    metad_command += "\nHEIGHT=" + str(round(height,4))
+    metad_command += "\nHEIGHT=" + f"{height:.17g}"
 
     # Add biasfactor
-    metad_command += "\nBIASFACTOR=" + str(biasfactor)
+    metad_command += "\nBIASFACTOR=" + f"{biasfactor:.17g}"
 
     # Add temperature
-    metad_command += "\nTEMP=" + str(temp)
+    metad_command += "\nTEMP=" + f"{temp:.17g}"
 
     # Add pace
     metad_command += "\nPACE=" + str(pace)
 
     # Add grid mins using .join()
-    metad_command += "\nGRID_MIN=" + ",".join([str(round(grid_min,4)) for grid_min in grid_mins])
+    metad_command += "\nGRID_MIN=" + ",".join([f"{grid_min:.17g}" for grid_min in grid_mins])
 
     # Add grid maxs
-    metad_command += "\nGRID_MAX=" + ",".join([str(round(grid_max,4)) for grid_max in grid_maxs])
+    metad_command += "\nGRID_MAX=" + ",".join([f"{grid_max:.17g}" for grid_max in grid_maxs])
 
     # Add grid bins
-    metad_command += "\nGRID_BIN=" + ",".join([str(grid_bin) for grid_bin in grid_bins])
+    metad_command += "\nGRID_BIN=" + ",".join([f"{grid_bin:.17g}" for grid_bin in grid_bins])
 
     # Add c(t) calculation
     metad_command += "\nCALC_RCT"

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import torch
 import lightning
@@ -24,6 +25,8 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
+import deep_cartograph.modules.plumed as plumed
+import deep_cartograph.modules.md as md
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -33,16 +36,21 @@ class CVCalculator:
     """
     Base class for collective variables calculators.
     """
-    def __init__(self, colvars_paths: List[str], feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the base CV calculator.
+        
+        NOTE: for the comparison of different topologies, we will need the topologies to make sure that the features are 
+        equivalent and all the colvars files can be used together to learn a CV. 
         
         Parameters
         ----------
         
         colvars_paths : str
             List of paths to colvars files with the main data used for training
+        topology_paths : str
+            List of paths to topology files corresponding to the colvars files
         feature_constraints : Union[List[str], str]
             List with the features to use for the training or str with regex to filter feature names.
         ref_colvars_paths : Union[List[str], None]
@@ -55,27 +63,37 @@ class CVCalculator:
         
         # Training data
         self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in training_reading_settings
-
-        self.num_features: int = None
+        
         self.num_samples: int = None
         
         # Reference data
         self.ref_datasets: List[DictDataset] = []
         
         # Filter dictionary
-        self.feature_filter = self.get_feature_filter(feature_constraints)
+        self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
+        
+        # List of features used for training (features in the colvars file after filtering) 
+        # NOTE: this will be a list of lists when we consider different topologies
+        self.feature_labels: List[str] = None
+        
+        # Number of features
+        self.num_features: int = None
         
         # Configuration
         self.configuration: Dict = configuration
         self.architecture_config: Dict = configuration['architecture']
         self.training_reading_settings: Dict = configuration['input_colvars']
-        self.features_normalization: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
+        self.feats_norm_mode: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
+        self.features_normalization: Union[Normalization, None] = None
         
         # Read the data
         self.read_training_data(colvars_paths)
         self.read_reference_data(ref_colvars_paths)
         
         self.ref_names: List[str] = [Path(path).stem for path in ref_colvars_paths] if ref_colvars_paths else []
+        
+        # Topologies
+        self.topologies: List[str] = topology_paths
         
         # General CV attributes
         self.cv_dimension: int = configuration['dimension']
@@ -106,38 +124,7 @@ class CVCalculator:
         create_output_folder(self.output_path)
         
         logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
-    
-    def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
-        """
-        Create the filter dictionary to select the features to use from the feature constraints.
-
-        Parameters
-        ----------
-
-        feature_constraints: Union[List[str], str]
-            List of features to use or regex to select the features
         
-        Returns
-        -------
-        
-        feature_filter : dict
-            Dictionary with the filter to select the features
-        """
-
-        if isinstance(feature_constraints, list):
-            # List of features is given
-            feature_filter = dict(items=feature_constraints)
-
-        elif isinstance(feature_constraints, str):
-            # Regex is given
-            feature_filter = dict(regex=feature_constraints)
-            
-        else:
-            # No constraints are given
-            feature_filter = dict(regex=default_regex)
-        
-        return feature_filter
-    
     def cv_ready(self) -> bool:
         """
         Checks if the CV is ready to be used.
@@ -171,8 +158,11 @@ class CVCalculator:
             return_dataframe=False
         )
         
-        # Find number of features
-        self.num_features = self.training_input_dtset["data"].shape[1]
+        # Save feature labels
+        self.feature_labels = self.training_input_dtset.feature_names
+        
+        # Save the number of features
+        self.num_features = len(self.feature_labels)
         logger.info(f'Number of features: {self.num_features}')
 
     def read_reference_data(self, ref_colvars_paths: Union[List[str], None]):
@@ -220,6 +210,73 @@ class CVCalculator:
             
         return colvars_dataset
     
+    def read_features(self, colvars_path: str) -> List[str]:
+        """ 
+        Read the list of feature names from the colvars file and filter the list based on the feature constraints.
+        
+        Parameters
+        ----------
+        
+        colvars_path : str
+            Path to the colvars file
+        
+        Returns
+        -------
+            features : List[str]
+                List of feature names after filtering
+        """
+        from deep_cartograph.modules.plumed.colvars import read_column_names
+        
+        # Find all the features in the colvars file
+        features = read_column_names(colvars_path)
+        
+        # Filter the features based on the constraints, if any
+        if self.feature_filter:
+            if 'items' in self.feature_filter.keys():
+                features = [feat for feat in features if feat in self.feature_filter['items']]
+            
+            if 'regex' in self.feature_filter.keys():
+                features = [feat for feat in features if re.search(self.feature_filter['regex'], feat)]
+        
+        # Additional regex used by create_dataset_from_files()
+        default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
+        
+        # Filter the features based on the default regex
+        features = [feat for feat in features if re.search(default_regex, feat)]
+        
+        return features
+    
+    def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
+        """
+        Create the filter dictionary to select the features to use from the feature constraints.
+
+        Parameters
+        ----------
+
+        feature_constraints: Union[List[str], str]
+            List of features to use or regex to select the features
+        
+        Returns
+        -------
+        
+        feature_filter : dict
+            Dictionary with the filter to select the features
+        """
+
+        if isinstance(feature_constraints, list):
+            # List of features is given
+            feature_filter = dict(items=feature_constraints)
+
+        elif isinstance(feature_constraints, str):
+            # Regex is given
+            feature_filter = dict(regex=feature_constraints)
+            
+        else:
+            # No constraints are given
+            feature_filter = None
+        
+        return feature_filter
+    
     # Main methods
     def run(self, cv_dimension: Union[int, None] = None):
         """
@@ -245,6 +302,8 @@ class CVCalculator:
             self.cv_specific_tasks()
             
             self.save_cv()
+            
+            self.write_plumed_input()
         
     def compute_cv(self):
         """
@@ -313,6 +372,13 @@ class CVCalculator:
         
         raise NotImplementedError
         
+    def write_plumed_input(self):
+        """ 
+        Create a plumed input file that computes the collective variable from the features. Implement in subclasses.
+        """
+        
+        raise NotImplementedError
+
     # Getters
     def get_projected_ref(self) -> List[np.ndarray]:
         """
@@ -348,33 +414,30 @@ class LinearCVCalculator(CVCalculator):
     Linear collective variables calculator (e.g. PCA)
     """
     
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """ 
         Initializes a linear CV calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_paths, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
                 
         # Main attributes
         self.cv: Union[torch.tensor, None] = None
+        self.weights_path: Union[str, None] = None 
         
-        # Compute normalization layer using training data statistics
-        training_data_stats = Statistics(self.training_input_dtset[:]['data']).to_dict()
-        stats_length = len(training_data_stats["mean"])
-        if self.features_normalization == 'min_max':
-            self.features_normalization = Normalization(self.num_features, mode='min_max', stats=training_data_stats)
-        elif self.features_normalization == 'mean_std':
-            self.features_normalization = Normalization(self.num_features, mean=training_data_stats["mean"], range=training_data_stats["std"])
-        elif self.features_normalization == 'none':
-            self.features_normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length)   )
+        # Compute training data statistics
+        self.features_stats: Dict = Statistics(self.training_input_dtset[:]['data']).to_dict()
+        
+        # Set the features normalization object
+        if self.feats_norm_mode == 'none':
+            stats_length = len(self.features_stats["mean"])
+            self.features_normalization: Normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length))
+        else:
+            self.features_normalization: Normalization = Normalization(self.num_features, mode=self.feats_norm_mode, stats=self.features_stats)
 
         # Normalize the training data
         self.normalized_training_data: torch.Tensor = self.features_normalization(self.training_input_dtset[:]['data'])
-
-        # Save mean and std - these will be part of the final cv definition
-        self.features_mean: torch.Tensor = training_data_stats["mean"]
-        self.features_std: torch.Tensor = training_data_stats["std"]
     
     # Main methods
     def save_cv(self):
@@ -382,16 +445,19 @@ class LinearCVCalculator(CVCalculator):
         Saves the collective variable linear weights to a text file.
         """
         
-        weights_path = os.path.join(self.output_path, f'weights.txt')
-        np.savetxt(weights_path, self.cv.numpy())
+        # Path to output weights
+        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.txt')
         
-        mean_path = os.path.join(self.output_path, f'features_mean.txt')
-        np.savetxt(mean_path, self.features_mean)
+        np.savetxt(self.weights_path, self.cv.numpy(), fmt='%.7g')
         
-        std_path = os.path.join(self.output_path, f'features_std.txt')
-        np.savetxt(std_path, self.features_std)
+        if self.feats_norm_mode == 'mean_std':
+            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'], fmt='%.7g')
+            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'], fmt='%.7g')
+        elif self.feats_norm_mode == 'min_max':
+            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'], fmt='%.7g')
+            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'], fmt='%.7g')
         
-        logger.info(f'Collective variable weights saved to {weights_path}')
+        logger.info(f'Collective variable weights saved to {self.weights_path}')
 
     def project_reference(self):
         """
@@ -419,6 +485,8 @@ class LinearCVCalculator(CVCalculator):
     def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
         """
         Projects the samples from the colvars file onto the CV space.
+        
+        NOTE: revisit the need for reading the same data again after training - can't we project the training data instead? 
         
         Parameters
         ----------
@@ -458,18 +526,69 @@ class LinearCVCalculator(CVCalculator):
         projected_training_data = self.normalized_training_data @ self.cv
         
         # Compute statistics of the projected training data
-        stats = Statistics(projected_training_data)
+        self.cv_stats: Dict = Statistics(projected_training_data).to_dict()
         
         # Find the normalization for the CV
-        self.cv_normalization =  Normalization(self.cv_dimension, mode='min_max', stats = stats )
-        
-        # Get the dictionary with the statistics
-        stats_dict = stats.to_dict()
+        self.cv_normalization: Normalization =  Normalization(self.cv_dimension, mode='min_max', stats = self.cv_stats )
         
         # Save the max/min values of each dimension - part of the final cv definition
-        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), stats_dict['max'])
-        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), stats_dict['min'])
+        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
+        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
+    
+    def write_plumed_input(self):
+        """
+        Creates a plumed input file that computes the collective variable from the features.
+        """
         
+        # Save new PLUMED-compliant topology
+        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
+        md.create_pdb(self.topologies[0], plumed_topology_path)
+        
+        # Save CV data to parameters dictionary
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'features_norm_mode': self.feats_norm_mode,
+            'features_stats': self.features_stats,
+            'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization for the cv
+            'weights': self.cv.numpy()
+        }
+        
+        # Construct builder arguments
+        builder_args = {
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
+            'topology_path': plumed_topology_path,
+            'feature_list': self.feature_labels,
+            'traj_stride': 1,
+            'cv_type': 'linear',
+            'cv_params': cv_parameters
+        }
+        
+        # Build the plumed input file to track the CV
+        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_out.dat')
+        
+        # Save enhanced sampling parameters to parameters dictionary
+        sampling_params = {
+            'sigma': 0.05,
+            'height': 1.0,
+            'biasfactor': 10.0,
+            'temp': 300,
+            'pace': 500,
+            'grid_min': -1,
+            'grid_max': 1,
+            'grid_bin': 300
+        }
+        
+        builder_args.update({
+            'sampling_method': 'wt-metadynamics', 
+            'sampling_params': sampling_params,
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
+            })
+            
+        # Build the plumed input file to perform enhanced sampling
+        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
         
 # Subclass for non-linear collective variables calculators
 class NonLinearCVCalculator(CVCalculator):
@@ -477,25 +596,26 @@ class NonLinearCVCalculator(CVCalculator):
     Non-linear collective variables calculator (e.g. Autoencoder)
     """
     
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """ 
         Initializes a non-linear CV calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         # Main attributes
         self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
         self.checkpoint: Union[ModelCheckpoint, None] = None
         self.metrics: Union[MetricsCallback, None] = None
+        self.weights_path: Union[str, None] = None
+        self.weights_path: Union[str, None] = None
         
         # Training configuration
         self.training_config: Dict = configuration['training'] 
         self.general_config: Dict = self.training_config['general']
         self.early_stopping_config: Dict  = self.training_config['early_stopping']
         self.optimizer_config: Dict = self.training_config['optimizer']
-        self.lr_scheduler_config: Dict = self.training_config['lr_scheduler']
         
         # Training attributes
         self.max_tries: int = self.general_config['max_tries']
@@ -524,31 +644,16 @@ class NonLinearCVCalculator(CVCalculator):
         self.nn_options: Dict = {'activation': 'shifted_softplus', 'dropout': self.dropout} 
         
         # Normalization of features in the Non-linear models: min_max or mean_std
-        if self.features_normalization == 'min_max':
+        if self.feats_norm_mode == 'min_max':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
-        elif self.features_normalization == 'mean_std':
+        elif self.feats_norm_mode == 'mean_std':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std'}}
-        elif self.features_normalization == 'none':
+        elif self.feats_norm_mode == 'none':
             self.cv_options: Dict = {'norm_in' : None}
         
         # Optimizer
         self.opt_name: str = self.optimizer_config['name']
         self.optimizer_options: Dict = self.optimizer_config['kwargs']
-        
-        # Learning rate scheduler
-        if self.lr_scheduler_config is not None:
-
-            lr_scheduler = {'scheduler': getattr(torch.optim.lr_scheduler, self.lr_scheduler_config['name'])}
-            lr_scheduler.update(self.lr_scheduler_config['kwargs'])
-
-            # Update options
-            self.cv_options.update({"lr_scheduler": lr_scheduler, 
-                                    "lr_interval": "epoch", 
-                                    "lr_monitor": "valid_loss", 
-                                    "lr_frequency": self.check_val_every_n_epoch})
-
-            # Make early stopping patience larger than learning rate scheduler patience
-            self.patience = max(self.patience, self.lr_scheduler_config['kwargs']['patience']*2)
     
     def check_batch_size(self):
         
@@ -699,7 +804,7 @@ class NonLinearCVCalculator(CVCalculator):
                 np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
                 np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
                 np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
-                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([self.best_model_score]))
+                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([self.best_model_score]), fmt='%.7g')
                 
             # Plot loss
             ax = plot_metrics(self.metrics.metrics, 
@@ -748,14 +853,16 @@ class NonLinearCVCalculator(CVCalculator):
         Saves the collective variable non-linear weights to a pytorch script file.
         """
         
+        # Path to output model
+        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.pt')
+        
         if self.cv is None:
             logger.error('No collective variable to save.')
             return
-    
-        weights_path = os.path.join(self.output_path, f'weights.ptc')
-        self.cv.to_torchscript(file_path = weights_path, method='trace') # NOTE: check if this also saves the normalization layer
+
+        self.cv.to_torchscript(file_path = self.weights_path, method='trace') # NOTE: check if this also saves the normalization layer
         
-        logger.info(f'Collective variable weights saved to {weights_path}')
+        logger.info(f'Collective variable weights saved to {self.weights_path}')
 
     def project_reference(self):
         """
@@ -804,19 +911,69 @@ class NonLinearCVCalculator(CVCalculator):
    
         return projected_colvars
     
+    def write_plumed_input(self):
+        """
+        Creates a plumed input file that computes the collective variable from the features.
+        """
+        
+        # Save new PLUMED-compliant topology
+        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
+        md.create_pdb(self.topologies[0], plumed_topology_path)
+        
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'weights_path': self.weights_path
+        }
+        
+        builder_args = {
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
+            'topology_path': plumed_topology_path,
+            'feature_list': self.feature_labels,
+            'traj_stride': 1,
+            'cv_type': 'non-linear',
+            'cv_params': cv_parameters
+        }
+        
+        # Build the plumed input file to track the CV
+        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_out.dat')
+        
+        # Save enhanced sampling parameters to parameters dictionary
+        sampling_params = {
+            'sigma': 0.05,
+            'height': 1.0,
+            'biasfactor': 10.0,
+            'temp': 300,
+            'pace': 500,
+            'grid_min': -1,
+            'grid_max': 1,
+            'grid_bin': 300
+        }
+        
+        builder_args.update({
+            'sampling_method': 'wt-metadynamics',
+            'sampling_params': sampling_params,
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
+            })
+        
+        # Build the plumed input file to perform enhanced sampling
+        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
+
 # Collective variables calculators
 class PCACalculator(LinearCVCalculator):
     """
     Principal component analysis calculator.
     """
 
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the PCA calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'pca'
         
@@ -860,13 +1017,13 @@ class TICACalculator(LinearCVCalculator):
     Time-lagged independent component analysis calculator.
     """
     
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the TICA calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'tica'
         
@@ -904,13 +1061,13 @@ class HTICACalculator(LinearCVCalculator):
     Computing Slow Modes and Reaction Coordinates for Large Molecular Systems.” Journal of Chemical Theory 
     and Computation 12, no. 12 (December 13, 2016): 6118–29. https://doi.org/10.1021/acs.jctc.6b00738.
     """
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the HTICA calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'htica'
         
@@ -996,13 +1153,13 @@ class AECalculator(NonLinearCVCalculator):
     """
     Autoencoder calculator.
     """
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the Autoencoder calculator.
         """
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'ae'
         
@@ -1019,13 +1176,13 @@ class DeepTICACalculator(NonLinearCVCalculator):
     """
     DeepTICA calculator.
     """
-    def __init__(self, colvars_path: str, feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """
         Initializes the DeepTICA calculator.
         """      
         
-        super().__init__(colvars_path, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
         
         self.cv_name = 'deep_tica'
         
@@ -1055,7 +1212,7 @@ class DeepTICACalculator(NonLinearCVCalculator):
         for i in range(self.cv_dimension):
             logger.info(f'Eigenvalue {i+1}: {best_eigvals[i]}')
             
-        np.savetxt(os.path.join(self.output_path, 'eigenvalues.txt'), np.array(best_eigvals))
+        np.savetxt(os.path.join(self.output_path, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
         
         # Plot eigenvalues
         ax = plot_metrics(self.metrics.metrics,

@@ -8,12 +8,9 @@ plumed_settings:
   features:
     dihedral_groups:
       tor:
-        atoms_format: name
         periodic_encoding: true
         search_mode: virtual
         selection: all
     distance_groups: {}
     distance_to_center_groups: {}
-  moltype: protein
   traj_stride: 1
-  whole_molecule_selection: all

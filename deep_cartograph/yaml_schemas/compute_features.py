@@ -15,8 +15,6 @@ class DistanceGroup(BaseModel):
     skip_neigh_residues: bool = False
     # If True, skip distances between atoms that are bonded
     skip_bonded_atoms: bool = True
-    # Format of the ATOMS field in the distance plumed command
-    atoms_format: Literal["name", "index"] = "name"
 
 class DihedralGroup(BaseModel):
     
@@ -26,8 +24,6 @@ class DihedralGroup(BaseModel):
     periodic_encoding: bool = True
     # Mode to search for the dihedrals.
     search_mode: Literal["virtual", "protein_backbone", "real"] = "real"
-    # Format of the ATOMS field in the torsions plumed command.
-    atoms_format: Literal["name", "index"] = "name"
 
 class DistanceToCenterGroup(BaseModel):
 
@@ -51,10 +47,6 @@ class PlumedSettings(BaseModel):
     timeout: int = 172800
     # Stride for the trajectory. Include only one every traj_stride-th frame in the trajectory
     traj_stride: int = 1
-    # Molecule type: protein, dna or rna
-    moltype: str = "protein"
-    # Selection of atoms that define the molecules that should be whole to compute the descriptors (MDAnalysis selection syntax)
-    whole_molecule_selection: str = "all"
     # Definition of features to be included in the PLUMED input file
     features: Features = Features()
 

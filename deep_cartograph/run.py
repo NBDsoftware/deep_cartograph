@@ -237,8 +237,8 @@ def main():
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     
     # Input files
-    parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to compute the CVs.", required=True)
-    parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data.", required=True)
+    parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to compute the CVs. Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd ", required=True)
+    parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data. Accepted formats: .pdb", required=True)
     
     parser.add_argument('-ref_traj_data', dest='ref_trajectory_data', help="Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.", required=False)
     parser.add_argument('-ref_topology_data', dest='ref_topology_data', help="Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in -ref_traj_data.", required=False)

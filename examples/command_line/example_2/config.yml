@@ -2,8 +2,6 @@
 compute_features:
   plumed_settings:
     traj_stride: 1
-    moltype: protein
-    whole_molecule_selection: all
     features:
       distance_groups:
         L1_relative_position: 
@@ -13,7 +11,6 @@ compute_features:
           second_stride: 2
           skip_neigh_residues: False
           skip_bonded_atoms: True
-          atoms_format: name
 
 filter_features:
     filter_settings:
@@ -58,7 +55,6 @@ train_colvars:
         kwargs: 
           lr: 1.0e-02 
           weight_decay: 0
-      lr_scheduler: null
       save_loss: True
       plot_loss: True
   ae:           
