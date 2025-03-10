@@ -7,7 +7,7 @@ Deep cartograph is a package to analyze and enhance MD simulations.
 
 ---
 
-Deep cartograph can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages a custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar) to compute or train the different collective variables [1](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
+Deep cartograph can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages PLUMED to compute the features and the [mlcolvar](https://github.com/luigibonati/mlcolvar.git) library to train the different collective variables [1](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
 
 Starting from a trajectory and topology files, Deep cartograph can be used to:
 
@@ -15,7 +15,7 @@ Starting from a trajectory and topology files, Deep cartograph can be used to:
   2. Filter the features.
   3. Compute and train different collective variables (CVs) using the filtered features.
   4. Project and cluster the trajectory in the CV space.
-  5. (On-going) Produce a PLUMED input file to enhance the sampling.
+  5. Produce a PLUMED input file to enhance the sampling.
 
 <img src="deep_cartograph/data/images/DeepCarto_summary.png" width="800">
 
@@ -34,20 +34,13 @@ Using conda, create the deep cartograph environment from the `environment.yml` f
 ```
 git clone https://github.com/NBDsoftware/deep_cartograph.git
 cd deep_cartograph
-conda env create -f environment.yml
+conda env create -f environment_detailed.yml
 ```
 
-Activate the environment and install the custom version of [mlcolvar](https://github.com/NBDsoftware/mlcolvar).
+The `environment_detailed.yml` file has been produced using `conda env export --no-builds -f environment_detailed.yml` and should be cross-platform compatible. 
+Otherwise try to create the environment from `environment_production.yml`.
 
-```
-cd ../
-conda activate deep_cartograph
-git clone https://github.com/NBDsoftware/mlcolvar.git
-cd mlcolvar
-pip install .
-```
-
-Finally install the deep cartograph package itself.
+Activate the environment and install the deep cartograph package itself.
 
 ```
 cd deep_cartograph
