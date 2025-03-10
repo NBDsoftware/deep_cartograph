@@ -109,41 +109,47 @@ def run_plumed(plumed_command: str, working_dir: Union[str, None] = None, plumed
     
     logger.info(f"Executing PLUMED command: {command_str}")
 
-    # Change working directory if specified
-    if working_dir:
-        logger.info(f"Changing working directory to: {working_dir}")
-        try:
-            os.chdir(working_dir)
-        except FileNotFoundError:
-            logger.error(f"Specified working directory does not exist: {working_dir}")
-            sys.exit(1)
-        except PermissionError:
-            logger.error(f"Permission denied to access working directory: {working_dir}")
-            sys.exit(1)
-            
+    # Store the original working directory
+    original_cwd = os.getcwd()
+  
     try:
-        # Execute PLUMED redirecting output to the log file
-        completed_process = subprocess.run(args=command_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=plumed_timeout, text=True) 
-        
+        # Change working directory if specified
+        if working_dir:
+            logger.info(f"Changing working directory to: {working_dir}")
+            os.chdir(working_dir)
+
+        # Execute PLUMED redirecting output
+        completed_process = subprocess.run(
+            args=command_str, 
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            timeout=plumed_timeout, 
+            text=True
+        )
+
         stdout, stderr = completed_process.stdout, completed_process.stderr
-        
+
         if logger.isEnabledFor(logging.DEBUG):
-            # Send standard output to the log file 
             logger.info(stdout)
-            
-        # Check if PLUMED failed
+
         if completed_process.returncode != 0:
-            logger.error("PLUMED execution failed! \n")
+            logger.error("PLUMED execution failed!")
             logger.error(stderr)
             sys.exit(1)
-            
+
         return stdout, stderr
-    
+
     except subprocess.TimeoutExpired:
         logger.error("PLUMED execution timed out!")
         return None, "TimeoutExpired"
-    
+
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return None, str(e)
+
+    finally:
+        # Restore the original working directory
+        os.chdir(original_cwd)
+        logger.info(f"Restored working directory to: {original_cwd}")
 
