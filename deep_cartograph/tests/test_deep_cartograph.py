@@ -1,5 +1,8 @@
 from deep_cartograph.run import deep_cartograph
 import importlib.resources as resources
+from deep_cartograph.modules.plumed.colvars import read_as_pandas
+import deep_cartograph.modules.plumed as plumed
+import deep_cartograph.modules.md as md
 from deep_cartograph import tests
 import pandas as pd
 import shutil
@@ -175,7 +178,56 @@ def test_deep_cartograph():
       print(f"{cv} test passed: {computed_df.equals(reference_df)}")
 
     assert test_passed
+    
+    # For each linear cv
+    linear_cvs = ['pca', 'tica', 'htica']
+    for cv in linear_cvs:
+      
+      cv_output_path = os.path.join(train_colvars_path, cv)
+      
+      # Find path to plumed input file that tracks the cv
+      plumed_input_path = os.path.join(train_colvars_path, cv, f"plumed_input_{cv}.dat")
+      
+      # Check if the file exists
+      test_passed = test_passed and os.path.exists(plumed_input_path)
+      print(f"{cv} plumed input file exists: {os.path.exists(plumed_input_path)}")
+      
+      # Construct plumed driver command
+      traj_path = os.path.join(trajectory_folder, "CA_example.dcd")
+      top_path = os.path.join(topology_folder, "CA_example.pdb")
+      plumed_command = plumed.cli.get_driver_command(plumed_input_path, traj_path, md.get_number_atoms(top_path), cv_output_path)
 
+      # Execute plumed command
+      plumed.cli.run_plumed(plumed_command, working_dir=cv_output_path)
+      
+      # Find colvars path
+      colvars_path = os.path.join(cv_output_path, f"{cv}_out.dat")
+      plumed.colvars.check(colvars_path)
+      plumed_projection_df = read_as_pandas(colvars_path)
+      
+      # Find reference file
+      reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
+      reference_df = pd.read_csv(reference_projection_path)
+      
+      # Extract projection from dfs
+      plumed_projection = plumed_projection_df.iloc[:, 1:3]
+      reference_projection = reference_df.iloc[:, :2]
+      
+      # Put the same column names
+      plumed_projection.columns = reference_projection.columns
+      
+      # Take the difference
+      difference_df = plumed_projection - reference_projection
+          
+      # Check the values are below threshold
+      threshold = 1.0e-2
+      test_passed = test_passed and (difference_df.abs() < threshold).all().all()
+      
+      assert test_passed
+    
     # If the test passed, clean the output folder
     if test_passed:
-      shutil.rmtree(output_path)
+      try:
+        shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")

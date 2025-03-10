@@ -65,10 +65,13 @@ def test_compute_features():
         raise FileNotFoundError(f"Topology file {topology_path} does not exist.")
     if not os.path.exists(reference_colvars_path):
         raise FileNotFoundError(f"Reference colvars file {reference_colvars_path} does not exist.")
-      
-    # Remove output folder if it exists
+        
+    # Try to remove output folder if it exists
     if os.path.exists(output_path):
+      try:
         shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
     
     # Call API
     colvars_path = compute_features(
@@ -89,14 +92,20 @@ def test_compute_features():
     
     # If the test passed, clean the output folder
     if test_passed:
-      shutil.rmtree(output_path)
+      try:
+        shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
       
     # Output files
     output_path = os.path.join(tests_path, "output_compute_features_2")
         
-    # Remove output folder if it exists
+    # Try to remove output folder if it exists
     if os.path.exists(output_path):
+      try:
         shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
     
     print("Testing compute_features with distances ...")
     
@@ -122,5 +131,8 @@ def test_compute_features():
     
     # If the test passed, clean the output folder
     if test_passed:
-      shutil.rmtree(output_path)
+      try:
+        shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
     

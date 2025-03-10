@@ -158,4 +158,7 @@ def test_train_colvars():
     
     # If the test passed, clean the output folder
     if test_passed:
-      shutil.rmtree(output_path)
+      try:
+        shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")

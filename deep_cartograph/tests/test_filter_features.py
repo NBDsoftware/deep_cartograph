@@ -60,4 +60,7 @@ def test_filter_features():
     
     # If the test passed, clean the output folder
     if test_passed:
+      try:
         shutil.rmtree(output_path)
+      except:
+        print("Could not remove output folder.")
