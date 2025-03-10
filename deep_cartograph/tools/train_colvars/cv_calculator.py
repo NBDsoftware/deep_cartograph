@@ -562,11 +562,32 @@ class LinearCVCalculator(CVCalculator):
             'cv_params': cv_parameters
         }
         
-        # Build the plumed input file
+        # Build the plumed input file to track the CV
         plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_out.dat')
         
-    
+        # Save enhanced sampling parameters to parameters dictionary
+        sampling_params = {
+            'sigma': 0.05,
+            'height': 1.0,
+            'biasfactor': 10.0,
+            'temp': 300,
+            'pace': 500,
+            'grid_min': -1,
+            'grid_max': 1,
+            'grid_bin': 300
+        }
+        
+        builder_args.update({
+            'sampling_method': 'wt-metadynamics', 
+            'sampling_params': sampling_params,
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
+            })
+            
+        # Build the plumed input file to perform enhanced sampling
+        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
+        
 # Subclass for non-linear collective variables calculators
 class NonLinearCVCalculator(CVCalculator):
     """
@@ -928,8 +949,31 @@ class NonLinearCVCalculator(CVCalculator):
             'cv_params': cv_parameters
         }
         
+        # Build the plumed input file to track the CV
         plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_out.dat')
+        
+        # Save enhanced sampling parameters to parameters dictionary
+        sampling_params = {
+            'sigma': 0.05,
+            'height': 1.0,
+            'biasfactor': 10.0,
+            'temp': 300,
+            'pace': 500,
+            'grid_min': -1,
+            'grid_max': 1,
+            'grid_bin': 300
+        }
+        
+        builder_args.update({
+            'sampling_method': 'wt-metadynamics',
+            'sampling_params': sampling_params,
+            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
+            })
+        
+        # Build the plumed input file to perform enhanced sampling
+        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
 
 # Collective variables calculators
 class PCACalculator(LinearCVCalculator):

@@ -86,6 +86,9 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
         # Add CV to print arguments
         self.print_args.extend(self.cv_labels)
         
+        # Add enhanced sampling variables to print arguments
+        self.print_args.extend(self.bias_labels)
+        
         # Add the print command
         self.add_print_command(colvars_path, self.traj_stride)
         

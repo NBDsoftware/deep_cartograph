@@ -235,7 +235,7 @@ class CollectiveVariableAssembler(Assembler):
         
     def add_cv_section(self):
         """
-        Add the collective variable section to the PLUMED input file.
+        Add the collective variable section to the contents of the PLUMED input file.
         """
         
         # Add the corresponding CV commands
@@ -373,24 +373,54 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params)
         self.sampling_method = sampling_method  # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
         self.sampling_params = sampling_params  # Parameters for the enhanced sampling method
-    
+        self.bias_labels = []  # Labels of the bias potentials
+        
     def build(self):
         """Override the base build method to include the enhanced sampling section."""
         super().build()
+        
+        # Add the enhanced sampling section
+        self.add_enhanced_sampling_section()
+        
+    def add_enhanced_sampling_section(self):
+        """ 
+        Add the enhanced sampling section to the contents of the PLUMED input file.
+        """
+        
+        if self.sampling_method == "wt-metadynamics":
+            self.add_wt_metadynamics()
+        else:
+            raise ValueError(f"Enhanced sampling method {self.sampling_method} not recognized.")
+        
+    def add_wt_metadynamics(self):
+        """
+        Add well-tempered metadynamics to the PLUMED input file.
+        """
+        
+        bias_name = 'wt_metad'
         
         # Ensure a CV is defined before applying enhanced sampling
         if not self.cv_type:
             raise ValueError("Enhanced sampling requires a collective variable.")
         
+        # Set up the bias parameters
+        metad_params = {
+            'command_label' : bias_name,
+            'arguments' : self.cv_labels,
+            'sigmas' : [self.sampling_params['sigma'] for _ in range(self.cv_params['cv_dimension'])],
+            'height' : self.sampling_params['height'],
+            'biasfactor' : self.sampling_params['biasfactor'],
+            'temp' : self.sampling_params['temp'],
+            'pace' : self.sampling_params['pace'],
+            'grid_mins' : [self.sampling_params['grid_min'] for _ in range(self.cv_params['cv_dimension'])],
+            'grid_maxs' : [self.sampling_params['grid_max'] for _ in range(self.cv_params['cv_dimension'])],
+            'grid_bins' : [self.sampling_params['grid_bin'] for _ in range(self.cv_params['cv_dimension'])],
+        }
+        
         # Add enhanced sampling section title
         self.input_content += "\n# Enhanced Sampling\n"
         
-        # Generate the enhanced sampling command (to be implemented based on sampling_method)
-        self.input_content += self.get_sampling_command()
-    
-    def get_sampling_command(self) -> str:
-        """
-        Generate the PLUMED command to apply enhanced sampling.
-        """
-        # Placeholder - implement logic based on self.sampling_method and self.sampling_params
-        return f"# Apply {self.sampling_method} enhanced sampling here\n"
+        # Generate the enhanced sampling command
+        self.input_content += plumed.command.metad(**metad_params)
+            
+        self.bias_labels.append(f"{bias_name}.rbias")
