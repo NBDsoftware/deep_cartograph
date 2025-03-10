@@ -414,13 +414,13 @@ class LinearCVCalculator(CVCalculator):
     Linear collective variables calculator (e.g. PCA)
     """
     
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
+    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
                  ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
         """ 
         Initializes a linear CV calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(colvars_paths, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
                 
         # Main attributes
         self.cv: Union[torch.tensor, None] = None
