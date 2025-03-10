@@ -1,17 +1,17 @@
-  python
-  pip
-  numpy
-  dask
-  pandas
-  pydantic
-  torch
-  lightning
-  MDAnalysis
-  seaborn
-  matplotlib
-  scikit-learn>=1.3
-  KDEpy             # (Optional) Faster than scikit-learn for KDE
-  diptest
-  plumed
-  jupyter           # (Optional) For running the notebooks
-  #mlcolvar
+numpy
+pandas
+pydantic
+lightning
+MDAnalysis
+scikit-learn>=1.3
+scipy
+seaborn
+matplotlib
+jupyter
+ipython
+ipykernel
+torch==2.2.2
+kdepy
+diptest
+plumed==2.9.0
+mlcolvar

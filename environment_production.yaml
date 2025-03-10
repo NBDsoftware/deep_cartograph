@@ -1,0 +1,36 @@
+name: deep_cartograph
+channels:
+
+  - conda-forge
+  - pytorch
+  - defaults
+
+dependencies:
+  # Base depends
+  - python >=3.8,<=3.10
+  - pip
+
+  # Core dependencies
+  - numpy<2               # match with pytorch
+  - pytorch<2.3           # match with numpy
+  - pandas
+  - pydantic              # to-try: pydantic<2 workaround to avoid clashes with lightning
+  - lightning
+  - mdanalysis
+  - scikit-learn>=1.3     # HDBSCAN is included in scikit-learn>=1.3
+  - scipy
+  - plumed==2.9.0        # (Optional) Otherwise use an external installation
+  - pytest
+
+  # Notebooks and plotting
+  - seaborn
+  - matplotlib
+  - jupyter           
+  - ipython
+  - ipykernel
+   
+  # Pip-only installs
+  - pip:   
+    - kdepy                # (Optional) Faster than scikit-learn for KDE
+    - diptest
+    - mlcolvar
