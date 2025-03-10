@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Dict, Union
 
 import logging
 
@@ -76,7 +77,7 @@ def get_driver_command(plumed_input: str, traj_path: str = None, num_atoms: int 
 
     return driver_command 
 
-def run_plumed(plumed_command: str, plumed_settings: dict, plumed_timeout: int) -> None:
+def run_plumed(plumed_command: str, working_dir: Union[str, None] = None, plumed_settings: Dict = {}, plumed_timeout: int = 604800) -> None:
     """
     Runs PLUMED through command line, setting up the necessary environment variables and modules.
 
@@ -108,6 +109,18 @@ def run_plumed(plumed_command: str, plumed_settings: dict, plumed_timeout: int) 
     
     logger.info(f"Executing PLUMED command: {command_str}")
 
+    # Change working directory if specified
+    if working_dir:
+        logger.info(f"Changing working directory to: {working_dir}")
+        try:
+            os.chdir(working_dir)
+        except FileNotFoundError:
+            logger.error(f"Specified working directory does not exist: {working_dir}")
+            sys.exit(1)
+        except PermissionError:
+            logger.error(f"Permission denied to access working directory: {working_dir}")
+            sys.exit(1)
+            
     try:
         # Execute PLUMED redirecting output to the log file
         completed_process = subprocess.run(args=command_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=plumed_timeout, text=True) 
