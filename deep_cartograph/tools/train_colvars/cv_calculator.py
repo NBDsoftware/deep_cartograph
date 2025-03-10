@@ -448,14 +448,14 @@ class LinearCVCalculator(CVCalculator):
         # Path to output weights
         self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.txt')
         
-        np.savetxt(self.weights_path, self.cv.numpy())
+        np.savetxt(self.weights_path, self.cv.numpy(), fmt='%.7g')
         
         if self.feats_norm_mode == 'mean_std':
-            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'])
-            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'])
+            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'], fmt='%.7g')
+            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'], fmt='%.7g')
         elif self.feats_norm_mode == 'min_max':
-            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'])
-            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'])
+            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'], fmt='%.7g')
+            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'], fmt='%.7g')
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
@@ -530,8 +530,8 @@ class LinearCVCalculator(CVCalculator):
         self.cv_normalization: Normalization =  Normalization(self.cv_dimension, mode='min_max', stats = self.cv_stats )
         
         # Save the max/min values of each dimension - part of the final cv definition
-        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'])
-        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'])
+        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
+        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
     
     def write_plumed_input(self):
         """
@@ -818,7 +818,7 @@ class NonLinearCVCalculator(CVCalculator):
                 np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
                 np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
                 np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
-                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([self.best_model_score]))
+                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([self.best_model_score]), fmt='%.7g')
                 
             # Plot loss
             ax = plot_metrics(self.metrics.metrics, 
@@ -1226,7 +1226,7 @@ class DeepTICACalculator(NonLinearCVCalculator):
         for i in range(self.cv_dimension):
             logger.info(f'Eigenvalue {i+1}: {best_eigvals[i]}')
             
-        np.savetxt(os.path.join(self.output_path, 'eigenvalues.txt'), np.array(best_eigvals))
+        np.savetxt(os.path.join(self.output_path, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
         
         # Plot eigenvalues
         ax = plot_metrics(self.metrics.metrics,
