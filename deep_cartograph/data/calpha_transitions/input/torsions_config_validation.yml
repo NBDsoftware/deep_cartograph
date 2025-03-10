@@ -51,7 +51,6 @@ train_colvars:
         kwargs: 
           lr: 1.0e-03
           weight_decay: 0
-      lr_scheduler: null
       save_loss: True
       plot_loss: True
   figures:

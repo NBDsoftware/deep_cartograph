@@ -1,13 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Union, Literal, Optional
-
-# Schemas with default values, to validate CommonCollectiveVariable
-class LRScheduler(BaseModel):
-
-    # Name of the optimizer (see torch.optim.lr_scheduler Algorithms)
-    name: str = "ReduceLROnPlateau"
-    # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim.lr_scheduler Algorithms)
-    kwargs: dict = {'mode': 'min', 'factor': 0.5, 'patience': 5, 'threshold': 0.05, 'threshold_mode': 'rel', 'cooldown': 0, 'min_lr': 1.0e-05, 'eps': 1.0e-09}
+from typing import List, Union, Literal
 
 class Optimizer(BaseModel):
 
@@ -70,8 +62,6 @@ class Trainings(BaseModel):
     early_stopping: EarlyStopping = EarlyStopping()
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
-    # Learning rate scheduler settings
-    lr_scheduler: Union[LRScheduler, None] = None
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training

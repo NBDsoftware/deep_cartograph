@@ -70,7 +70,6 @@ def get_config():
             kwargs: 
               lr: 1.0e-02 
               weight_decay: 0
-          lr_scheduler: null
           save_loss: True
           plot_loss: True
       ae:           

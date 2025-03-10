@@ -133,9 +133,6 @@ filter_features:
 #       optimizer:                   Settings for the optimizer
 #         name:                         (str) Name of the optimizer
 #         kwargs:                       (dict) Keyword arguments for the optimizer
-#       lr_scheduler:                Settings for the learning rate scheduler
-#         name:                         (str) Name of the learning rate scheduler
-#         kwargs:                       (dict) Keyword arguments for the learning rate scheduler
 #       save_loss:                    (bool) Wether to save the training and validation losses after training 
 #       plot_loss:                    (bool) Wether to plot the loss after training
 #   figures:                          Settings for additional figures
@@ -207,7 +204,6 @@ train_colvars:
         kwargs: 
           lr: 1.0e-05
           weight_decay: 0.0
-      lr_scheduler: null
       save_loss: True
       plot_loss: True
   figures:

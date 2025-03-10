@@ -614,7 +614,6 @@ class NonLinearCVCalculator(CVCalculator):
         self.general_config: Dict = self.training_config['general']
         self.early_stopping_config: Dict  = self.training_config['early_stopping']
         self.optimizer_config: Dict = self.training_config['optimizer']
-        self.lr_scheduler_config: Dict = self.training_config['lr_scheduler']
         
         # Training attributes
         self.max_tries: int = self.general_config['max_tries']
@@ -653,21 +652,6 @@ class NonLinearCVCalculator(CVCalculator):
         # Optimizer
         self.opt_name: str = self.optimizer_config['name']
         self.optimizer_options: Dict = self.optimizer_config['kwargs']
-        
-        # Learning rate scheduler
-        if self.lr_scheduler_config is not None:
-
-            lr_scheduler = {'scheduler': getattr(torch.optim.lr_scheduler, self.lr_scheduler_config['name'])}
-            lr_scheduler.update(self.lr_scheduler_config['kwargs'])
-
-            # Update options
-            self.cv_options.update({"lr_scheduler": lr_scheduler, 
-                                    "lr_interval": "epoch", 
-                                    "lr_monitor": "valid_loss", 
-                                    "lr_frequency": self.check_val_every_n_epoch})
-
-            # Make early stopping patience larger than learning rate scheduler patience
-            self.patience = max(self.patience, self.lr_scheduler_config['kwargs']['patience']*2)
     
     def check_batch_size(self):
         
