@@ -6,7 +6,7 @@ setup(name='deep_cartograph',
     python_requires=">=3.8,<=3.10",
     install_requires=[
         'numpy',
-        'pytorch<2.3',
+        'torch<2.3',
         'pandas',
         "pydantic",
         'lightning',

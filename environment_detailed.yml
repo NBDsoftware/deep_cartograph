@@ -340,7 +340,6 @@ dependencies:
       - aiohttp==3.11.13
       - aiosignal==1.3.2
       - async-timeout==5.0.1
-      - deep-cartograph==0.1.0
       - diptest==0.8.2
       - frozenlist==1.5.0
       - kdepy==1.1.11
@@ -348,4 +347,3 @@ dependencies:
       - multidict==6.1.0
       - propcache==0.3.0
       - yarl==1.18.3
-prefix: /home/pnavarro/.conda/envs/deep_cartograph

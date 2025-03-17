@@ -10,7 +10,7 @@ matplotlib
 jupyter
 ipython
 ipykernel
-torch==2.2.2
+torch<2.3
 kdepy
 diptest
 plumed==2.9.0
