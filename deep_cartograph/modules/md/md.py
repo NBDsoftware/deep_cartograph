@@ -445,8 +445,12 @@ def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
                         if j_neighbor != i_index and j_neighbor != i_neighbor:
 
                             # Create dihedral label for atoms with indices i_neighbor, i_index, j_index, j_neighbor
-                            dihedral_label = f"@{heavy_atom_dict[i_neighbor].name}-{heavy_atom_dict[i_neighbor].resid},@{heavy_atom_dict[i_index].name}-{heavy_atom_dict[i_index].resid},@{heavy_atom_dict[j_index].name}-{heavy_atom_dict[j_index].resid},@{heavy_atom_dict[j_neighbor].name}-{heavy_atom_dict[j_neighbor].resid}"
-                            equivalent_dihedral_label = f"@{heavy_atom_dict[j_neighbor].name}-{heavy_atom_dict[j_neighbor].resid},@{heavy_atom_dict[j_index].name}-{heavy_atom_dict[j_index].resid},@{heavy_atom_dict[i_index].name}-{heavy_atom_dict[i_index].resid},@{heavy_atom_dict[i_neighbor].name}-{heavy_atom_dict[i_neighbor].resid}"
+                            atom_1 = f"@{heavy_atom_dict[i_neighbor].name}_{heavy_atom_dict[i_neighbor].resid}"
+                            atom_2 = f"@{heavy_atom_dict[i_index].name}_{heavy_atom_dict[i_index].resid}"
+                            atom_3 = f"@{heavy_atom_dict[j_index].name}_{heavy_atom_dict[j_index].resid}"
+                            atom_4 = f"@{heavy_atom_dict[j_neighbor].name}_{heavy_atom_dict[j_neighbor].resid}"
+                            dihedral_label = f"{atom_1}-{atom_2}-{atom_3}-{atom_4}"
+                            equivalent_dihedral_label = f"{atom_4}-{atom_3}-{atom_2}-{atom_1}"
                             
                             # Check dihedral is not repeated
                             if dihedral_label not in dihedral_labels and equivalent_dihedral_label not in dihedral_labels:
