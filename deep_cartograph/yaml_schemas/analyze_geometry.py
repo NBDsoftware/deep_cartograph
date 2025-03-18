@@ -16,12 +16,12 @@ class RMSSettings(BaseModel):
 class RMSDSettings(RMSSettings):
     
     # Title for the RMSD calculation
-    title: str = "Backbone RMSD"
+    title: str = "Protein Backbone RMSD"
 
 class RMSFSettings(RMSSettings):
     
     # Title for the RMSF calculation
-    title: str = "Backbone RMSF"
+    title: str = "Protein Backbone RMSF"
     
 
 class AnalysisList(BaseModel):

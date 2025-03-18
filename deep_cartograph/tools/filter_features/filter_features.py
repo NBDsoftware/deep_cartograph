@@ -11,8 +11,8 @@ from typing import Dict, List, Union
 # TOOL #
 ########
 
-def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], output_features_path: Union[str, None] = None, 
-                    csv_summary: bool = True, output_folder: str = 'filter_features'):
+def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], csv_summary: bool = True, 
+                    output_folder: str = 'filter_features'):
     """
     Function that filters the features in the colvars file/s using different algorithms to select a subset that contains 
     the most information about the system.
@@ -29,9 +29,6 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], o
             
         colvars_paths:             
             Path or list of paths to the input colvars file/s with the time series of features to filter. If more than one file is given, they should have the same features.
-            
-        output_features_path       
-            (Optional) Path to the output file with the filtered features.
             
         csv_summary:               
             (Optional) If True, saves a CSV summary with the filter values for each collective variable
@@ -63,6 +60,14 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], o
 
     # Start timer
     start_time = time.time()
+    
+    # Set output file path
+    output_features_path = os.path.join(output_folder, 'filtered_features.txt')
+    
+    # If the file exists already, skip the filtering
+    if os.path.exists(output_features_path):
+        logger.info(f"Filtered features file already exists: {output_features_path}. Skipping filtering.")
+        return output_features_path
 
     # Create output folder if it does not exist
     create_output_folder(output_folder)
@@ -89,7 +94,6 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], o
     filtered_features = features_filter.run(csv_summary)
 
     # Save the filtered features
-    output_features_path = os.path.join(output_folder, 'filtered_features.txt')
     save_list(filtered_features, output_features_path)
 
     # End timer

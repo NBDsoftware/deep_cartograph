@@ -83,102 +83,73 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     ref_trajectories, ref_topologies = check_ref_data(ref_trajectory_data, ref_topology_data)
     
     # Step 0: Analyze geometry
-    step0_output_folder = os.path.join(output_folder, 'analyze_geometry')
+    # ------------------------
     
-    if os.path.exists(step0_output_folder):
-        logger.info("Analyzed geometry folder already exists. Skipping analysis of geometry.")
-    else:
-        analyze_geometry(
-            configuration = configuration['analyze_geometry'], 
-            trajectories = trajectories, 
-            topologies = topologies, 
-            output_folder = step0_output_folder)
+    args = {
+        'configuration': configuration['analyze_geometry'],
+        'trajectories': trajectories,
+        'topologies': topologies,
+        'output_folder': os.path.join(output_folder, 'analyze_geometry')
+    }
+    analyze_geometry(**args)
 
     # Step 1: Compute features
-    step1_parent_path = os.path.join(output_folder, 'compute_features')
+    # ------------------------
     
-    # Step 1.1: Compute features for trajectories
-    traj_colvars_paths = []
-    traj_names = []
-    for trajectory, topology in zip(trajectories, topologies):
+    # Compute features for all trajectories
+    args = {
+        'configuration': configuration['compute_features'], 
+        'trajectories': trajectories, 
+        'topologies': topologies, 
+        'output_folder': os.path.join(output_folder, 'compute_features')
+    }
+    traj_colvars_paths = compute_features(**args)
         
-        # Create unique output folder
-        traj_name = Path(trajectory).stem
-        step1_output_folder = os.path.join(step1_parent_path, traj_name)
-        colvars_path = os.path.join(step1_output_folder, 'colvars.dat')
+    # Compute features for reference data
+    args = {
+        'configuration': configuration['compute_features'], 
+        'trajectories': ref_trajectories, 
+        'topologies': ref_topologies, 
+        'output_folder': os.path.join(output_folder, 'compute_ref_features')
+    }
+    ref_colvars_paths = compute_features(**args)
         
-        # Compute features for trajectory if colvars file does not exist
-        if os.path.exists(colvars_path):
-            logger.info(f"Colvars file already exists for trajectory {traj_name}. Skipping computation of features.")
-        else:
-            compute_features(
-                configuration = configuration['compute_features'], 
-                trajectory = trajectory, 
-                topology = topology, 
-                colvars_path = colvars_path,
-                output_folder = step1_output_folder)
-            
-        # Save path to colvars file and name of trajectory file
-        traj_colvars_paths.append(colvars_path)
-        traj_names.append(traj_name)
-
-    # Step 1.2: Compute features for reference data
-    ref_colvars_paths = []
-    ref_names = []    
-    for ref_trajectory, ref_topology in zip(ref_trajectories, ref_topologies):
-
-        # Create unique output folder
-        ref_name = Path(ref_trajectory).stem
-        step1_output_folder = os.path.join(step1_parent_path, ref_name)
-        ref_colvars_path = os.path.join(step1_output_folder, 'colvars.dat')
-
-        if os.path.exists(ref_colvars_path):
-            logger.info("Colvars file already exists for reference file. Skipping computation of features.")
-        else:
-            ref_colvars_path = compute_features(
-                configuration = configuration['compute_features'], 
-                trajectory = ref_trajectory,
-                topology = ref_topology,
-                colvars_path = ref_colvars_path,
-                output_folder = step1_output_folder)
-        
-        # Save path to colvars file and name of reference file
-        ref_colvars_paths.append(ref_colvars_path)
-        ref_names.append(ref_name)
-
-    if not label_reference:
+    # Set reference labels
+    if label_reference:
+        ref_names = [Path(ref_trajectory).stem for ref_trajectory in ref_trajectories]
+    else:
         ref_names = None
 
-    # Step 2: Filter features
-    step2_output_folder = os.path.join(output_folder, 'filter_features')
-    output_features_path = os.path.join(step2_output_folder, 'filtered_features.txt')
+    ## Step 2: Filter features
+    # ------------------------
     
-    if os.path.exists(output_features_path):
-        logger.info("Filtered features file already exists. Skipping filtering of features.")
-    else:
-        output_features_path = filter_features(
-                configuration = configuration['filter_features'], 
-                colvars_paths = traj_colvars_paths,
-                output_features_path = output_features_path,
-                output_folder = step2_output_folder)
+    args = {
+        'configuration': configuration['filter_features'], 
+        'colvars_paths': traj_colvars_paths,
+        'output_folder': os.path.join(output_folder, 'filter_features')
+    }
+    output_features_path = filter_features(**args)
 
     # Read filtered features
     filtered_features = read_feature_constraints(output_features_path) 
 
     # Step 3: Train colvars
-    step3_output_folder = os.path.join(output_folder, 'train_colvars')
-    train_colvars(
-        configuration = configuration['train_colvars'],
-        colvars_paths = traj_colvars_paths,
-        feature_constraints = filtered_features,
-        ref_colvars_paths = ref_colvars_paths,
-        ref_labels = ref_names,
-        dimension = dimension,
-        cvs = cvs,
-        trajectories = trajectories,
-        topologies = topologies,
-        samples_per_frame = 1/configuration['compute_features']['plumed_settings']['traj_stride'],
-        output_folder = step3_output_folder)
+    # ---------------------
+    
+    args = {
+        'configuration': configuration['train_colvars'],
+        'colvars_paths': traj_colvars_paths,
+        'feature_constraints': filtered_features,
+        'ref_colvars_paths': ref_colvars_paths,
+        'ref_labels': ref_names,
+        'dimension': dimension,
+        'cvs': cvs,
+        'trajectories': trajectories,
+        'topologies': topologies,
+        'samples_per_frame': 1/configuration['compute_features']['plumed_settings']['traj_stride'],
+        'output_folder': os.path.join(output_folder, 'train_colvars')
+    }
+    train_colvars(**args)
             
     # End timer
     elapsed_time = time.time() - start_time

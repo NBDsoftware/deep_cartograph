@@ -57,6 +57,9 @@ def files_exist(*file_path):
         
         this_file_exist = os.path.isfile(path)
         all_exist = all_exist and this_file_exist
+        
+        if not this_file_exist:
+            logger.error(f"File not found {path}")
             
     return all_exist
 
