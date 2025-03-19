@@ -13,51 +13,6 @@ from deep_cartograph.tools.train_colvars.train_colvars_workflow import TrainColv
 # TOOL #
 ########
 
-def set_logger(verbose: bool):
-    """
-    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
-    If verbose is False, it sets the logging level to INFO.
-
-    Inputs
-    ------
-
-        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
-    """
-    # Issue warning if logging is already configured
-    if logging.getLogger().hasHandlers():
-        logging.warning("Logging has already been configured in the root logger. This may lead to unexpected behavior.")
-    
-    # Get the path to this file
-    file_path = Path(os.path.abspath(__file__))
-
-    # Get the path to the package
-    tool_path = file_path.parent
-    all_tools_path = tool_path.parent
-    package_path = all_tools_path.parent
-
-    info_config_path = os.path.join(package_path, "log_config/info_configuration.ini")
-    debug_config_path = os.path.join(package_path, "log_config/debug_configuration.ini")
-    
-    # Check the existence of the configuration files
-    if not os.path.exists(info_config_path):
-        raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
-    
-    if not os.path.exists(debug_config_path):
-        raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
-    
-    if verbose:
-        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
-    else:
-        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
-
-    logger = logging.getLogger("deep_cartograph")
-
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-
-########
-# MAIN #
-########
-
 def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], feature_constraints: Union[List[str], str, None] = None, 
                   validation_colvars_paths: Union[List[str], None] = None, validation_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
                   cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, trajectories: Union[List[str], None] = None, 
@@ -70,6 +25,7 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
         - pca (Principal Component Analysis) 
         - ae (Autoencoder)
         - tica (Time Independent Component Analysis)
+        - htica (Hierarchical Time Independent Component Analysis)
         - deep_tica (Deep Time Independent Component Analysis)
 
     It also plots an estimate of the Free Energy Surface (FES) along the CVs from the trajectory data.
@@ -152,6 +108,47 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
+def set_logger(verbose: bool):
+    """
+    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
+    If verbose is False, it sets the logging level to INFO.
+
+    Inputs
+    ------
+
+        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
+    """
+    # Issue warning if logging is already configured
+    if logging.getLogger().hasHandlers():
+        logging.warning("Logging has already been configured in the root logger. This may lead to unexpected behavior.")
+    
+    # Get the path to this file
+    file_path = Path(os.path.abspath(__file__))
+
+    # Get the path to the package
+    tool_path = file_path.parent
+    all_tools_path = tool_path.parent
+    package_path = all_tools_path.parent
+
+    info_config_path = os.path.join(package_path, "log_config/info_configuration.ini")
+    debug_config_path = os.path.join(package_path, "log_config/debug_configuration.ini")
+    
+    # Check the existence of the configuration files
+    if not os.path.exists(info_config_path):
+        raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
+    
+    if not os.path.exists(debug_config_path):
+        raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
+    
+    if verbose:
+        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
+    else:
+        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
+
+    logger = logging.getLogger("deep_cartograph")
+
+    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+
 ########
 # MAIN #
 ########
@@ -192,6 +189,7 @@ def main():
     validation_labels = None
     validation_colvars_paths = None
     if args.validation_colvars_paths:
+        validation_labels = [Path(args.validation_colvars_paths).stem]
         validation_colvars_paths = [args.validation_colvars_paths]
             
     # Trajectories should be list or None - see train_colvars API

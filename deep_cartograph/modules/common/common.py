@@ -251,8 +251,9 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     
         trajectory_data    (str): Path to trajectory or folder with trajectories.
         topology_data      (str): Path to topology or folder with topology files for the trajectories. 
-                                  If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
                                   If a single topology file is provided, it is used for all trajectories.
+                                  If a folder is given, each trajectory should have a corresponding topology file with the same name.
+                                  
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -267,7 +268,7 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
         logger.error(f"Trajectory data not found: {trajectory_data}")
         sys.exit(1)
     else:
-        logger.error(f"Trajectory data should be a file or a folder: {trajectory_data}")
+        logger.error(f"Trajectory data should be a path to a file or a folder: {trajectory_data}")
         sys.exit(1)
         
     # Remove any hidden files
