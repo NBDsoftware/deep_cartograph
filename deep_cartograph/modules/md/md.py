@@ -272,8 +272,6 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     @phi_resid
     
     @psi_resid
-    
-    @omega_resid
 
     Input
     -----
@@ -293,7 +291,7 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     # Select atoms
     atoms = u.select_atoms(selection)
 
-    dihedrals = ['phi', 'psi', 'omega']
+    dihedrals = ['phi', 'psi']
 
     dihedral_labels = []
 
