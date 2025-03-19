@@ -141,7 +141,7 @@ class Assembler:
         elif feat_name == "sin":
             
             # Sinus of a dihedral angle
-            if len(entities) != 5:
+            if len(entities) != 5 and len(entities) != 2:
                 logger.error(f"Malformed sin feature label: {feature}")
                 sys.exit(1)
             
@@ -150,7 +150,7 @@ class Assembler:
         elif feat_name == "cos":
             
             # Cosinus of a dihedral angle
-            if len(entities) != 5:
+            if len(entities) != 5 and len(entities) != 2:
                 logger.error(f"Malformed cos feature label: {feature}")
                 sys.exit(1)
             
@@ -159,7 +159,7 @@ class Assembler:
         elif feat_name == "tor":
             
             # Dihedral angle
-            if len(entities) != 5:
+            if len(entities) != 5 and len(entities) != 2:
                 logger.error(f"Malformed tor feature label: {feature}")
                 sys.exit(1)
             
