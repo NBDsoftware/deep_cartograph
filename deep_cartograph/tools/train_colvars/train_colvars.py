@@ -59,7 +59,7 @@ def set_logger(verbose: bool):
 ########
 
 def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], feature_constraints: Union[List[str], str, None] = None, 
-                  ref_colvars_paths: Union[List[str], None] = None, ref_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
+                  validation_colvars_paths: Union[List[str], None] = None, validation_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
                   cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, trajectories: Union[List[str], None] = None, 
                   topologies: Union[List[str], None] = None, samples_per_frame: Union[float, None] = 1, output_folder: str = 'train_colvars'):
     """
@@ -86,10 +86,10 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
         feature_constraints: 
             List with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
             
-        ref_colvars_paths:   
+        validation_colvars_paths:   
             List of paths to colvars files with reference data. If None, no reference data is used
             
-        ref_labels:          
+        validation_labels:          
             List of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
             
         cv_dimension:        
@@ -135,8 +135,8 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
         configuration=configuration,
         colvars_paths=colvars_paths,
         feature_constraints=feature_constraints,
-        ref_colvars_paths=ref_colvars_paths,
-        ref_labels=ref_labels,
+        validation_colvars_paths=validation_colvars_paths,
+        validation_labels=validation_labels,
         cv_dimension=dimension,
         cvs=cvs,
         trajectory_paths=trajectories,
@@ -169,8 +169,7 @@ def main():
     parser.add_argument('-topology', dest='topology', help="Path to topology file of the trajectory.", required=False)
     parser.add_argument('-samples_per_frame', dest='samples_per_frame', type=float, help="""Samples in the colvars file for each frame in the trajectory file. 
                         Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency).""", required=False)
-    parser.add_argument('-ref_colvars', dest='ref_colvars_paths', type=str, help='Path to the colvars file with the reference data', required=False)
-    parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder)", default=False)
+    parser.add_argument('-val_colvars', dest='validation_colvars_paths', type=str, help='Path to the colvars file with the validation data', required=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help='Dimension of the CV to train or compute', required=False)
@@ -190,12 +189,10 @@ def main():
     feature_constraints = read_feature_constraints(args.features_path, args.features_regex)
 
     # Reference data should be list or None - see train_colvars API
-    ref_labels = None
-    ref_colvars_paths = None
-    if args.ref_colvars_paths:
-        ref_colvars_paths = [args.ref_colvars_paths]
-        if args.label_reference:
-            ref_labels = [Path(args.ref_colvars_paths).stem]
+    validation_labels = None
+    validation_colvars_paths = None
+    if args.validation_colvars_paths:
+        validation_colvars_paths = [args.validation_colvars_paths]
             
     # Trajectories should be list or None - see train_colvars API
     trajectories = None
@@ -221,8 +218,8 @@ def main():
         configuration = configuration,
         colvars_paths = args.colvars_path,
         feature_constraints = feature_constraints,
-        ref_colvars_paths = ref_colvars_paths,
-        ref_labels = ref_labels,
+        validation_colvars_paths = validation_colvars_paths,
+        validation_labels = validation_labels,
         dimension = args.dimension,
         cvs = args.cvs,
         trajectories = trajectories,

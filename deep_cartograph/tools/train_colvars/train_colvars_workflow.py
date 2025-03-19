@@ -27,8 +27,8 @@ class TrainColvarsWorkflow:
                  configuration: Dict, 
                  colvars_paths: List[str], 
                  feature_constraints: Union[List[str], str] = None,
-                 ref_colvars_paths: Union[List[str], None] = None, 
-                 ref_labels: Union[List[str], None] = None,
+                 validation_colvars_paths: Union[List[str], None] = None, 
+                 validation_labels: Union[List[str], None] = None,
                  cv_dimension: Union[int, None] = None,
                  cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = None,
                  trajectory_paths: Union[List[str], None] = None,
@@ -59,7 +59,7 @@ class TrainColvarsWorkflow:
         # Input related attributes
         self.colvars_paths: List[str] = colvars_paths
         self.feature_constraints: Union[List[str], str] = feature_constraints
-        self.ref_colvars_paths: Union[List[str], None] = ref_colvars_paths
+        self.validation_colvars_paths: Union[List[str], None] = validation_colvars_paths
         self.trajectory_paths: Union[str, None] = trajectory_paths
         self.topology_paths: Union[str, None] = topology_paths
         
@@ -68,7 +68,7 @@ class TrainColvarsWorkflow:
         else:
             self.samples_per_frame: float = samples_per_frame
             
-        self.ref_labels: Union[List[str], None] = ref_labels
+        self.validation_labels: Union[List[str], None] = validation_labels
         
         # Validate inputs existence
         self._validate_files()
@@ -85,8 +85,8 @@ class TrainColvarsWorkflow:
                 logger.error(f"Colvars file {path} does not exist. Exiting...")
                 sys.exit(1)
             
-        if self.ref_colvars_paths: 
-            for path in self.ref_colvars_paths:
+        if self.validation_colvars_paths: 
+            for path in self.validation_colvars_paths:
                 if not files_exist(path):
                     logger.error(f"Reference colvars file {path} does not exist. Exiting...")
                     sys.exit(1)
@@ -139,7 +139,7 @@ class TrainColvarsWorkflow:
         calculator = cv_calculators_map[cv](self.colvars_paths, 
                                     self.topology_paths,
                                     self.feature_constraints, 
-                                    self.ref_colvars_paths, 
+                                    self.validation_colvars_paths, 
                                     cv_configuration,
                                     self.output_folder)
         
@@ -186,7 +186,7 @@ class TrainColvarsWorkflow:
                         X = projected_colvars,
                         cv_labels = cv_calculator.get_labels(),
                         X_ref = cv_calculator.get_projected_ref(),
-                        X_ref_labels = self.ref_labels,
+                        X_ref_labels = self.validation_labels,
                         settings = self.figures_configuration['fes'],
                         output_path = traj_output_folder)
                 

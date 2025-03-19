@@ -11,44 +11,62 @@ from typing import Dict, List, Literal, Union
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: str, ref_trajectory_data: Union[str, None] = None, 
-                    ref_topology_data: Union[str, None] = None, label_reference: bool = False, dimension: Union[int, None] = None, 
+def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: str, validation_traj_data: Union[str, None] = None, 
+                    validation_top_data: Union[str, None] = None, reference_topology: Union[str, None] = None, dimension: Union[int, None] = None, 
                     cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, 
                     restart: bool = False, output_folder: Union[str, None] = None) -> None:
     """
-    Function that maps a set of trajectories onto a set of collective variables.
+    Main API of the Deep Cartograph workflow.
+    
+    NOTE: Currently we request same number of trajectories and topologies.
+          In the future we might want to provide individual topologies as data 
+          or produce plumed enhanced sampling files for specific topologies.
 
     Parameters
     ----------
 
-        configuration:         
+        configuration         
             Configuration dictionary (see default_config.yml for more information)
             
-        trajectory_data:       
-            Path to trajectory or folder with trajectories to compute the CVs.
+        trajectory_data       
+            Path to trajectory or folder with trajectories to analyze. 
+            They will be used to compute the collective variables. 
+            Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd  
             
-        topology_data:         
-            Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
+        topology_data         
+            Path to topology or folder with topology files for the trajectories. 
+            If a single topology file is provided, it is used for all trajectories. 
+            If a folder is given, each trajectory should have a corresponding topology file with the same name.
+            Accepted formats: .pdb
             
-        ref_trajectory_data:   
-            (Optional) Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
+        validation_traj_data (Optional)
+            Path to validation trajectory or folder with validation trajectories. 
+            To project onto the CV alongside 'trajectory_data' but not used to compute the CVs. 
+            Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd 
         
-        ref_topology_data:     
-            (Optional) Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in ref_trajectory_data.
+        validation_top_data (Optional)    
+            Path to validation topology or folder with validation topologies. 
+            If a single topology file is provided, it is used for all validation trajectories.
+            If a folder is given, each validation trajectory should have a corresponding topology file with the same name.
+            Accepted formats: .pdb
         
-        label_reference:       
-            (Optional) Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
+        reference_topology (Optional)
+            Path to reference topology file. The reference topology is used to find the features from the user selections.
+            Default is the first topology in topology_data. Accepted formats: .pdb
         
-        dimension:             
-            (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
+        dimension (Optional)          
+            Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
         
-        cvs:                   
-            (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'htica', 'deep_tica'], overwrites the value in the configuration if provided
+        cvs (Optional)                    
+            List of collective variables to train or compute ['pca', 'ae', 'tica', 'htica', 'deep_tica'], overwrites the value in the configuration if provided
+            
+        restart (Optional)
+            Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat. Default is False.
         
-        output_folder:         
-            (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
+        output_folder (Optional)      
+            Path to the output folder. Default is 'deep_cartograph'
     """
-    from deep_cartograph.modules.common import check_data, check_ref_data, create_output_folder, get_unique_path, validate_configuration, read_feature_constraints
+    from deep_cartograph.modules.common import check_data, check_validation_data, create_output_folder, get_unique_path, validate_configuration, read_feature_constraints
     from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
     
     from deep_cartograph.tools import analyze_geometry
@@ -79,8 +97,15 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     # Check main input folders
     trajectories, topologies = check_data(trajectory_data, topology_data)
     
-    # Check reference input folders
-    ref_trajectories, ref_topologies = check_ref_data(ref_trajectory_data, ref_topology_data)
+    # Set reference topology
+    if not reference_topology:
+        reference_topology = topologies[0]
+    elif not os.path.exists(reference_topology):
+        logger.error(f"Reference topology file missing. Exiting...")
+        sys.exit(1)
+        
+    # Check validation input folders
+    validation_trajs, validation_tops = check_validation_data(validation_traj_data, validation_top_data)
     
     # Step 0: Analyze geometry
     # ------------------------
@@ -105,20 +130,20 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     }
     traj_colvars_paths = compute_features(**args)
         
-    # Compute features for reference data
+    # Compute features for validation data
     args = {
         'configuration': configuration['compute_features'], 
-        'trajectories': ref_trajectories, 
-        'topologies': ref_topologies, 
+        'trajectories': validation_trajs, 
+        'topologies': validation_tops, 
         'output_folder': os.path.join(output_folder, 'compute_ref_features')
     }
-    ref_colvars_paths = compute_features(**args)
+    validation_colvars_paths = compute_features(**args)
         
-    # Set reference labels
-    if label_reference:
-        ref_names = [Path(ref_trajectory).stem for ref_trajectory in ref_trajectories]
+    # If there are less than 10 validation trajectories, use their names as labels
+    if len(validation_trajs) < 10: 
+        validation_labels = [Path(val_trajectory).stem for val_trajectory in validation_trajs]
     else:
-        ref_names = None
+        validation_labels = None
 
     ## Step 2: Filter features
     # ------------------------
@@ -140,8 +165,8 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
         'configuration': configuration['train_colvars'],
         'colvars_paths': traj_colvars_paths,
         'feature_constraints': filtered_features,
-        'ref_colvars_paths': ref_colvars_paths,
-        'ref_labels': ref_names,
+        'validation_colvars_paths': validation_colvars_paths,
+        'validation_labels': validation_labels,
         'dimension': dimension,
         'cvs': cvs,
         'trajectories': trajectories,
@@ -205,16 +230,15 @@ def main():
     
     parser = argparse.ArgumentParser("Deep Cartograph", description="Map trajectories onto Collective Variables.")
     
+    # Required input files
     parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
-    
-    # Input files
-    parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to compute the CVs. Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd ", required=True)
+    parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to analyze. Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd ", required=True)
     parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data. Accepted formats: .pdb", required=True)
     
-    parser.add_argument('-ref_traj_data', dest='ref_trajectory_data', help="Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.", required=False)
-    parser.add_argument('-ref_topology_data', dest='ref_topology_data', help="Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in -ref_traj_data.", required=False)
-    
-    parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.", default=False)
+    # Optional input files
+    parser.add_argument('-val_traj_data', dest='validation_traj_data', help="Path to validation trajectory or folder with validation trajectories. To project onto the CV alongside 'trajectory_data' but not used to compute the CVs.", required=False)
+    parser.add_argument('-val_topology_data', dest='validation_top_data', help="Path to validation topology or folder with validation topologies. If a folder is provided, each topology should have the same name as the corresponding validation trajectory in -ref_traj_data.", required=False)
+    parser.add_argument('-ref_top', dest='reference_topology', help="Path to reference topology file. The reference topology is used to find the features from the user selections. Default is the first topology in topology_data. Accepted formats: .pdb", required=False)
     
     # Options
     parser.add_argument('-restart', dest='restart', action='store_true', help="Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat.", default=False)
@@ -248,9 +272,9 @@ def main():
         configuration = configuration, 
         trajectory_data = args.trajectory_data, 
         topology_data = args.topology_data,
-        ref_trajectory_data = args.ref_trajectory_data,
-        ref_topology_data = args.ref_topology_data,
-        label_reference = args.label_reference,
+        validation_traj_data = args.validation_traj_data,
+        validation_top_data = args.validation_top_data,
+        reference_topology = args.reference_topology,
         dimension = args.dimension, 
         cvs = args.cvs, 
         restart = args.restart,

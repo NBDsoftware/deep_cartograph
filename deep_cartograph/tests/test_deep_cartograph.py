@@ -148,8 +148,8 @@ def test_deep_cartograph():
     deep_cartograph(configuration=get_config(),
                     trajectory_data=trajectory_folder,
                     topology_data=topology_folder,
-                    ref_trajectory_data=trajectory_folder,
-                    ref_topology_data=topology_folder,
+                    validation_traj_data=trajectory_folder,
+                    validation_top_data=topology_folder,
                     output_folder=output_path)
     
     # Find path to train_colvars step

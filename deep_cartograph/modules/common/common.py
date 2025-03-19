@@ -332,7 +332,7 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
             
     return traj_file_paths, top_file_paths
 
-def check_ref_data(ref_trajectory_data: Union[str, None], ref_topology_data: Union[str, None]) -> Tuple[List[str], List[str]]:
+def check_validation_data(ref_trajectory_data: Union[str, None], ref_topology_data: Union[str, None]) -> Tuple[List[str], List[str]]:
     """
     Function that checks (if given) the existence of the optional reference data files.
     

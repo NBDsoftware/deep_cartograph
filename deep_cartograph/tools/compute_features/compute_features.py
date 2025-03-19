@@ -11,24 +11,28 @@ from typing import Dict, Union, List
 ########
 
 def compute_features(configuration: Dict, trajectories: Union[List[str], str], topologies: Union[List[str], str], 
-                     output_folder: str = 'compute_features') -> List[str]:
+                     reference_topology: Union[str, None] = None, output_folder: str = 'compute_features') -> List[str]:
     """
     Function that computes features from a trajectory using PLUMED.
 
     Parameters
     ----------
 
-        configuration:
+        configuration
             A configuration dictionary (see default_config.yml for more information)
             
-        trajectories:          
+        trajectories          
             Paths to the trajectory files that will be analyzed.
             
-        topologies:            
+        topologies            
             Paths to the topology files of the trajectories.
             
-        output_folder:       
-            (Optional) Path to the output folder
+        reference_topology (Optional)
+            Path to reference topology file. The reference topology is used to find the features from the user selections.
+            Default is the first topology in topologies. Accepted formats: .pdb
+            
+        output_folder (Optional)
+            Path to the output folder
         
     Returns
     -------
@@ -68,13 +72,18 @@ def compute_features(configuration: Dict, trajectories: Union[List[str], str], t
     if not files_exist(*trajectories):
         logger.error(f"Trajectory file missing. Exiting...")
         sys.exit(1)
-        
     if not files_exist(*topologies):
         logger.error(f"Topology file missing. Exiting...")
         sys.exit(1)
         
-    colvars_paths = []
+    # Set reference topology
+    if not reference_topology:
+        reference_topology = topologies[0]
+    elif not os.path.exists(reference_topology):
+        logger.error(f"Reference topology file missing. Exiting...")
+        sys.exit(1)
         
+    colvars_paths = []
     for trajectory, topology in zip(trajectories, topologies):
 
         traj_name = Path(trajectory).stem
