@@ -148,8 +148,8 @@ def test_deep_cartograph():
     deep_cartograph(configuration=get_config(),
                     trajectory_data=trajectory_folder,
                     topology_data=topology_folder,
-                    validation_traj_data=trajectory_folder,
-                    validation_top_data=topology_folder,
+                    supplementary_traj_data=trajectory_folder,
+                    supplementary_top_data=topology_folder,
                     output_folder=output_path)
     
     # Find path to train_colvars step
@@ -162,7 +162,7 @@ def test_deep_cartograph():
       # Find paths to csv files
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
       computed_projection_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
-      computed_ref_data_path = os.path.join(train_colvars_path, cv, "reference_data", "colvars.csv")
+      computed_ref_data_path = os.path.join(train_colvars_path, cv, "supplementary_data", "colvars.csv")
       
       # Read csv files
       reference_df = pd.read_csv(reference_projection_path)

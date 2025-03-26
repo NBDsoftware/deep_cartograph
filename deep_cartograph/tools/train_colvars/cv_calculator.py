@@ -12,7 +12,6 @@ from typing import Dict, List, Tuple, Union, Literal
 from sklearn.decomposition import PCA       
 
 from mlcolvar.utils.timelagged import create_timelagged_dataset # NOTE: this function returns less samples than expected: N-lag_time-2
-from mlcolvar.utils.io import create_dataset_from_files
 from mlcolvar.data import DictModule, DictDataset
 from mlcolvar.cvs import AutoEncoderCV, DeepTICA
 from mlcolvar.utils.trainer import MetricsCallback
@@ -36,8 +35,9 @@ class CVCalculator:
     """
     Base class for collective variables calculators.
     """
-    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """
         Initializes the base CV calculator.
         
@@ -47,36 +47,40 @@ class CVCalculator:
         Parameters
         ----------
         
-        colvars_paths : str
+        training_colvars_paths 
             List of paths to colvars files with the main data used for training
-        topology_paths : str
-            List of paths to topology files corresponding to the colvars files
-        feature_constraints : Union[List[str], str]
-            List with the features to use for the training or str with regex to filter feature names.
-        ref_colvars_paths : Union[List[str], None]
-            List of paths to colvars files with reference data
-        configuration : Dict
+            
+        configuration
             Configuration dictionary for the CV
-        output_path : str
+            
+        topology_paths
+            List of paths to topology files corresponding to the colvars files (same order)
+        
+        ref_topology_path
+            Path to the reference topology file. If None, the first topology file is used as reference topology
+            
+        feature_constraints
+            List with the features to use for the training or str with regex to filter feature names.
+            
+        sup_colvars_paths
+            List of paths to colvars files with supplementary data to project alongside the FES of the training data (e.g. experimental structures). If None, no supplementary data is used
+            
+        output_path
             Output path where the CV results folder will be created
         """
         
         # Training data
         self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in training_reading_settings
-        
         self.num_samples: int = None
         
-        # Reference data
-        self.ref_datasets: List[DictDataset] = []
+        # Supplementary data
+        self.sup_datasets: List[DictDataset] = []
         
         # Filter dictionary
         self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
         
         # List of features used for training (features in the colvars file after filtering) 
-        # NOTE: this will be a list of lists when we consider different topologies
         self.feature_labels: List[str] = None
-        
-        # Number of features
         self.num_features: int = None
         
         # Configuration
@@ -86,14 +90,15 @@ class CVCalculator:
         self.feats_norm_mode: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
         self.features_normalization: Union[Normalization, None] = None
         
-        # Read the data
-        self.read_training_data(colvars_paths)
-        self.read_reference_data(ref_colvars_paths)
-        
-        self.ref_names: List[str] = [Path(path).stem for path in ref_colvars_paths] if ref_colvars_paths else []
-        
         # Topologies
         self.topologies: List[str] = topology_paths
+        self.ref_topology_path: str = ref_topology_path
+        
+        # Read the data
+        self.read_training_data(training_colvars_paths)
+        self.read_sup_data(sup_colvars_paths)
+        
+        self.sup_colvars_names: List[str] = [Path(path).stem for path in sup_colvars_paths] if sup_colvars_paths else []
         
         # General CV attributes
         self.cv_dimension: int = configuration['dimension']
@@ -101,9 +106,8 @@ class CVCalculator:
         self.cv_name: str = None
         self.cv_range: List[Tuple[float, float]] = []
         
-        # Output 
         self.projected_ref: List[np.ndarray] = []
-    
+
         self.output_path: str =  output_path
     
     def initialize(self):
@@ -150,11 +154,12 @@ class CVCalculator:
         load_args = [self.training_reading_settings for _ in colvars_paths]
         
         # Main data
-        self.training_input_dtset = create_dataset_from_files(
-            file_names=colvars_paths,
+        self.training_input_dtset = plumed.colvars.create_dataset_from_files(
+            file_paths=colvars_paths,
+            topology_paths=self.topologies,
+            reference_topology=self.ref_topology_path,
             load_args=load_args,       
-            filter_args=self.feature_filter, 
-            verbose=False, 
+            filter_args=self.feature_filter,  
             return_dataframe=False
         )
         
@@ -165,16 +170,16 @@ class CVCalculator:
         self.num_features = len(self.feature_labels)
         logger.info(f'Number of features: {self.num_features}')
 
-    def read_reference_data(self, ref_colvars_paths: Union[List[str], None]):
+    def read_sup_data(self, colvars_paths: Union[List[str], None]):
         """
-        Reads the reference data from the colvars files.
+        Reads the supplementary data from the colvars files.
         """
         
-        # Reference data (if provided)
-        if ref_colvars_paths:
-            for path in ref_colvars_paths:
-                ref_dataset = create_dataset_from_files(
-                    file_names=[path], 
+        # Supplementary data (if provided)
+        if colvars_paths:
+            for path in colvars_paths:
+                ref_dataset = plumed.colvars.create_dataset_from_files(
+                    file_paths=[path], 
                     filter_args=self.feature_filter, 
                     verbose=False, 
                     return_dataframe=False
@@ -187,7 +192,7 @@ class CVCalculator:
                     sys.exit(1)
                 
                 # Append to lists
-                self.ref_datasets.append(ref_dataset) 
+                self.sup_datasets.append(ref_dataset) 
               
     def read_colvars_data(self, colvars_path: str) -> DictDataset:
         """
@@ -195,8 +200,8 @@ class CVCalculator:
         """
         
         # Read the colvars file
-        colvars_dataset = create_dataset_from_files(
-            file_names=[colvars_path], 
+        colvars_dataset = plumed.colvars.create_dataset_from_files(
+            file_paths=[colvars_path], 
             filter_args=self.feature_filter, 
             verbose=False, 
             return_dataframe=False
@@ -295,9 +300,9 @@ class CVCalculator:
 
             self.normalize_cv()
             
-            self.project_reference()
+            self.project_supplementary()
             
-            self.save_projected_ref()
+            self.save_projected_sup()
             
             self.cv_specific_tasks()
             
@@ -333,19 +338,19 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def project_reference(self):
+    def project_supplementary(self):
         """
-        Projects the reference data onto the CV space. Implement in subclasses.
+        Projects the supplementary data onto the CV space. Implement in subclasses.
         """
         
         raise NotImplementedError
     
-    def save_projected_ref(self):
+    def save_projected_sup(self):
         """
-        Saves the projected reference data to files, if there is any.
+        Saves the projected supplementary data to files, if there is any.
         """
         
-        projected_ref_folder = os.path.join(self.output_path, 'reference_data')
+        projected_ref_folder = os.path.join(self.output_path, 'supplementary_data')
         
         if self.projected_ref:
             
@@ -354,7 +359,7 @@ class CVCalculator:
         
             for i, ref in enumerate(self.projected_ref):
                 ref = pd.DataFrame(ref, columns=self.get_labels())
-                ref.to_csv(os.path.join(projected_ref_folder,f'{self.ref_names[i]}.csv'), index=False, float_format='%.4f')
+                ref.to_csv(os.path.join(projected_ref_folder,f'{self.sup_colvars_names[i]}.csv'), index=False, float_format='%.4f')
     
     def set_labels(self):
         """
@@ -382,7 +387,7 @@ class CVCalculator:
     # Getters
     def get_projected_ref(self) -> List[np.ndarray]:
         """
-        Returns the projected reference features.
+        Returns the projected supplementary features.
         """
         
         return self.projected_ref
@@ -414,13 +419,14 @@ class LinearCVCalculator(CVCalculator):
     Linear collective variables calculator (e.g. PCA)
     """
     
-    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None,
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """ 
         Initializes a linear CV calculator.
         """
         
-        super().__init__(colvars_paths, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
                 
         # Main attributes
         self.cv: Union[torch.tensor, None] = None
@@ -459,26 +465,26 @@ class LinearCVCalculator(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
-    def project_reference(self):
+    def project_supplementary(self):
         """
-        Projects the reference data onto the CV space.
+        Projects the supplementary data onto the CV space.
         """
         
-        logger.info(f'Projecting reference data onto {cv_names_map[self.cv_name]} ...')
+        logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
         
-        # If reference data is provided
-        if self.ref_datasets:
+        # If supplementary data is provided
+        if self.sup_datasets:
             
-            for ref_dtset in self.ref_datasets:
+            for dataset in self.sup_datasets:
                 
                 # Get the torch tensor
-                ref_tensor = ref_dtset[:]['data']
+                sup_data_tensor = dataset[:]['data']
                 
-                # Normalize the reference data
-                ref_tensor = self.features_normalization(ref_tensor)
+                # Normalize the supplementary data
+                sup_data_tensor = self.features_normalization(sup_data_tensor)
                 
-                # Project the reference data onto the CV space
-                projected_ref = ref_tensor @ self.cv
+                # Project the supplementary data onto the CV space
+                projected_ref = sup_data_tensor @ self.cv
                 
                 self.projected_ref.append(self.cv_normalization(projected_ref).numpy())  
   
@@ -596,13 +602,14 @@ class NonLinearCVCalculator(CVCalculator):
     Non-linear collective variables calculator (e.g. Autoencoder)
     """
     
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """ 
         Initializes a non-linear CV calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
         
         # Main attributes
         self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
@@ -676,7 +683,6 @@ class NonLinearCVCalculator(CVCalculator):
 
                 self.tries += 1
 
-                # Debug
                 logger.debug(f'Splitting the dataset...')
 
                 # Build datamodule, split the dataset into training and validation
@@ -688,7 +694,6 @@ class NonLinearCVCalculator(CVCalculator):
                     shuffle = self.shuffle, 
                     generator = torch.manual_seed(self.seed + self.tries))
         
-                # Debug
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
@@ -699,7 +704,6 @@ class NonLinearCVCalculator(CVCalculator):
                 
                 logger.info(f"Model architecture: {model}")
                 
-                # Debug
                 logger.debug(f'Initializing metrics and callbacks...')
 
                 # Define MetricsCallback to store the loss
@@ -723,7 +727,6 @@ class NonLinearCVCalculator(CVCalculator):
                     mode="min",                                # Best model is the one with the minimum monitored quantity
                     every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
                 
-                # Debug
                 logger.debug(f'Initializing Trainer...')
 
                 # Define trainer
@@ -735,7 +738,6 @@ class NonLinearCVCalculator(CVCalculator):
                     enable_progress_bar = False, 
                     check_val_every_n_epoch=self.check_val_every_n_epoch)
 
-                # Debug
                 logger.debug(f'Training...')
 
                 trainer.fit(model, datamodule)
@@ -864,19 +866,19 @@ class NonLinearCVCalculator(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
-    def project_reference(self):
+    def project_supplementary(self):
         """
-        Projects the reference data onto the CV space.
+        Projects the supplementary data onto the CV space.
         """
         
-        logger.info(f'Projecting reference data onto {cv_names_map[self.cv_name]} ...')
+        logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
 
-        # If reference data is provided, project it as well
-        if self.ref_datasets:
-            for dataset in self.ref_datasets:
-                ref_tensor = dataset[:]['data']
+        # If supplementary data is provided, project it as well
+        if self.sup_datasets:
+            for dataset in self.sup_datasets:
+                sup_data_tensor = dataset[:]['data']
                 with torch.no_grad():
-                    self.projected_ref.append(self.cv(ref_tensor).numpy())
+                    self.projected_ref.append(self.cv(sup_data_tensor).numpy())
                     
     def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
         """
@@ -967,13 +969,14 @@ class PCACalculator(LinearCVCalculator):
     Principal component analysis calculator.
     """
 
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """
         Initializes the PCA calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
         
         self.cv_name = 'pca'
         
@@ -1017,13 +1020,14 @@ class TICACalculator(LinearCVCalculator):
     Time-lagged independent component analysis calculator.
     """
     
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """
         Initializes the TICA calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
         
         self.cv_name = 'tica'
         
@@ -1061,13 +1065,14 @@ class HTICACalculator(LinearCVCalculator):
     Computing Slow Modes and Reaction Coordinates for Large Molecular Systems.” Journal of Chemical Theory 
     and Computation 12, no. 12 (December 13, 2016): 6118–29. https://doi.org/10.1021/acs.jctc.6b00738.
     """
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """
         Initializes the HTICA calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
         
         self.cv_name = 'htica'
         
@@ -1153,13 +1158,14 @@ class AECalculator(NonLinearCVCalculator):
     """
     Autoencoder calculator.
     """
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """
         Initializes the Autoencoder calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
         
         self.cv_name = 'ae'
         
@@ -1176,13 +1182,14 @@ class DeepTICACalculator(NonLinearCVCalculator):
     """
     DeepTICA calculator.
     """
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self,  training_colvars_paths: List[str], configuration: Dict, topology_paths: Union[List[str], None] = None, 
+                 ref_topology_path: Union[str, None] = None, feature_constraints: Union[List[str], str, None] = None, 
+                 sup_colvars_paths: Union[List[str], None] = None, output_path: Union[str, None] = None):
         """
         Initializes the DeepTICA calculator.
         """      
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(training_colvars_paths, configuration, topology_paths, ref_topology_path, feature_constraints, sup_colvars_paths, output_path)
         
         self.cv_name = 'deep_tica'
         

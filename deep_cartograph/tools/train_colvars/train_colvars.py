@@ -14,9 +14,10 @@ from deep_cartograph.tools.train_colvars.train_colvars_workflow import TrainColv
 ########
 
 def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], feature_constraints: Union[List[str], str, None] = None, 
-                  validation_colvars_paths: Union[List[str], None] = None, validation_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
+                  sup_colvars_paths: Union[List[str], None] = None, sup_labels: Union[List[str], None] = None, dimension: Union[int, None] = None, 
                   cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, trajectories: Union[List[str], None] = None, 
-                  topologies: Union[List[str], None] = None, samples_per_frame: Union[float, None] = 1, output_folder: str = 'train_colvars'):
+                  topologies: Union[List[str], None] = None, reference_topology: Union[str, None] = None, samples_per_frame: Union[float, None] = 1, 
+                  output_folder: str = 'train_colvars'):
     """
     Function that trains collective variables using the mlcolvar library. 
 
@@ -33,37 +34,40 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
     Parameters
     ----------
 
-        configuration:       
+        configuration       
             Configuration dictionary (see default_config.yml for more information)
             
-        colvars_paths:       
+        colvars_paths       
             Path or list of paths to the colvars files with the input data (samples of features)
             
-        feature_constraints: 
+        feature_constraints (Optional)
             List with the features to use for the training | str with regex to filter feature names. If None, all features but *labels, time, *bias and *walker are used from the colvars file
             
-        validation_colvars_paths:   
-            List of paths to colvars files with reference data. If None, no reference data is used
-            
-        validation_labels:          
+        sup_colvars_paths (Optional)   
+            List of paths to colvars files with supplementary data to project alongside the FES of the training data (e.g. experimental structures). If None, no supplementary data is used
+
+        sup_labels (Optional)          
             List of labels to identify the reference data. If None, the reference data is identified as 'reference data i'
             
-        cv_dimension:        
+        cv_dimension (Optional)        
             Dimension of the CVs to train or compute, if None, the value in the configuration file is used
             
-        cvs:                 
+        cvs (Optional)                 
             List of collective variables to train or compute (pca, ae, tica, htica, deep_tica), if None, the ones in the configuration file are used
             
-        trajectories:        
-            Path to the trajectory files that will be clustered
+        trajectories (Optional)        
+            Path to the trajectory files corresponding to the colvars files (same order).
             
-        topologies:          
-            Path to the topology files of the trajectories
+        topologies (Optional)          
+            Path to the topology files corresponding to the trajectory files (same order).
             
-        samples_per_frame:   
+        reference_topology (Optional)
+            Path to the reference topology file. If None, the first topology file is used as reference topology
+            
+        samples_per_frame (Optional)   
             Samples in the colvars file for each frame in the trajectory file. Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)
             
-        output_folder:       
+        output_folder (Optional)       
             Path to folder where the output files are saved, if not given, a folder named 'output' is created
     """
     
@@ -89,14 +93,15 @@ def train_colvars(configuration: Dict, colvars_paths: Union[str, List[str]], fea
     # Create a TrainColvarsWorkflow object 
     workflow = TrainColvarsWorkflow(
         configuration=configuration,
-        colvars_paths=colvars_paths,
+        training_colvars_paths=colvars_paths,
         feature_constraints=feature_constraints,
-        validation_colvars_paths=validation_colvars_paths,
-        validation_labels=validation_labels,
+        sup_colvars_paths=sup_colvars_paths,
+        sup_labels=sup_labels,
         cv_dimension=dimension,
         cvs=cvs,
         trajectory_paths=trajectories,
         topology_paths=topologies,
+        ref_topology_path=reference_topology,
         samples_per_frame=samples_per_frame,
         output_folder=output_folder
     )
@@ -166,7 +171,8 @@ def main():
     parser.add_argument('-topology', dest='topology', help="Path to topology file of the trajectory.", required=False)
     parser.add_argument('-samples_per_frame', dest='samples_per_frame', type=float, help="""Samples in the colvars file for each frame in the trajectory file. 
                         Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency).""", required=False)
-    parser.add_argument('-val_colvars', dest='validation_colvars_paths', type=str, help='Path to the colvars file with the validation data', required=False)
+    parser.add_argument('-sup_colvars', dest='sup_colvars_paths', type=str, help="""List of paths to colvars files with supplementary data to project alongside 
+                        the FES of the training data (e.g. experimental structures). If None, no supplementary data is used""", required=False)
     parser.add_argument('-features_path', type=str, help='Path to a file containing the list of features that should be used (these are used if the path is given)', required=False)
     parser.add_argument('-features_regex', type=str, help='Regex to filter the features (features_path is prioritized over this, mutually exclusive)', required=False)
     parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help='Dimension of the CV to train or compute', required=False)
@@ -186,11 +192,11 @@ def main():
     feature_constraints = read_feature_constraints(args.features_path, args.features_regex)
 
     # Reference data should be list or None - see train_colvars API
-    validation_labels = None
-    validation_colvars_paths = None
-    if args.validation_colvars_paths:
-        validation_labels = [Path(args.validation_colvars_paths).stem]
-        validation_colvars_paths = [args.validation_colvars_paths]
+    sup_labels = None
+    sup_colvars_paths = None
+    if args.sup_colvars_paths:
+        sup_labels = [Path(args.sup_colvars_paths).stem]
+        sup_colvars_paths = [args.sup_colvars_paths]
             
     # Trajectories should be list or None - see train_colvars API
     trajectories = None
@@ -216,8 +222,8 @@ def main():
         configuration = configuration,
         colvars_paths = args.colvars_path,
         feature_constraints = feature_constraints,
-        validation_colvars_paths = validation_colvars_paths,
-        validation_labels = validation_labels,
+        sup_colvars_paths = sup_colvars_paths,
+        sup_labels = sup_labels,
         dimension = args.dimension,
         cvs = args.cvs,
         trajectories = trajectories,
