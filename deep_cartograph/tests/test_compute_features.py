@@ -1,5 +1,5 @@
 from deep_cartograph.tools.compute_features import compute_features
-from deep_cartograph.modules.plumed.colvars import read_as_pandas
+from deep_cartograph.modules.plumed.colvars import read_colvars
 import importlib.resources as resources
 from deep_cartograph import tests
 import shutil
@@ -81,10 +81,10 @@ def test_compute_features():
                     output_folder=output_path)
     
     # Read colvars file as pandas dataframe
-    computed_df = read_as_pandas(colvars_paths[0])
+    computed_df = read_colvars(colvars_paths[0])
     
     # Read reference file as pandas dataframe
-    reference_df = read_as_pandas(reference_colvars_path)
+    reference_df = read_colvars(reference_colvars_path)
     
     # Check if the computed and reference dataframes are equal
     test_passed = computed_df.equals(reference_df)
@@ -120,10 +120,10 @@ def test_compute_features():
                     output_folder=output_path)
     
     # Read colvars file as pandas dataframe
-    computed_df = read_as_pandas(colvars_paths[0])
+    computed_df = read_colvars(colvars_paths[0])
     
     # Read reference file as pandas dataframe
-    reference_df = read_as_pandas(reference_colvars_path)
+    reference_df = read_colvars(reference_colvars_path)
     
     # Check if the computed and reference dataframes are equal
     test_passed = computed_df.equals(reference_df)

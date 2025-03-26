@@ -151,6 +151,8 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     args = {
         'configuration': configuration['filter_features'], 
         'colvars_paths': traj_colvars_paths,
+        'topologies': topologies,
+        'reference_topology': reference_topology,
         'output_folder': os.path.join(output_folder, 'filter_features')
     }
     output_features_path = filter_features(**args)

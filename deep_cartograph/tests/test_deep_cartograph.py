@@ -1,6 +1,6 @@
 from deep_cartograph.run import deep_cartograph
 import importlib.resources as resources
-from deep_cartograph.modules.plumed.colvars import read_as_pandas
+from deep_cartograph.modules.plumed.colvars import read_colvars
 import deep_cartograph.modules.plumed as plumed
 import deep_cartograph.modules.md as md
 from deep_cartograph import tests
@@ -202,7 +202,7 @@ def test_deep_cartograph():
       # Find colvars path
       colvars_path = os.path.join(cv_output_path, f"{cv}_out.dat")
       plumed.colvars.check(colvars_path)
-      plumed_projection_df = read_as_pandas(colvars_path)
+      plumed_projection_df = read_colvars(colvars_path)
       
       # Find reference file
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")

@@ -157,47 +157,6 @@ def merge_configurations(common_config: Dict, specific_config: Union[Dict, None]
 
 
 # Features utils
-def find_feature_names(colvars_paths: List[str]) -> List[str]:
-    """
-    Find feature names present in colvars_paths. Feature names are read from the first line. 
-    Only the common features present in all colvars files will be returned as a list.
-
-    Inputs
-    ------
-
-        colvars_path: Paths to the colvars files with the time series data of the features
-    
-    Outputs
-    -------
-
-        common_features: List of common feature names present in all colvars files
-    """
-    
-    common_features = set()
-    for path in colvars_paths:
-        
-        # Read the first line of the colvars file
-        with open(path, 'r') as colvar_file:
-            first_line = colvar_file.readline().split()
-
-        # Read feature names. Skip first 3 elements, they are: #! FIELDS time
-        feature_names = set()
-        for index in range(3, len(first_line)):
-            feature_names.add(first_line[index])
-            
-        if len(common_features) == 0:
-            common_features = feature_names
-        else:
-            common_features = common_features.intersection(feature_names)
-
-    # Check if there are any features
-    if len(common_features) == 0:
-        logger.error(f'No common features found in the colvars files: {colvars_paths}')
-        sys.exit(1)
-    
-    # Return sorted list to ensure consistency
-    return sorted(common_features)
-
 def read_feature_constraints(features_path: Union[str, None], features_regex: Union[str, None] = None) -> Union[List[str], str]:
     """
     Read the feature constraints from the configuration file. Either a list of features or a regex.

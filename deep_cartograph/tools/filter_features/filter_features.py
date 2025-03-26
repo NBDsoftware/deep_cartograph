@@ -12,6 +12,7 @@ from typing import Dict, List, Union
 ########
 
 def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], csv_summary: bool = True, 
+                    topologies: Union[List[str], None] = None, reference_topology: Union[str, None] = None, 
                     output_folder: str = 'filter_features'):
     """
     Function that filters the features in the colvars file/s using different algorithms to select a subset that contains 
@@ -20,6 +21,7 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], c
     The API is prepared to handle multiple large colvars files. It will incur in many opening and closing operations on the files to avoid memory issues.
     
     NOTE: add a quick version that loads all data into memory for small datasets? Depending on the number of samples/files vs number of features ratio.
+    NOTE: If topologies and ref topology are not given, assume all colvars files have the same feature names. To use this tool from cli easily
 
     Parameters
     ----------
@@ -32,6 +34,12 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], c
             
         csv_summary:               
             (Optional) If True, saves a CSV summary with the filter values for each collective variable
+
+        topologies:
+            (Optional) Topologies corresponding to the different colvars files. If given, they will be used to translate the feature names to the reference topology.
+        
+        reference_topology:
+            (Optional) Reference topology to translate the feature names to. If not given, the first topology in the list is used as reference.
             
         output_folder:             
             (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
@@ -43,7 +51,7 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], c
     """
 
     from deep_cartograph.tools.filter_features.filtering import Filter
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_list, find_feature_names
+    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_list
     from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
 
     logger = logging.getLogger("deep_cartograph")
@@ -81,14 +89,22 @@ def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], c
     # Check the colvars file exists
     check_colvars(colvars_paths)
 
-    # Initialize the list of features
-    initial_features = find_feature_names(colvars_paths)
-
-    logger.info(f'Initial size of features set: {len(initial_features)}.')
-    save_list(initial_features, os.path.join(output_folder, 'all_features.txt'))
+    if topologies:
+        if reference_topology is None:
+            reference_topology = topologies[0]
+        elif not os.path.exists(reference_topology):
+            logger.error(f"Reference topology file missing: {reference_topology}")
+            sys.exit(1)
 
     # Create a Filter object
-    features_filter = Filter(colvars_paths, initial_features, output_folder, configuration['filter_settings'])
+    args = {
+        'colvars_paths': colvars_paths,
+        'topologies': topologies,
+        'reference_topology': reference_topology,
+        'settings': configuration['filter_settings'],
+        'output_dir': output_folder
+    }
+    features_filter = Filter(**args)
 
     # Filter the features
     filtered_features = features_filter.run(csv_summary)
