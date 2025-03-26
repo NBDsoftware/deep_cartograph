@@ -19,14 +19,12 @@ dependencies:
   - mdanalysis
   - scikit-learn>=1.3     # HDBSCAN is included in scikit-learn>=1.3
   - scipy
-  - plumed==2.9.0        # (Optional) Otherwise use an external installation
+  - plumed==2.9.0         # (Optional) Otherwise use an external installation
+  - biopython==1.85       # Other versions may work as well
 
   # Notebooks and plotting
   - seaborn
   - matplotlib
-  - jupyter           
-  - ipython
-  - ipykernel
    
   # Pip-only installs
   - pip:   

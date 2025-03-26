@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import shutil
+import numpy as np
 import logging.config
 from pathlib import Path
 from typing import Dict, Union, List
@@ -83,29 +84,59 @@ def compute_features(configuration: Dict, trajectories: Union[List[str], str], t
         logger.error(f"Reference topology file missing. Exiting...")
         sys.exit(1)
         
-    colvars_paths = []
-    for trajectory, topology in zip(trajectories, topologies):
+    # Create a reference plumed topology file
+    ref_plumed_topology = os.path.join(output_folder, 'ref_topology.pdb')
+    md.create_pdb(reference_topology, ref_plumed_topology)
+    
+    # Find list of features to compute from reference topology - user selection of features refers to this topology
+    ref_feature_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
+ 
+    # For each topology
+    features_lists = []
+    for topology in topologies:
+        
+        # Find top name
+        top_name = Path(topology).stem
+    
+        # Create output folder
+        top_output_folder = os.path.join(output_folder, top_name)
+        create_output_folder(top_output_folder)
+        
+        # Create new topology file
+        plumed_topology = os.path.join(top_output_folder, 'plumed_topology.pdb')
+        md.create_pdb(topology, plumed_topology)
+        
+        # Translate features to new topology
+        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_feature_list).run()
+        features_lists.append(features_list)
 
-        traj_name = Path(trajectory).stem
-        traj_output_folder = os.path.join(output_folder, traj_name)
-        plumed_input_path = os.path.join(traj_output_folder, 'plumed_input.dat')
-        plumed_topology_path = os.path.abspath(os.path.join(traj_output_folder, 'plumed_topology.pdb'))
-        colvars_path = os.path.join(traj_output_folder, 'colvars.dat')
+    # Keep just the features available in all topologies
+    masks = np.array([[x is not None for x in lst] for lst in features_lists])
+    mask =  masks.all(axis=0)
+    common_features_lists = [[lst[i] for i in range(len(lst)) if mask[i]] for lst in features_lists]
+        
+    # Compute the features for each traj and topology
+    colvars_paths = []
+    for i in range(len(topologies)):
+
+        topology = topologies[i]
+        top_name = Path(topology).stem
+        trajectory = trajectories[i]
+        features_list = common_features_lists[i]
+        
+        logger.info(f"Computing features for {top_name} using {Path(trajectory).stem}")
+
+        top_output_folder = os.path.join(output_folder, top_name)
+
+        plumed_input_path = os.path.join(top_output_folder, 'plumed_input.dat')
+        plumed_topology_path = os.path.abspath(os.path.join(top_output_folder, 'plumed_topology.pdb'))
+        colvars_path = os.path.join(top_output_folder, 'colvars.dat')
         colvars_paths.append(colvars_path)
         
         # Skip if colvars file already exists
         if os.path.exists(colvars_path):
-            logger.info(f"Skipping {traj_name}. Colvars file already exists.")
+            logger.info(f"Skipping {top_name}. Colvars file already exists.")
             continue
-        
-        # Create trajectory output folder
-        create_output_folder(traj_output_folder)
-    
-        # Create new topology file
-        md.create_pdb(topology, plumed_topology_path)
-    
-        # Find list of features to compute with PLUMED
-        features_list = md.get_features_list(configuration['plumed_settings']['features'], plumed_topology_path)
 
         # Create the plumed input builder
         builder_args = {
@@ -122,7 +153,7 @@ def compute_features(configuration: Dict, trajectories: Union[List[str], str], t
             'plumed_input': plumed_input_path,
             'traj_path': trajectory,
             'num_atoms':  md.get_number_atoms(topology),
-            'output_path': traj_output_folder
+            'output_path': top_output_folder
         }
         plumed_command = plumed.cli.get_driver_command(**driver_command_args)
 
