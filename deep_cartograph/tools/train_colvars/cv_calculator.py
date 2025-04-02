@@ -233,7 +233,7 @@ class CVCalculator:
         from deep_cartograph.modules.plumed.colvars import read_column_names
         
         # Find all the features in the colvars file
-        features = read_column_names(colvars_path)
+        features = read_column_names(colvars_path, features_only = True)
         
         # Filter the features based on the constraints, if any
         if self.feature_filter:
@@ -242,12 +242,6 @@ class CVCalculator:
             
             if 'regex' in self.feature_filter.keys():
                 features = [feat for feat in features if re.search(self.feature_filter['regex'], feat)]
-        
-        # Additional regex used by create_dataset_from_files()
-        default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
-        
-        # Filter the features based on the default regex
-        features = [feat for feat in features if re.search(default_regex, feat)]
         
         return features
     
