@@ -114,7 +114,7 @@ def filter_features(
             logger.error(f"Reference topology file missing: {reference_topology}")
             sys.exit(1)
 
-    # Create a Filter object
+    # Filter the features
     args = {
         'colvars_paths': colvars_paths,
         'topologies': topologies,
@@ -122,10 +122,7 @@ def filter_features(
         'settings': configuration['filter_settings'],
         'output_dir': output_folder
     }
-    features_filter = Filter(**args)
-
-    # Filter the features
-    filtered_features = features_filter.run(csv_summary)
+    filtered_features = Filter(**args).run(csv_summary)
 
     # Save the filtered features
     save_list(filtered_features, output_features_path)
