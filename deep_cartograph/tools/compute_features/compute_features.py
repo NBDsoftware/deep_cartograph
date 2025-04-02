@@ -103,8 +103,11 @@ def compute_features(
     
     # Find list of features to compute from reference topology - user selection of features refers to this topology
     ref_feature_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
+    
+    logger.debug(f"Reference feature list extracted from user selection and reference topology:")
+    logger.debug(ref_feature_list)
  
-    # For each topology
+    # Find feature names for each topology
     features_lists = []
     for topology in topologies:
         
@@ -122,11 +125,25 @@ def compute_features(
         # Translate features to new topology
         features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_feature_list).run()
         features_lists.append(features_list)
+        
+        if logger.isEnabledFor(logging.DEBUG):
+            # Find indices of None values in feature list
+            absent_features_idxs = [i for i, feature in enumerate(features_list) if feature is None]
+            absent_features = [ref_feature_list[i] for i in absent_features_idxs]
+            if absent_features:
+                logger.debug(f"Absent features in {top_name}: {absent_features}")
+            else:
+                logger.debug(f"No absent features in {top_name}")
 
     # Keep just the features available in all topologies
     masks = np.array([[x is not None for x in lst] for lst in features_lists])
     mask =  masks.all(axis=0)
     common_features_lists = [[lst[i] for i in range(len(lst)) if mask[i]] for lst in features_lists]
+    
+    # Check if there are common features
+    if not common_features_lists:
+        logger.error("No common features found in the topologies. Exiting...")
+        sys.exit(1)
         
     # Compute the features for each traj and topology
     colvars_paths = []

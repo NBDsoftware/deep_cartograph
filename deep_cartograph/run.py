@@ -131,7 +131,7 @@ def deep_cartograph(
     if not reference_topology:
         reference_topology = topologies[0]
     elif not os.path.exists(reference_topology):
-        logger.error(f"Reference topology file missing. Exiting...")
+        logger.error(f"Reference topology file missing: {reference_topology}")
         sys.exit(1)
     
     # Step 0: Analyze geometry
