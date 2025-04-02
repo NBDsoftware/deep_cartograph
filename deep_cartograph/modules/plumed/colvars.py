@@ -316,7 +316,6 @@ def create_dataset_from_files(
     create_labels: bool = None,
     load_args: List[Dict] = None,
     filter_args: Dict = None,
-    modifier_function=None,
     return_dataframe: bool = False,
     **kwargs,
 ):
@@ -344,9 +343,6 @@ def create_dataset_from_files(
     filter_args (Optional)
         Dictionary of arguments which are passed to df.filter() to select features (keys: items, like, regex), by default None
         Note that 'time' and '*.bias' columns are always discarded.
-        
-    modifier_function (Optional)
-        Function to be applied to the input data, by default None.
     
     return_dataframe (Optional)
         Return also the imported Pandas dataframe for convenience, by default False
@@ -411,7 +407,7 @@ def create_dataset_from_files(
             # Translate feature names to the reference topology
             ref_feature_names = FeatureTranslator(topology_paths[i], reference_topology, feature_names).run()
             
-            # Check if any feature didn't have a translation
+            # Check if any feature didn't have a translation - all features in the provided colvars should be translatable
             for i in range(len(ref_feature_names)):
                 if ref_feature_names[i] is None:
                     logger.error(f'Feature {feature_names[i]} from {Path(file_paths).name} not found in the reference topology.')
@@ -424,10 +420,6 @@ def create_dataset_from_files(
     # filter inputs
     df_data = df.filter(**filter_args) if filter_args is not None else df.copy()
     df_data = df_data.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
-
-    # apply transformation
-    if modifier_function is not None:
-        df_data = df_data.apply(modifier_function)
 
     # create DictDataset
     dictionary = {"data": torch.Tensor(df_data.values)}
