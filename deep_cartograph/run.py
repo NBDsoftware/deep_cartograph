@@ -179,6 +179,8 @@ def deep_cartograph(
     ## Step 2: Filter features
     # ------------------------
     
+    # NOTE: Here we are assuming that MDAnalysis hasn't changed: resid, resname, atomnames of the topologies
+    #       Otherwise there would be a mismatch between the feature names in the colvars and the original topologies    
     args = {
         'configuration': configuration['filter_features'], 
         'colvars_paths': traj_colvars_paths,
@@ -193,7 +195,7 @@ def deep_cartograph(
 
     # Step 3: Train colvars
     # ---------------------
-    
+    # NOTE: we'll need to include the supplementary tops and trajs
     args = {
         'configuration': configuration['train_colvars'],
         'colvars_paths': traj_colvars_paths,
