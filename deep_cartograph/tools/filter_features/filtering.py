@@ -105,13 +105,14 @@ class Filter:
         from deep_cartograph.modules.plumed.features import FeatureTranslator
         
         # For each colvars and topology file
-        common_features = set()
+        common_features = None
         for i in range(len(self.colvars_paths)):
             
             colvars_path = self.colvars_paths[i]
             
             # Find the feature names in this colvars file
             feature_names = read_column_names(colvars_path, features_only=True)
+            feature_names.sort() # NOTE: This sort here is just to maintain the old behavior, remove once the changes are tested, we want to keep same order of weights as in the colvars files - will make life easier for the user
             
             logger.debug(f'There are {len(feature_names)} features in {Path(colvars_path).name}: {feature_names}')
             
@@ -125,15 +126,12 @@ class Filter:
                 ref_feature_names = [x for x in ref_feature_names if x is not None]
             else:
                 ref_feature_names = feature_names
-
-            # Convert to set
-            ref_feature_names = set(ref_feature_names)
             
             # Accumulate the common features
-            if len(common_features) == 0:
-                common_features = ref_feature_names
+            if common_features:
+                common_features = [feature for feature in common_features if feature in ref_feature_names]
             else:
-                common_features = common_features.intersection(ref_feature_names)
+                common_features = ref_feature_names
         
         if len(common_features) == 0:
             logger.error('No common features found in the colvars files.')

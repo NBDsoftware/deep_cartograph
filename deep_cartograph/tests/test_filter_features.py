@@ -56,6 +56,20 @@ def test_filter_features():
     reference_set = set(reference_features)
     output_set = set(output_features)    
     test_passed = reference_set == output_set
+    
+    if test_passed:
+        print("Filter features is returning the same set of features as the reference.")
+    else:
+        print("Filter features is not returning the same set of features as the reference.")
+        
+    # Test the order of the features
+    if test_passed:
+        test_passed = reference_features == output_features
+        if test_passed:
+            print("Filter features is returning the features in the same order as the reference.")
+        else:
+            print("Filter features is not returning the features in the same order as the reference.")
+            
     assert test_passed
     
     # If the test passed, clean the output folder
