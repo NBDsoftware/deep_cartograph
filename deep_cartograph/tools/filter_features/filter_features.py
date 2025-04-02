@@ -5,54 +5,72 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
+
+from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
+from deep_cartograph.tools.filter_features.filtering import Filter
+from deep_cartograph.modules.common import (
+    create_output_folder, 
+    validate_configuration, 
+    save_list,
+    get_unique_path, 
+    create_output_folder, 
+    read_configuration
+)
 
 ########
 # TOOL #
 ########
 
-def filter_features(configuration: Dict, colvars_paths: Union[str, List[str]], csv_summary: bool = True, 
-                    topologies: Union[List[str], None] = None, reference_topology: Union[str, None] = None, 
-                    output_folder: str = 'filter_features'):
+def filter_features(
+    configuration: Dict,
+    colvars_paths: Union[str, List[str]],
+    csv_summary: bool = True,
+    topologies: Optional[List[str]] = None,
+    reference_topology: Optional[str] = None,
+    output_folder: str = "filter_features"
+) -> str:
     """
-    Function that filters the features in the colvars file/s using different algorithms to select a subset that contains 
+    Filters features from colvars files using various algorithms to select a subset that retains 
     the most information about the system.
-    
-    The API is prepared to handle multiple large colvars files. It will incur in many opening and closing operations on the files to avoid memory issues.
-    
-    NOTE: add a quick version that loads all data into memory for small datasets? Depending on the number of samples/files vs number of features ratio.
-    NOTE: If topologies and ref topology are not given, assume all colvars files have the same feature names. To use this tool from cli easily
+
+    This function is optimized to handle large colvars files efficiently by performing multiple 
+    open/close operations to minimize memory usage.
+
+    **NOTE**:  
+    - If `topologies` and `reference_topology` are not provided, it is assumed that all colvars files 
+      have the same feature names.  
+    - This assumption allows easy CLI usage.
 
     Parameters
     ----------
+    configuration : Dict
+        Configuration dictionary (see `default_config.yml` for details).
+            
+    colvars_paths : str or List[str]
+        Path or list of paths to colvars file(s) containing the time series of features to filter.  
+        If multiple files are provided, they must have the same feature set.
+            
+    csv_summary : bool, optional (default: True)
+        If `True`, saves a CSV summary with filter values for each collective variable.
 
-        configuration:             
-            Configuration dictionary (see default_config.yml for more information)
-            
-        colvars_paths:             
-            Path or list of paths to the input colvars file/s with the time series of features to filter. If more than one file is given, they should have the same features.
-            
-        csv_summary:               
-            (Optional) If True, saves a CSV summary with the filter values for each collective variable
+    topologies : List[str], optional (default: None)
+        Topologies corresponding to the colvars files.  
+        If provided, they are used to translate feature names to the reference topology.
 
-        topologies:
-            (Optional) Topologies corresponding to the different colvars files. If given, they will be used to translate the feature names to the reference topology.
-        
-        reference_topology:
-            (Optional) Reference topology to translate the feature names to. If not given, the first topology in the list is used as reference.
+    reference_topology : str, optional (default: None)
+        Reference topology for feature name translation.  
+        If `None`, the first topology in `topologies` is used as a reference.
             
-        output_folder:             
-            (Optional) Path to the output folder, if not given, a folder named 'filter_features' is created
+    output_folder : str, optional (default: "filter_features")
+        Path to the output folder.  
+        If not specified, a folder named `"filter_features"` is created.
 
     Returns
     -------
-
-        output_features_path:      Path to the output file with the filtered features.
+    output_features_path : str
+        Path to the output file containing the filtered features.
     """
-
-    from deep_cartograph.tools.filter_features.filtering import Filter
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_list
-    from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
 
     logger = logging.getLogger("deep_cartograph")
     
@@ -173,7 +191,41 @@ def set_logger(verbose: bool):
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
 
+def parse_arguments():
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(
+        prog="Deep Cartograph: Filter Features",
+        description=("Filter the features in the colvar file using different" 
+                     "algorithms to select a subset of features that contains"
+                     "the most information about the system."
+        )
+    )
+    
+    # Required input files
+    parser.add_argument(
+        '-conf', '-configuration', dest='configuration_path', type=str, required=True,
+        help="Path to configuration file (.yml)."
+    )
+    parser.add_argument(
+        '-colvars', dest='colvars_paths', type=str, required=True,
+        help="Path to the input colvars file."
+    )
+    
+    # Optional arguments
+    parser.add_argument(
+        '-output', dest='output_folder', type=str, required=False,
+        help="Path to the output folder."
+    )
+    parser.add_argument(
+        '-csv_summary', action='store_true', required=False,
+        help="Save a CSV summary with the values of the different metrics for each feature."
+    )
+    parser.add_argument(
+        '-v', '--verbose', dest='verbose', action='store_true', required=False,
+        help="Set the logging level to DEBUG."
+    )
 
+    return parser.parse_args()
 
 ########
 # MAIN #
@@ -181,18 +233,7 @@ def set_logger(verbose: bool):
 
 def main():
 
-    from deep_cartograph.modules.common import get_unique_path, create_output_folder, read_configuration
-
-    parser = argparse.ArgumentParser("Deep Cartograph: Filter Features", description="Filter the features in the colvar file using different algorithms to select a subset of features that contains the most information about the system.")
-    
-    # Inputs
-    parser.add_argument("-conf", dest='configuration_path', help="Path to the YAML configuration file with the settings of the filtering task", required=True)
-    parser.add_argument("-colvars", dest='colvars_paths', type=str, help="Path to the input colvars file", required=True)
-    parser.add_argument("-output", dest='output_folder', help="Path to the output folder", required=False)
-    parser.add_argument("-csv_summary", action='store_true', help="Save a CSV summary with the values of the different metrics for each feature", required=False)
-    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
-    
-    args = parser.parse_args()
+    args = parse_arguments()
 
     # Set logger
     set_logger(verbose=args.verbose)

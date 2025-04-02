@@ -2,50 +2,63 @@ import os
 import sys
 import time
 import shutil
+import argparse
 import numpy as np
 import logging.config
 from pathlib import Path
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Optional
+
+from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
+import deep_cartograph.modules.plumed as plumed 
+import deep_cartograph.modules.md as md
+from deep_cartograph.modules.common import ( 
+    get_unique_path, 
+    read_configuration,
+    create_output_folder, 
+    validate_configuration, 
+    files_exist
+)
 
 ########
 # TOOL #
 ########
 
-def compute_features(configuration: Dict, trajectories: Union[List[str], str], topologies: Union[List[str], str], 
-                     reference_topology: Union[str, None] = None, output_folder: str = 'compute_features') -> List[str]:
+def compute_features(
+    configuration: Dict,
+    trajectories: Union[List[str], str],
+    topologies: Union[List[str], str],
+    reference_topology: Optional[str] = None,
+    output_folder: str = "compute_features",
+) -> List[str]:
     """
-    Function that computes features from a trajectory using PLUMED.
+    Computes features from a trajectory using PLUMED.
 
-    Parameters
-    ----------
-
-        configuration
-            A configuration dictionary (see default_config.yml for more information)
-            
-        trajectories          
-            Paths to the trajectory files that will be analyzed.
-            
-        topologies            
-            Paths to the topology files of the trajectories.
-            
-        reference_topology (Optional)
-            Path to reference topology file. The reference topology is used to find the features from the user selections.
-            Default is the first topology in topologies. Accepted formats: .pdb
-            
-        output_folder (Optional)
-            Path to the output folder
+    Args:
+        configuration (Dict): 
+            Configuration dictionary (see `default_config.yml` for more details).
         
-    Returns
-    -------
+        trajectories (Union[List[str], str]): 
+            Path(s) to the trajectory files to be analyzed.
+            If a single path is provided as a string, it will be converted to a list.
+        
+        topologies (Union[List[str], str]): 
+            Path(s) to the topology files corresponding to the trajectories.
+            Must be in the same order as `trajectories`.
+            If a single path is provided as a string, it will be converted to a list.
+        
+        reference_topology (Optional[str]): 
+            Path to the reference topology file.
+            Used to extract features from user selections.
+            Defaults to the first topology in `topologies`.
+            Accepted format: `.pdb`.
+        
+        output_folder (str, optional): 
+            Path to the output folder where computed features will be stored.
+            Default: `"compute_features"`.
 
-        colvars_paths:        
-            Paths to the output colvars files with the time series of the features.
+    Returns:
+        List[str]: Paths to the output colvars files containing the time series of the computed features.
     """
-
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist
-    from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
-    import deep_cartograph.modules.plumed as plumed 
-    import deep_cartograph.modules.md as md
 
     # Set logger
     logger = logging.getLogger("deep_cartograph")
@@ -215,25 +228,50 @@ def set_logger(verbose: bool):
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
 
+def parse_arguments():
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(
+        prog="Deep Cartograph: Compute features",
+        description="Compute features from a trajectory using PLUMED."
+    )
+    
+    # Required input files
+    parser.add_argument(
+        '-conf', '-configuration', dest='configuration_path', type=str, required=True,
+        help="Path to configuration file (.yml)."
+    )
+    parser.add_argument(
+        '-trajectory', dest='trajectory', type=str, required=True,
+        help="Path to trajectory file, for which the features are computed."
+    )
+    parser.add_argument(
+        '-topology', dest='topology', type=str, required=True,
+        help="Path to topology file."
+    )
+    parser.add_argument(
+        '-colvars', dest='colvars_path', type=str, required=True,
+        help="Path to the output colvars file that the PLUMED input will produce."
+    )
+    
+    # Optional arguments
+    parser.add_argument(
+        '-output', dest='output_folder', type=str, required=False,
+        help="Path to the output folder."
+    )
+    parser.add_argument(
+        '-v', '--verbose', dest='verbose', action='store_true', default=False,
+        help="Set the logging level to DEBUG."
+    )
+    
+    return parser.parse_args()
+
 ########
 # MAIN #
 ########
 
 def main():
-    
-    import argparse
-    from deep_cartograph.modules.common import get_unique_path, read_configuration
 
-    parser = argparse.ArgumentParser("Deep Cartograph: Compute features", description="Compute features from a trajectory using PLUMED.")
-    
-    parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
-    parser.add_argument('-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
-    parser.add_argument('-topology', dest='topology', help="Path to topology file.", required=True)
-    parser.add_argument('-colvars', dest='colvars_path', help="Path to the output colvars file that the PLUMED input will produce", required=True)
-    parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=False)
-    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
-
-    args = parser.parse_args()
+    args = parse_arguments()
 
     # Set logger
     set_logger(verbose=args.verbose)
