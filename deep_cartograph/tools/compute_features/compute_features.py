@@ -300,5 +300,4 @@ def main():
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
 
 if __name__ == "__main__":
-
     main()

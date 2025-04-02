@@ -252,13 +252,13 @@ class CVCalculator:
         Parameters
         ----------
 
-        feature_constraints: Union[List[str], str]
+        feature_constraints
             List of features to use or regex to select the features
         
         Returns
         -------
         
-        feature_filter : dict
+        feature_filter
             Dictionary with the filter to select the features
         """
 

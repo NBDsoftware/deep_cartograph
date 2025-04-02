@@ -56,7 +56,7 @@ def read_colvars(colvars_path: str) -> pd.DataFrame:
 
     return colvars_df
 
-def read_column_names(colvars_path: str, features_only: bool = False) -> list:
+def read_column_names(colvars_path: str, features_only: bool = False) -> List[str]:
     '''
     Reads the column names from a COLVARS file. 
 
@@ -194,13 +194,14 @@ def check(colvars_path: str):
     ''' 
     Check colvars file content.
 
-        - Check the file is not empty
-        - Check the file doesn't contain NaN values
+    - Check the file is not empty
+    - Check the file doesn't contain NaN values
     
     Inputs
     ------
 
-        colvars_path    (str):          COLVARS file path
+        colvars_path   
+            COLVARS file path
     '''
     # Check that the file exists
     if not os.path.exists(colvars_path):
