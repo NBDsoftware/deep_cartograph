@@ -64,6 +64,7 @@ class PDBTopologyMapper:
                 Residue indices.
         """
         parser = PDB.PDBParser(QUIET=True)
+    
         structure = parser.get_structure("protein", pdb_file)
         
         sequence = []
@@ -77,10 +78,9 @@ class PDBTopologyMapper:
         
         for chain in chains:
             for residue in chain:
-                if PDB.is_aa(residue, standard=True):
-                    res_name = residue.get_resname()
-                    sequence.append(seq1(res_name))
-                    indices.append(residue.id[1])  # Store residue sequence number
+                res_name = residue.get_resname()
+                sequence.append(seq1(res_name))
+                indices.append(residue.id[1])  # Store residue sequence number
         
         return "".join(sequence), indices
     
@@ -99,7 +99,9 @@ class PDBTopologyMapper:
     
     def get_mapping(self) -> Dict[int, int]:
         """
-        Creates a mapping from reference residues to other topology resides using the alignment.
+        Creates a mapping from reference residues to other topology residues using the sequence alignment.
+        
+        NOTE: this mapping currently only takes into account amino acid residues.
         
         The format of the mapping is the following:
 
@@ -135,7 +137,21 @@ class PDBTopologyMapper:
         return mapping 
     
     def map_residue(self, ref_residue_index: int) -> Union[int, None]:
-        """Given a resid in the reference topology, return the corresponding resid in the other topology."""
+        """
+        Given a resid in the reference topology, return the corresponding resid in the other topology.
+        
+        Input
+        -----
+        
+            ref_residue_index :
+                Residue index in the reference topology.
+                
+        Returns
+        -------
+        
+            resid :
+                Residue index in the other topology or None if not found.
+        """
         
         # NOTE: Should we check here the residue is the same? Should we ask for the atom name as well?
         
