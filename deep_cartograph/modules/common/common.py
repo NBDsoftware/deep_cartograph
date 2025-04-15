@@ -2,13 +2,12 @@ import os
 import sys
 import yaml
 import math
-import torch
 import logging
 import numpy as np
 import pandas as pd
+import importlib.util
 from pathlib import Path, PurePath
 from typing import Any, Dict, List, Union, Tuple
-from mlcolvar.data import DictDataset
 from pydantic import ValidationError
 from pydantic import BaseModel
 
@@ -20,6 +19,29 @@ default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
 
 
 # General utils
+def package_is_installed(*package_name: str) -> bool:
+    """
+    Check if some packages are installed.
+    
+    Parameters
+    ----------
+    
+    package_name : str
+        Variable number of package names to check
+    
+    Returns
+    -------
+    
+    bool
+        True if all packages are installed, False otherwise
+    """
+    
+    for package in package_name:
+        if importlib.util.find_spec(package) is None:
+            logger.debug(f"Package {package} is not installed")
+            return False
+    return True
+
 def create_output_folder(output_path: str) -> None:
     """
     Creates the output path if it does not exist.
@@ -325,6 +347,9 @@ def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, ve
     torch.Dataset
         Torch labeled dataset of the given data
     """
+    
+    import torch
+    from mlcolvar.data import DictDataset
 
     # filter inputs
     df_data = df.filter(**filter_args) if filter_args is not None else df.copy()

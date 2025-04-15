@@ -4,13 +4,13 @@ import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import List, Dict, Union, Literal
+from typing import List, Dict, Union
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, rgb2hex
-from mlcolvar.utils.fes import compute_fes
 
 # Import local modules
 from deep_cartograph.yaml_schemas.train_colvars import FesFigure 
+from deep_cartograph.modules.common import package_is_installed
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -29,6 +29,14 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
         settings:     dictionary with the settings of the FES plot
         output_path:  path where the outputs are saved
     """
+    
+    if not package_is_installed('mlcolvar', 'torch'):
+        logger.debug('mlcolvar and torch are not installed. Skipping FES plot.')
+        return
+    
+    import mlcolvar.utils.plot # NOTE: Defines fessa colormap - issue in mlcolvar
+    from mlcolvar.utils.fes import compute_fes
+    
     # NOTE: If reference data has many samples, resort to 2D contours of different colors instead of scatter plots
     
     # List of matplotlib markers to cycle through

@@ -309,43 +309,43 @@ def load_dataframe(
 
     return df
 
-def create_dataset_from_files(
-    file_paths: Union[List[str], str],
+def create_dataframe_from_files(
+    colvars_paths: Union[List[str], str],
     topology_paths: Union[List[str], None] = None,
     reference_topology: Union[str, None] = None,
-    create_labels: bool = None,
     load_args: List[Dict] = None,
     filter_args: Dict = None,
-    return_dataframe: bool = False,
+    create_labels: bool = None,
     **kwargs,
-):
+) -> pd.DataFrame:
     """
-    Initialize a dataset from (a list of) colvars files.
-
+    Create a list of dataframes from a list of colvars files.
+    
     Inputs
     ------
     
-    file_paths
+    colvars_paths
         Path to colvars files or list of paths to colvars files
         
     topology_paths (Optional)
-        List of paths to the topology files corresponding to the different colvars files (to translate the feature names if needed)
+        List of paths to the topology files corresponding to the different colvars files (to translate the feature names if needed).
+        If not given, assume the feature names are the same in all colvars files.
     
     reference_topology (Optional)
         Path to reference topology to which the filer_args refer. If no reference topology is given, the first file in topology_paths is used.
 
-    create_labels (Optional)
-        Assign a label to each file, default True if more than a file is given, otherwise False
-
     load_args (Optional)
-        List of dictionaries with the arguments passed to load_dataframe function for each file (keys: start,stop,stride and pandas.read_csv options), by default None
+        List of dictionaries with the arguments passed to load_dataframe function for each file 
+        (keys: start,stop,stride and pandas.read_csv options), by default None
     
     filter_args (Optional)
         Dictionary of arguments which are passed to df.filter() to select features (keys: items, like, regex), by default None
-        Note that 'time' and '*.bias' columns are always discarded.
-    
-    return_dataframe (Optional)
-        Return also the imported Pandas dataframe for convenience, by default False
+        Note that 'time', 'labels', 'walker' and '*.bias' columns are always discarded.
+        
+    create_labels (Optional)
+        Assign a label to each file, default True if more than a file is given, otherwise False
+        If True, a new column 'label' is added to the dataframe with the label of the file.
+        If False, the label is not added.
         
     kwargs (Optional)
         args passed to pd.load_csv function
@@ -353,81 +353,111 @@ def create_dataset_from_files(
     Outputs
     -------
     
-    torch.Dataset
-        Torch labeled dataset of the given data
-        
-    optional, pandas.Dataframe
-        Pandas dataframe of the given data
+    pd.DataFrame
+        Pandas dataframe of all the given data
     """
-    import torch
-    from mlcolvar.data import DictDataset
     from deep_cartograph.modules.plumed.features import FeatureTranslator
     
-    if isinstance(file_paths, str):
-        file_paths = [file_paths]
-    num_files = len(file_paths)
+    if isinstance(colvars_paths, str):
+        colvars_paths = [colvars_paths]
+    num_files = len(colvars_paths)
 
     # check if per file args are given, otherwise set to {}
     if load_args is None:
-        load_args = [{} for _ in file_paths]
+        load_args = [{} for _ in colvars_paths]
     else:
-        if (not isinstance(load_args, list)) or (len(file_paths) != len(load_args)):
+        if (not isinstance(load_args, list)) or (len(colvars_paths) != len(load_args)):
             raise TypeError(
-                """load_args should be a list of dictionaries of arguments of same length as file_paths. 
-                If you want to use the same args for all file pass them directly as **kwargs."""
+                """load_args should be a list of dictionaries of arguments of same length as colvars_paths. 
+                If you want to use the same args for all files pass them directly as **kwargs."""
             )
             
     if topology_paths:
         if (not isinstance(topology_paths, list)) or (num_files != len(topology_paths)):
             raise TypeError(
-                """topology_paths should be a list of paths of same length as file_paths."""
+                """topology_paths should be a list of paths of same length as colvars_paths."""
             )
         if not reference_topology:
             reference_topology = topology_paths[0]
 
-    # check if create_labels is given, otherwise set it to True if more than one file is given
+    # If the user has not set create_labels, set it to True if more than one file is given
     if create_labels is None:
-        create_labels = False if len(file_paths) == 1 else True
-
+        create_labels = False if len(colvars_paths) == 1 else True
+    
     # initialize pandas dataframe
     df = pd.DataFrame()
 
     # load data
-    for i in range(num_files):
+    for file_index in range(num_files):
         
-        df_tmp = load_dataframe(file_paths[i], **load_args[i], **kwargs)
-
-        # add label in the dataframe
-        if create_labels:
-            df_tmp["labels"] = i
+        tmp_df = load_dataframe(colvars_paths[file_index], **load_args[file_index], **kwargs)
         
         if topology_paths:
             
-            feature_names = list(df_tmp.columns)
+            # Original feature names
+            feature_names = list(tmp_df.columns)
+            
             # Translate feature names to the reference topology
-            ref_feature_names = FeatureTranslator(topology_paths[i], reference_topology, feature_names).run()
+            ref_feature_names = FeatureTranslator(topology_paths[file_index], reference_topology, feature_names).run()
             
             # Check if any feature didn't have a translation - all features in the provided colvars should be translatable
-            for i in range(len(ref_feature_names)):
-                if ref_feature_names[i] is None:
-                    logger.error(f'Feature {feature_names[i]} from {Path(file_paths).name} not found in the reference topology.')
+            for feature_index in range(len(ref_feature_names)):
+                if ref_feature_names[feature_index] is None:
+                    logger.error(f'Feature {feature_names[feature_index]} from {Path(colvars_paths).name} not found in the reference topology.')
                     sys.exit(1)
-            df_tmp.columns = ref_feature_names
+                    
+            # Change the column names to the reference names before concatenating
+            tmp_df.columns = ref_feature_names
             
+        # Filter the dataframe
+        if filter_args is not None:
+            tmp_df = tmp_df.filter(**filter_args)
+        
+        # Remove unwanted columns - needed in case filter_args is not given
+        tmp_df = tmp_df.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
+        
+        # add file label to the dataframe
+        if create_labels:
+            tmp_df["label"] = file_index
+            
+        # Check this dataframe has the same features and in the same order as the previous ones
+        if not df.empty:
+            
+            # Get the feature names from this dataframe
+            feature_names = list(tmp_df.columns)
+            
+            # Get the set of feature names
+            feature_set = set(feature_names)
+            
+            # Check if it has the same number of features as the accumulated df
+            if len(feature_set) != len(df.columns):
+                logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same number of features as the previous colvars.")
+                logger.error(f"Previous colvars features: {list(df.columns)}")
+                logger.error(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
+                logger.error(f"Please check the colvars files and the topology files used to translate the features.")
+                sys.exit(1)
+            
+            print(f"Previous colvars features: {list(df.columns)}")
+            print(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
+            print(f"Feature set: {feature_set}")
+            
+            # Check if it has the same features as the accumulated df
+            if not feature_set == set(df.columns):
+                logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same features as the previous colvars.")
+                logger.error(f"Previous colvars features: {list(df.columns)}")
+                logger.error(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
+                logger.error(f"Please check the colvars files and the topology files used to translate the features.")
+                sys.exit(1)
+        
+            # Check if all dataframes have the features in the same order
+            if not feature_names == list(df.columns):
+                logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same order in the features as the previous colvars.")
+                logger.error(f"Previous colvars features: {list(df.columns)}")
+                logger.error(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
+                logger.error(f"Please check the colvars files and the topology files used to translate the features.")
+                sys.exit(1)
+                
         # update collective dataframe
-        df = pd.concat([df, df_tmp], ignore_index=True)
+        df = pd.concat([df, tmp_df], ignore_index=True)
     
-    # filter inputs
-    df_data = df.filter(**filter_args) if filter_args is not None else df.copy()
-    df_data = df_data.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
-
-    # create DictDataset
-    dictionary = {"data": torch.Tensor(df_data.values)}
-    if create_labels:
-        dictionary["labels"] = torch.Tensor(df["labels"].values)
-    dataset = DictDataset(dictionary, feature_names=df_data.columns.values)
-
-    if return_dataframe:
-        return dataset, df
-    else:
-        return dataset
+    return df
