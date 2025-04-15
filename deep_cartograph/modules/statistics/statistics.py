@@ -345,6 +345,7 @@ def find_centroids(features_df: pd.DataFrame, centroids: np.array, feature_label
     # Make sure the dimension of the centroids is the same as the dimension of the used features
     if len(centroids[0]) != len(feature_labels):
         logger.error("  The dimension of the centroids is not the same as the dimension of the used features.\n")
+        logger.error(f"  Centroids dimension: {len(centroids[0])}, features dimension: {len(feature_labels)}\n")
         sys.exit(1)
 
     # Create an empty DataFrame with the same structure features_df
