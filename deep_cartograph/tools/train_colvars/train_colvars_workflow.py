@@ -134,7 +134,7 @@ class TrainColvarsWorkflow:
         # For each requested collective variable
         for cv in self.cvs:
             
-            if cv is not "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
+            if cv != "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
                 logger.warning(f"Missing packages for {cv}. Skipping this CV.")
                 continue
             
