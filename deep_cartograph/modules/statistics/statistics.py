@@ -4,7 +4,7 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Union, Literal
+from typing import Dict, Tuple, Union, Literal, List
 from sklearn.cluster import HDBSCAN
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -13,7 +13,7 @@ from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bo
 # Set logger
 logger = logging.getLogger(__name__)
 
-# Define functions
+# Clustering
 def optimize_clustering(features: np.ndarray, settings: Dict):
     """
     Optimize the hyper-parameters of the clustering algorithm. For kmeans and hierarchical, the optimization 
@@ -345,6 +345,7 @@ def find_centroids(features_df: pd.DataFrame, centroids: np.array, feature_label
     # Make sure the dimension of the centroids is the same as the dimension of the used features
     if len(centroids[0]) != len(feature_labels):
         logger.error("  The dimension of the centroids is not the same as the dimension of the used features.\n")
+        logger.error(f"  Centroids dimension: {len(centroids[0])}, features dimension: {len(feature_labels)}\n")
         sys.exit(1)
 
     # Create an empty DataFrame with the same structure features_df
@@ -362,3 +363,127 @@ def find_centroids(features_df: pd.DataFrame, centroids: np.array, feature_label
         centroids_df = pd.concat([centroids_df, closest_sample], ignore_index=True)
 
     return centroids_df
+
+# Entropy
+def shannon_entropy(features_df: pd.DataFrame) -> List[float]:
+    """
+    Function that computes the Shannon entropy of the distribution of each feature.
+
+    Entropy can be understood as the surprise of the outcome x of a random variable X: 
+    log(1/p(x)) -> the more unlikely the outcome, the more surprised we are and p(x) = 1 yields no surprise
+
+    The average 'surprise' of a random variable X: H(X) = \sum_x p(x) log(1/p(x)) = - \sum_x p(x) log(p(x))
+
+    Which is the entropy of the distribution of X
+
+    The average surprise is maximized when the distribution is uniform (all outcomes have the same probability, variability is maximized)
+
+    The more uniform the distribution (many outcomes with similar probabilities, variability is maximized), the higher the entropy
+    The more skewed the distribution (few outcomes with high probabilities, variability is minimized), the lower the entropy
+
+    For continuous variables, the entropy is computed as the integral of the probability density function times the log of the probability density function
+    and it measures the variability with respect to the unit uniform distribution.
+
+    If its more spread out, the entropy is higher. If its more concentrated, the entropy is lower.
+
+    If it has several peaks, the entropy is higher while if it has a single peak, the entropy is lower (provided they have the same spread or variance)
+
+    Note that the Shannon entropy of continuous distributions will be sensitive to the units of the variable, thus it cannot be used to compare distributions
+    of variables with different units.
+    Inputs
+    ------
+
+        features_df:
+            DataFrame with the time series of the features
+    
+    Outputs
+    -------
+
+        feature_entropies:
+            List with the shannon entropy of each feature
+    """
+
+    from scipy.stats import entropy
+
+    # Iterate over the features
+    feature_entropies = []
+    feature_names = list(features_df.columns)
+    for name in feature_names:
+        
+        # Compute the histogram of the feature
+        hist, bin_edges = np.histogram(features_df[name].to_numpy(), bins=100, density=True)
+        prob_distribution = hist * np.diff(bin_edges)
+
+        # Compute and append the entropy to the list
+        feature_entropies.append(round(entropy(prob_distribution, base=2), 3))
+        
+    return feature_entropies
+
+def standard_deviation(features_df: pd.DataFrame) -> List[float]:
+    """
+    Function that computes the std of the distribution of each feature.
+    
+    Inputs
+    ------
+
+        features_df:
+            DataFrame with the time series of the features 
+            
+    Outputs
+    -------
+
+        feature_stds: 
+            List of stds of the features
+    """
+
+    # Iterate over the features
+    feature_stds = []
+    feature_names = list(features_df.columns)
+    for name in feature_names:
+
+        # Compute and append the std to the list
+        feature_stds.append(round(np.std(features_df[name].to_numpy()), 3))
+
+    return feature_stds
+
+def dip_test(features_df: pd.DataFrame) -> List[float]:
+    """
+    Function that computes the p-value of the Hartigan Dip test for each feature.
+
+    In the Hartigan's dip test, the null hypothesis is that the distribution is uni-modal. 
+    The alternative hypothesis is that the distribution is multi-modal.
+
+    The test statistic is the maximum difference over all sample points, between the empirical 
+    distribution function, and the unimodal distribution function that minimizes that maximum difference.
+
+    The p-value indicates the probability of rejecting the null hypothesis when it is true. 
+    The smaller the p-value, the stronger the evidence against the null hypothesis.
+
+    Inputs
+    ------
+
+        features_df:
+            DataFrame with the time series of the features 
+    
+    Outputs
+    -------
+
+        hdt_pvalues: 
+            List with p-values of the Hartigan Dip test for each feature
+    """
+    
+    from diptest import diptest
+    
+    # Iterate over the features
+    hdt_pvalues = []
+    feature_names = list(features_df.columns)
+    for name in feature_names:
+        
+        # Compute the p-value of the Hartigan Dip test
+        hdt_pvalue = diptest(np.array(features_df[name].to_numpy()))[1]
+
+        # Append the p-value to the list
+        hdt_pvalues.append(hdt_pvalue)
+
+    # Return a dataframe with the feature names and their p-values
+    return hdt_pvalues

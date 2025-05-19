@@ -2,48 +2,63 @@ import os
 import sys
 import time
 import shutil
+import argparse
+import numpy as np
 import logging.config
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Union, List, Optional
+
+from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
+import deep_cartograph.modules.plumed as plumed 
+import deep_cartograph.modules.md as md
+from deep_cartograph.modules.common import ( 
+    get_unique_path, 
+    read_configuration,
+    create_output_folder, 
+    validate_configuration, 
+    files_exist
+)
 
 ########
 # TOOL #
 ########
 
-def compute_features(configuration: Dict, trajectory: str, topology: str, colvars_path: Union[str, None] = None, 
-                     output_folder: str = 'compute_features') -> str:
+def compute_features(
+    configuration: Dict,
+    trajectories: Union[List[str], str],
+    topologies: Union[List[str], str],
+    reference_topology: Optional[str] = None,
+    output_folder: str = "compute_features",
+) -> List[str]:
     """
-    Function that computes features from a trajectory using PLUMED.
+    Computes features from a trajectory using PLUMED.
 
-    Parameters
-    ----------
-
-        configuration:
-            A configuration dictionary (see default_config.yml for more information)
-            
-        trajectory:          
-            Path to the trajectory file that will be analyzed.
-            
-        topology:            
-            Path to the topology file of the trajectory.
-            
-        colvars_path:        
-            (Optional) Path to the output colvars file with the time series of the features.
-            
-        output_folder:       
-            (Optional) Path to the output folder
+    Args:
+        configuration (Dict): 
+            Configuration dictionary (see `default_config.yml` for more details).
         
-    Returns
-    -------
+        trajectories (Union[List[str], str]): 
+            Path(s) to the trajectory files to be analyzed.
+            If a single path is provided as a string, it will be converted to a list.
+        
+        topologies (Union[List[str], str]): 
+            Path(s) to the topology files corresponding to the trajectories.
+            Must be in the same order as `trajectories`.
+            If a single path is provided as a string, it will be converted to a list.
+        
+        reference_topology (Optional[str]): 
+            Path to the reference topology file.
+            Used to extract features from user selections.
+            Defaults to the first topology in `topologies`.
+            Accepted format: `.pdb`.
+        
+        output_folder (str, optional): 
+            Path to the output folder where computed features will be stored.
+            Default: `"compute_features"`.
 
-        colvars_path:        
-            Path to the output colvars file with the time series of the features.
+    Returns:
+        List[str]: Paths to the output colvars files containing the time series of the computed features.
     """
-
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, files_exist
-    from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
-    import deep_cartograph.modules.plumed as plumed 
-    import deep_cartograph.modules.md as md
 
     # Set logger
     logger = logging.getLogger("deep_cartograph")
@@ -62,56 +77,140 @@ def compute_features(configuration: Dict, trajectory: str, topology: str, colvar
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
     
+    if isinstance(trajectories, str):
+        trajectories = [trajectories]
+    if isinstance(topologies, str):
+        topologies = [topologies]
+        
     # Check if files exist
-    if not files_exist(trajectory):
-        logger.error(f"Trajectory file {trajectory} does not exist. Exiting...")
+    if not files_exist(*trajectories):
+        logger.error(f"Trajectory file missing. Exiting...")
         sys.exit(1)
-    else:
-        logger.info(f"Trajectory file: {trajectory}")
-        
-    if not files_exist(topology):
-        logger.error(f"Topology file {topology} does not exist. Exiting...")
+    if not files_exist(*topologies):
+        logger.error(f"Topology file missing. Exiting...")
         sys.exit(1)
-
-    # Create colvars path if not provided
-    if colvars_path is None:
-        colvars_path = os.path.join(output_folder, 'colvars.dat')
         
-    # Set plumed input path
-    plumed_input_path = os.path.join(output_folder, 'plumed_input.dat')
+    # Set reference topology
+    if not reference_topology:
+        reference_topology = topologies[0]
+    elif not os.path.exists(reference_topology):
+        logger.error(f"Reference topology file missing. Exiting...")
+        sys.exit(1)
+        
+    # Create a reference plumed topology file
+    ref_plumed_topology = os.path.join(output_folder, 'ref_topology.pdb')
+    md.create_pdb(reference_topology, ref_plumed_topology)
     
-    # Set plumed topology path
-    plumed_topology_path = os.path.abspath(os.path.join(output_folder, 'plumed_topology.pdb'))
+    # Find list of features to compute from reference topology - user selection of features refers to this topology
+    ref_feature_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
     
-     # Create new topology file
-    md.create_pdb(topology, plumed_topology_path)
+    logger.debug(f"The reference feature list contains {len(ref_feature_list)} features:")
+    logger.debug(ref_feature_list)
+ 
+    # Find feature names for each topology
+    features_lists = []
+    for topology in topologies:
+        
+        # Find top name
+        top_name = Path(topology).stem
     
-    # Find list of features to compute with PLUMED
-    features_list = md.get_features_list(configuration['plumed_settings']['features'], plumed_topology_path)
+        # Create output folder
+        top_output_folder = os.path.join(output_folder, top_name)
+        create_output_folder(top_output_folder)
+        
+        # Create new topology file
+        plumed_topology = os.path.join(top_output_folder, 'plumed_topology.pdb')
+        md.create_pdb(topology, plumed_topology)
+        
+        # Translate features to new topology
+        logger.debug(f"Translating features from reference topology {Path(reference_topology).name} to topology {Path(topology).name}")
+        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_feature_list).run()
+        features_lists.append(features_list)
+        
+        if logger.isEnabledFor(logging.DEBUG):
+            # Find indices of None values in feature list
+            absent_features_idxs = [i for i, feature in enumerate(features_list) if feature is None]
+            absent_features = [ref_feature_list[i] for i in absent_features_idxs]
+            if absent_features:
+                logger.debug(f"There are {len(absent_features)} absent features in {top_name}: {absent_features}")
+            else:
+                logger.debug(f"No absent features in {top_name}. All reference features were translated successfully.")
 
-    # Create the corresponding PLUMED Builder
-    plumed_builder = plumed.input.builder.ComputeFeaturesBuilder(plumed_input_path, plumed_topology_path, features_list, configuration['plumed_settings']['traj_stride'])
-    plumed_builder.build(colvars_path)
-
-    # Construct plumed driver command
-    plumed_command = plumed.cli.get_driver_command(plumed_input_path, trajectory, md.get_number_atoms(topology), output_folder)
-
-    # Execute plumed command
-    run_args = {
-        'plumed_command': plumed_command,
-        'plumed_settings': configuration['plumed_environment'],
-        'plumed_timeout': configuration['plumed_settings']['timeout']   
-    }
-    plumed.cli.run_plumed(**run_args)
+    # Keep just the features available in all topologies
+    masks = np.array([[x is not None for x in lst] for lst in features_lists])
+    mask =  masks.all(axis=0)
+    common_features_lists = [[lst[i] for i in range(len(lst)) if mask[i]] for lst in features_lists]
     
-    # Check output file
-    plumed.colvars.check(colvars_path)
+    # Check if all common feature lists have the same length
+    if not all(len(lst) == len(common_features_lists[0]) for lst in common_features_lists):
+        logger.error("Feature lists are not the same length. Exiting...")
+        sys.exit(1)
+        
+    if logger.isEnabledFor(logging.DEBUG):
+        # Find list of discarded features
+        discarded_features = [ref_feature_list[i] for i in range(len(ref_feature_list)) if not mask[i]]
+        logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
+        logger.debug(discarded_features)
+        logger.debug(f"{len(common_features_lists[0])} features were kept")
+        
+    # Compute the features for each traj and topology
+    colvars_paths = []
+    for i in range(len(topologies)):
+
+        topology = topologies[i]
+        top_name = Path(topology).stem
+        trajectory = trajectories[i]
+        features_list = common_features_lists[i]
+        
+        logger.info(f"Computing features for {top_name} using {Path(trajectory).stem}")
+
+        top_output_folder = os.path.join(output_folder, top_name)
+
+        plumed_input_path = os.path.join(top_output_folder, 'plumed_input.dat')
+        plumed_topology_path = os.path.abspath(os.path.join(top_output_folder, 'plumed_topology.pdb'))
+        colvars_path = os.path.join(top_output_folder, 'colvars.dat')
+        colvars_paths.append(colvars_path)
+        
+        # Skip if colvars file already exists
+        if os.path.exists(colvars_path):
+            logger.info(f"Skipping {top_name}. Colvars file already exists.")
+            continue
+
+        # Create the plumed input builder
+        builder_args = {
+            'input_path': plumed_input_path,
+            'topology_path': plumed_topology_path,
+            'feature_list': features_list,
+            'traj_stride': configuration['plumed_settings']['traj_stride']
+        }
+        plumed_builder = plumed.input.builder.ComputeFeaturesBuilder(**builder_args)
+        plumed_builder.build(colvars_path)
+
+        # Construct plumed driver command
+        driver_command_args = {
+            'plumed_input': plumed_input_path,
+            'traj_path': trajectory,
+            'num_atoms':  md.get_number_atoms(topology),
+            'output_path': top_output_folder
+        }
+        plumed_command = plumed.cli.get_driver_command(**driver_command_args)
+
+        # Execute command
+        run_args = {
+            'plumed_command': plumed_command,
+            'plumed_settings': configuration['plumed_environment'],
+            'plumed_timeout': configuration['plumed_settings']['timeout']   
+        }
+        plumed.cli.run_plumed(**run_args)
+    
+        # Check output file
+        plumed.colvars.check(colvars_path)
 
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Compute features): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
-    return colvars_path
+    return colvars_paths
 
 def set_logger(verbose: bool):
     """
@@ -154,25 +253,50 @@ def set_logger(verbose: bool):
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
 
+def parse_arguments():
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(
+        prog="Deep Cartograph: Compute features",
+        description="Compute features from a trajectory using PLUMED."
+    )
+    
+    # Required input files
+    parser.add_argument(
+        '-conf', '-configuration', dest='configuration_path', type=str, required=True,
+        help="Path to configuration file (.yml)."
+    )
+    parser.add_argument(
+        '-trajectory', dest='trajectory', type=str, required=True,
+        help="Path to trajectory file, for which the features are computed."
+    )
+    parser.add_argument(
+        '-topology', dest='topology', type=str, required=True,
+        help="Path to topology file."
+    )
+    parser.add_argument(
+        '-colvars', dest='colvars_path', type=str, required=True,
+        help="Path to the output colvars file that the PLUMED input will produce."
+    )
+    
+    # Optional arguments
+    parser.add_argument(
+        '-output', dest='output_folder', type=str, required=False,
+        help="Path to the output folder."
+    )
+    parser.add_argument(
+        '-v', '--verbose', dest='verbose', action='store_true', default=False,
+        help="Set the logging level to DEBUG."
+    )
+    
+    return parser.parse_args()
+
 ########
 # MAIN #
 ########
 
 def main():
-    
-    import argparse
-    from deep_cartograph.modules.common import get_unique_path, read_configuration
 
-    parser = argparse.ArgumentParser("Deep Cartograph: Compute features", description="Compute features from a trajectory using PLUMED.")
-    
-    parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
-    parser.add_argument('-trajectory', dest='trajectory', help="Path to trajectory file, for which the features are computed.", required=True)
-    parser.add_argument('-topology', dest='topology', help="Path to topology file.", required=True)
-    parser.add_argument('-colvars', dest='colvars_path', help="Path to the output colvars file that the PLUMED input will produce", required=True)
-    parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=False)
-    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
-
-    args = parser.parse_args()
+    args = parse_arguments()
 
     # Set logger
     set_logger(verbose=args.verbose)
@@ -201,5 +325,4 @@ def main():
     shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
 
 if __name__ == "__main__":
-
     main()

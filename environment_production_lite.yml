@@ -1,8 +1,7 @@
-name: deep_cartograph
+name: deep_cartograph_lite
 channels:
 
   - conda-forge
-  - pytorch
   - defaults
 
 dependencies:
@@ -12,10 +11,8 @@ dependencies:
 
   # Core dependencies
   - numpy<2               # match with pytorch
-  - pytorch<2.3           # match with numpy
   - pandas
   - pydantic              # to-try: pydantic<2 workaround to avoid clashes with lightning
-  - lightning
   - mdanalysis
   - scikit-learn>=1.3     # HDBSCAN is included in scikit-learn>=1.3
   - scipy
@@ -30,4 +27,3 @@ dependencies:
   - pip:   
     - kdepy                # (Optional) Faster than scikit-learn for KDE
     - diptest
-    - mlcolvar

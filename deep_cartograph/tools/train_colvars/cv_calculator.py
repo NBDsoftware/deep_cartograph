@@ -1,28 +1,12 @@
 import os
-import re
 import sys
-import torch
-import lightning
 import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from scipy.sparse import block_diag
-from typing import Dict, List, Tuple, Union, Literal
+from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
-
-from mlcolvar.utils.timelagged import create_timelagged_dataset # NOTE: this function returns less samples than expected: N-lag_time-2
-from mlcolvar.utils.io import create_dataset_from_files
-from mlcolvar.data import DictModule, DictDataset
-from mlcolvar.cvs import AutoEncoderCV, DeepTICA
-from mlcolvar.utils.trainer import MetricsCallback
-from mlcolvar.utils.plot import plot_metrics
-from mlcolvar.core.stats import TICA
-from mlcolvar.core.transform import Normalization
-from mlcolvar.core.transform.utils import Statistics
-
-from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
 import deep_cartograph.modules.plumed as plumed
@@ -36,87 +20,139 @@ class CVCalculator:
     """
     Base class for collective variables calculators.
     """
-    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict,
+        training_colvars_paths: List[str],
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Optional[str] = None
+    ):
         """
         Initializes the base CV calculator.
         
-        NOTE: for the comparison of different topologies, we will need the topologies to make sure that the features are 
-        equivalent and all the colvars files can be used together to learn a CV. 
-        
         Parameters
         ----------
-        
-        colvars_paths : str
+    
+        configuration
+            Configuration dictionary with settings for the CV
+            
+        training_colvars_paths 
             List of paths to colvars files with the main data used for training
-        topology_paths : str
-            List of paths to topology files corresponding to the colvars files
-        feature_constraints : Union[List[str], str]
+                
+        topology_paths (Optional)
+            List of paths to topology files corresponding to the training colvars files (same order)
+        
+        ref_topology_path (Optional)
+            Path to the reference topology file. If None, the first topology file is used as reference topology
+            
+        feature_constraints (Optional)
             List with the features to use for the training or str with regex to filter feature names.
-        ref_colvars_paths : Union[List[str], None]
-            List of paths to colvars files with reference data
-        configuration : Dict
-            Configuration dictionary for the CV
-        output_path : str
+            
+        sup_colvars_paths (Optional)
+            List of paths to colvars files with supplementary data to project alongside the FES of the training data 
+            (e.g. experimental structures). If None, no supplementary data is used
+        
+        sup_topology_paths (Optional)
+            List of paths to topology files corresponding to the supplementary colvars files (same order)
+            
+        output_path (Optional)
             Output path where the CV results folder will be created
         """
         
-        # Training data
-        self.training_input_dtset: DictDataset = None  # Used to train / compute the CVs, contains just the samples defined in training_reading_settings
-        
+        # Total number of samples
         self.num_samples: int = None
-        
-        # Reference data
-        self.ref_datasets: List[DictDataset] = []
-        
         # Filter dictionary
         self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
-        
-        # List of features used for training (features in the colvars file after filtering) 
-        # NOTE: this will be a list of lists when we consider different topologies
-        self.feature_labels: List[str] = None
-        
-        # Number of features
-        self.num_features: int = None
         
         # Configuration
         self.configuration: Dict = configuration
         self.architecture_config: Dict = configuration['architecture']
         self.training_reading_settings: Dict = configuration['input_colvars']
-        self.feats_norm_mode: Union[Literal['mean_std', 'min_max'], None] = configuration['features_normalization']
-        self.features_normalization: Union[Normalization, None] = None
+        self.feats_norm_mode: Literal['mean_std', 'min_max', 'none'] = configuration['features_normalization']
         
-        # Read the data
-        self.read_training_data(colvars_paths)
-        self.read_reference_data(ref_colvars_paths)
-        
-        self.ref_names: List[str] = [Path(path).stem for path in ref_colvars_paths] if ref_colvars_paths else []
+        # Colvars paths
+        self.training_colvars_paths: List[str] = training_colvars_paths
+        self.sup_colvars_paths: Optional[List[str]] = sup_colvars_paths
         
         # Topologies
-        self.topologies: List[str] = topology_paths
+        self.topologies: Optional[List[str]] = topology_paths     # NOTE: Should these be attributes?
+        self.ref_topology_path: Optional[str] = ref_topology_path
+        if self.topologies is not None:
+            if self.ref_topology_path is None:
+                self.ref_topology_path = self.topologies[0]
+        
+        # Filtered training data used to train / compute the CVs
+        logger.info('Reading training data from colvars files...')
+        reading_args = {
+            'colvars_paths': training_colvars_paths,
+            'topology_paths': self.topologies,
+            'ref_topology_path': self.ref_topology_path,
+            'load_args': self.training_reading_settings}
+        self.training_data: pd.DataFrame = self.read_data(**reading_args)
+        self.training_data_labels: np.array = self.training_data.pop("label").to_numpy()
+
+        # Projected training data NOTE: make sure they have the labels from the training_data
+        self.projected_training_data: Optional[pd.DataFrame] = None
+        
+        # Number of samples used to train / compute the CV - depends on the specific CV calculator
+        self.num_training_samples: Union[int, None] = None
+        
+        # List of features used for training (features in the colvars files after filtering) 
+        self.feature_labels: List[str] = self.training_data.columns.tolist()
+        self.num_features: int = len(self.feature_labels)
+        logger.info(f'Number of features: {self.num_features}')
+        
+        # Read the supplementary data
+        if sup_colvars_paths:
+            logger.info('Reading supplementary data from supplementary colvars files...')
+            reading_args = {
+                'colvars_paths': sup_colvars_paths,
+                'topology_paths': sup_topology_paths,
+                'ref_topology_path': ref_topology_path,
+                'load_args': self.training_reading_settings
+            }
+            self.supplementary_data: pd.DataFrame = self.read_data(**reading_args)
+            self.supplementary_data_labels: np.array = self.supplementary_data.pop("label").to_numpy()
+    
+            # Check if the feature labels are the same as the training data
+            sup_feature_labels = self.supplementary_data.columns.tolist()
+            if len(sup_feature_labels) != self.num_features:
+                logger.error(f"""Number of features in supplementary colvars files ({len(sup_feature_labels)}) is different 
+                             from the number of features in the training dataset ({self.num_features}). Exiting...""")
+                sys.exit(1)
+            if self.feature_labels != sup_feature_labels:
+                logger.error(f"""Feature labels in supplementary colvars files ({sup_feature_labels}) are different 
+                             from the feature labels in the training dataset ({self.feature_labels}). Exiting...""")
+                sys.exit(1)
+        else:
+            self.supplementary_data: Optional[pd.DataFrame] = None
+        
+        # Projected supplementary data
+        self.projected_supplementary_data : Optional[pd.DataFrame] = None
         
         # General CV attributes
         self.cv_dimension: int = configuration['dimension']
         self.cv_labels: List[str] = []
         self.cv_name: str = None
-        self.cv_range: List[Tuple[float, float]] = []
-        
-        # Output 
-        self.projected_ref: List[np.ndarray] = []
+        self.cv_range: List[Tuple[float, float]] = [] 
+
+        self.output_path: str = output_path
     
-        self.output_path: str =  output_path
-    
-    def initialize(self):
+    def initialize_cv(self):
         """
-        Initializes the specific CV calculator:
+        Initialize the specific CV. 
         
-            - Finds the number of samples from the input dataset
+        These are tasks that are common to all CV calculators
+        but have to be done after the specific CV calculator constructor has been called.
+        
             - Creates the output folder for the CV using the cv_name
             - Logs the start of the calculation using the cv_name
         """
-        
-        # Get the number of samples - input_dataset depends on the specific CV calculator
-        self.num_samples = self.training_input_dtset["data"].shape[0]
+        # Get the total number of samples
+        self.num_samples = len(self.training_data)
         logger.info(f'Number of samples: {self.num_samples}')
         
         # Create output folder for this CV
@@ -133,118 +169,50 @@ class CVCalculator:
         return self.cv is not None
         
     # Readers
-    def read_training_data(self, colvars_paths: List[str]):
+    def read_data(self, 
+                  colvars_paths: List[str],
+                  topology_paths: Optional[List[str]] = None,   
+                  ref_topology_path: Optional[str] = None,
+                  load_args: Optional[Dict] = None
+        ) -> pd.DataFrame:
         """
-        Creates filtered training dataset from input colvars files.
+        Read the data from the colvars files, translate the feature names using the 
+        topology files and filter the features based on the feature filter.
         
         Parameters
         ----------
         
         colvars_paths : str
-            List of paths to colvars files with the main data used for training
-        """
-        
-        logger.info('Reading training data from colvars files...')
-        
-        # Use same load args for all colvars files
-        load_args = [self.training_reading_settings for _ in colvars_paths]
-        
-        # Main data
-        self.training_input_dtset = create_dataset_from_files(
-            file_names=colvars_paths,
-            load_args=load_args,       
-            filter_args=self.feature_filter, 
-            verbose=False, 
-            return_dataframe=False
-        )
-        
-        # Save feature labels
-        self.feature_labels = self.training_input_dtset.feature_names
-        
-        # Save the number of features
-        self.num_features = len(self.feature_labels)
-        logger.info(f'Number of features: {self.num_features}')
-
-    def read_reference_data(self, ref_colvars_paths: Union[List[str], None]):
-        """
-        Reads the reference data from the colvars files.
-        """
-        
-        # Reference data (if provided)
-        if ref_colvars_paths:
-            for path in ref_colvars_paths:
-                ref_dataset = create_dataset_from_files(
-                    file_names=[path], 
-                    filter_args=self.feature_filter, 
-                    verbose=False, 
-                    return_dataframe=False
-                )
-                
-                # Check if the number of features is the same
-                if ref_dataset["data"].shape[1] != self.num_features:
-                    logger.error(f"""Number of features in colvars file {path} is {ref_dataset["data"].shape[1]} and does 
-                                    not match the number of features in the training dataset ({self.num_features}). Exiting...""")
-                    sys.exit(1)
-                
-                # Append to lists
-                self.ref_datasets.append(ref_dataset) 
-              
-    def read_colvars_data(self, colvars_path: str) -> DictDataset:
-        """
-        Reads the colvars data from the colvars file.
-        """
-        
-        # Read the colvars file
-        colvars_dataset = create_dataset_from_files(
-            file_names=[colvars_path], 
-            filter_args=self.feature_filter, 
-            verbose=False, 
-            return_dataframe=False
-        )
-        
-        # Check if the number of features is the same
-        if colvars_dataset["data"].shape[1] != self.num_features:
-            logger.error(f"""Number of features in colvars file {colvars_path} is {colvars_dataset["data"].shape[1]} and does 
-                            not match the number of features in the training dataset ({self.num_features}). Exiting...""")
-            sys.exit(1)
+            List of paths to colvars files with the data
             
-        return colvars_dataset
-    
-    def read_features(self, colvars_path: str) -> List[str]:
-        """ 
-        Read the list of feature names from the colvars file and filter the list based on the feature constraints.
+        topology_paths : Optional[str]
+            List of paths to topology files corresponding to the colvars files (same order)
         
-        Parameters
-        ----------
+        ref_topology_path : Optional[str]
+            Path to the reference topology file. If None, the first topology file is used as reference topology
         
-        colvars_path : str
-            Path to the colvars file
-        
+        load_args : Optional[Dict]
+            Dictionary with the arguments to load the colvars files. 
+            
         Returns
         -------
-            features : List[str]
-                List of feature names after filtering
+        
+        df : pd.DataFrame
+            Dataframe with the data from the colvars files
         """
-        from deep_cartograph.modules.plumed.colvars import read_column_names
-        
-        # Find all the features in the colvars file
-        features = read_column_names(colvars_path)
-        
-        # Filter the features based on the constraints, if any
-        if self.feature_filter:
-            if 'items' in self.feature_filter.keys():
-                features = [feat for feat in features if feat in self.feature_filter['items']]
+        if load_args is None:
+            load_args = {}
             
-            if 'regex' in self.feature_filter.keys():
-                features = [feat for feat in features if re.search(self.feature_filter['regex'], feat)]
+        df = plumed.colvars.create_dataframe_from_files(
+            colvars_paths = colvars_paths,
+            topology_paths = topology_paths,
+            reference_topology = ref_topology_path,   
+            filter_args = self.feature_filter,  
+            create_labels = True,
+            **load_args
+        )
         
-        # Additional regex used by create_dataset_from_files()
-        default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
-        
-        # Filter the features based on the default regex
-        features = [feat for feat in features if re.search(default_regex, feat)]
-        
-        return features
+        return df
     
     def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
         """
@@ -253,13 +221,13 @@ class CVCalculator:
         Parameters
         ----------
 
-        feature_constraints: Union[List[str], str]
+        feature_constraints
             List of features to use or regex to select the features
         
         Returns
         -------
         
-        feature_filter : dict
+        feature_filter
             Dictionary with the filter to select the features
         """
 
@@ -278,32 +246,63 @@ class CVCalculator:
         return feature_filter
     
     # Main methods
-    def run(self, cv_dimension: Union[int, None] = None):
+    def run(self, cv_dimension: Union[int, None] = None) -> Union[pd.DataFrame, None]:
         """
         Runs the CV calculator.
         Overwrites the dimension in the configuration if provided.
+        
+        Parameters
+        ----------
+        
+        cv_dimension : int
+            Dimension of the CV. If None, the dimension from the configuration is used.
+        
+        Returns
+        -------
+        
+        projected_training_data : pd.DataFrame
+            Projected training data or None if the CV computation failed
         """
+        
+        # Overwrite the dimension from the configuration if provided
         if cv_dimension:
             self.cv_dimension = cv_dimension
-            
+        
+        # Compute the CV weights using the training data
         self.compute_cv()
         
+        self.set_labels()
+       
         # If the CV was computed successfully
         if self.cv is not None:
             
-            self.set_labels()
-
+            # NOTE: using max min normalization on the projected training data
             self.normalize_cv()
             
-            self.project_reference()
+            self.project_training_data()
             
-            self.save_projected_ref()
+            # Set the cv labels to the projected training data
+            self.projected_training_data.columns = self.cv_labels
             
-            self.cv_specific_tasks()
+            # Return file labels to the projected training data
+            self.projected_training_data["label"] = self.training_data_labels
+            
+            # NOTE: If the CV is normalized, this data might fall outside the expected range - check when plotting
+            self.project_supplementary_data() 
+            
+            if self.projected_supplementary_data is not None:
+                # Set the cv labels to the projected supplementary data
+                self.projected_supplementary_data.columns = self.cv_labels
+                # Return file labels to the projected supplementary data
+                self.projected_supplementary_data["label"] = self.supplementary_data_labels
+            
+            self.save_projected_supplementary_data()
             
             self.save_cv()
             
             self.write_plumed_input()
+
+        return self.projected_training_data
         
     def compute_cv(self):
         """
@@ -312,50 +311,59 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def cv_specific_tasks(self):
-        """
-        Performs specific tasks for the CV. Implement in subclasses.
-        """
-            
-        pass
-
     def save_cv(self):
         """
         Saves the collective variable weights to a file. Implement in subclasses.
         """
         
         raise NotImplementedError
-        
-    def project_colvars(self, colvars_path: str):
-        """
-        Projects the given colvars onto the CV space. Implement in subclasses.
-        """
-        
-        raise NotImplementedError
 
-    def project_reference(self):
+    def project_training_data(self):
+        """ 
+        Projects the training data onto the CV space and saves the projection to a csv file.
+        Implement in subclasses.
         """
-        Projects the reference data onto the CV space. Implement in subclasses.
+        
+    def project_supplementary_data(self):
+        """
+        Projects the supplementary data onto the CV space and saves the projection to a csv file. 
+        Implement in subclasses.
         """
         
         raise NotImplementedError
     
-    def save_projected_ref(self):
+    def save_projected_supplementary_data(self):
         """
-        Saves the projected reference data to files, if there is any.
+        Saves the projected supplementary data to csv files, if there is any.
         """
         
-        projected_ref_folder = os.path.join(self.output_path, 'reference_data')
+        supplementary_data_folder = os.path.join(self.output_path, 'supplementary_data')
         
-        if self.projected_ref:
+        if self.projected_supplementary_data is not None:
             
-            if not os.path.exists(projected_ref_folder):
-                os.makedirs(projected_ref_folder)
+            if not os.path.exists(supplementary_data_folder):
+                os.makedirs(supplementary_data_folder)
         
-            for i, ref in enumerate(self.projected_ref):
-                ref = pd.DataFrame(ref, columns=self.get_labels())
-                ref.to_csv(os.path.join(projected_ref_folder,f'{self.ref_names[i]}.csv'), index=False, float_format='%.4f')
-    
+            # Find the names of the supplementary colvars paths
+            sup_colvars_names = [Path(path).stem for path in self.sup_colvars_paths]
+            
+            # For each supplementary colvars
+            for i in range(len(sup_colvars_names)):
+                
+                # Get path to projected data
+                projected_data_path = os.path.join(supplementary_data_folder, f'{sup_colvars_names[i]}.csv')
+                
+                logger.debug(f'Saving supplementary data from {self.sup_colvars_paths[i]} to {projected_data_path}')
+                
+                # Extract the projected data for this colvars file
+                projected_data = self.projected_supplementary_data[self.projected_supplementary_data["label"] == i]
+                
+                # Drop file_label column
+                projected_data = projected_data.drop(columns=["label"])
+                
+                # Save the projected data to a csv file NOTE: We are assuming that the dataframe has the correct labels
+                projected_data.to_csv(projected_data_path, index=False, float_format='%.4f')
+          
     def set_labels(self):
         """
         Sets the labels of the CV.
@@ -368,24 +376,27 @@ class CVCalculator:
         Min max normalization of the CV.
         Normalizes the collective variable space to the range [-1, 1]
         Using the min and max values from the evaluation of the training data.
+        Implemented in subclasses.
         """
         
         raise NotImplementedError
         
     def write_plumed_input(self):
         """ 
-        Create a plumed input file that computes the collective variable from the features. Implement in subclasses.
+        Create a plumed input file that computes the collective variable from the features. 
+        Implement in subclasses.
         """
         
         raise NotImplementedError
 
     # Getters
-    def get_projected_ref(self) -> List[np.ndarray]:
+    def get_projected_sup_data(self) -> Union[pd.DataFrame, None]:
         """
-        Returns the projected reference features.
+        Returns the projected supplementary data. 
+        May be None if no supplementary data was provided or the CV computation failed.
         """
         
-        return self.projected_ref
+        return self.projected_supplementary_data
     
     def get_labels(self) -> List[str]:
         """
@@ -407,39 +418,112 @@ class CVCalculator:
         """
         
         return self.cv_range
-    
+
 # Subclass for linear collective variables calculators
-class LinearCVCalculator(CVCalculator):
+class LinearCalculator(CVCalculator):
     """
-    Linear collective variables calculator (e.g. PCA)
+    Base class for linear collective variable calculators
     """
     
-    def __init__(self, colvars_paths: List[str], topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict, 
+        training_colvars_paths: List[str], 
+        topology_paths: Optional[List[str]] = None,
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+    ):
         """ 
         Initializes a linear CV calculator.
         """
-        
-        super().__init__(colvars_paths, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(
+            configuration, 
+            training_colvars_paths, 
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths, 
+            sup_topology_paths, 
+            output_path)
                 
         # Main attributes
-        self.cv: Union[torch.tensor, None] = None
+        self.cv: Union[np.array, None] = None 
         self.weights_path: Union[str, None] = None 
         
+        # NOTE: This will be have to be moved to the base class - it is expected in this way by the assembler of the plumed input - non-linear calculators can use this info to build their own objects
         # Compute training data statistics
-        self.features_stats: Dict = Statistics(self.training_input_dtset[:]['data']).to_dict()
+        stats = ['mean', 'std', 'min', 'max']
+        stats_df = self.training_data.agg(stats).T
+        self.features_stats: Dict[str, np.array] = {stat: stats_df[stat].to_numpy() for stat in stats}
         
-        # Set the features normalization object
-        if self.feats_norm_mode == 'none':
-            stats_length = len(self.features_stats["mean"])
-            self.features_normalization: Normalization = Normalization(self.num_features, mean=torch.zeros(stats_length), range=torch.ones(stats_length))
-        else:
-            self.features_normalization: Normalization = Normalization(self.num_features, mode=self.feats_norm_mode, stats=self.features_stats)
-
-        # Normalize the training data
-        self.normalized_training_data: torch.Tensor = self.features_normalization(self.training_input_dtset[:]['data'])
+        # Normalize the data NOTE: I'm assuming here that after init is called I will just need the normalized data
+        self.training_data: pd.DataFrame = self.normalize_data(self.training_data, self.features_stats, self.feats_norm_mode)
     
-    # Main methods
+        if self.supplementary_data is not None:
+            self.supplementary_data = self.normalize_data(self.supplementary_data, self.features_stats, self.feats_norm_mode)
+            
+    def normalize_data(self, 
+        data: pd.DataFrame, 
+        stats: Dict[str, np.array], 
+        normalization_mode: Literal['mean_std', 'min_max', 'none']
+    ) -> pd.DataFrame:
+        """
+        Use the stats and the normalization mode to normalize the data
+        
+        Parameters
+        ----------
+        
+        data : pd.DataFrame
+            Data to normalize
+            
+        stats : Dict[str, np.array]
+            Dictionary with the statistics to use for normalization
+        
+        normalization_mode : str
+            Normalization mode. Can be 'mean_std', 'min_max', 'none'
+            
+        Returns
+        -------
+        
+        normalized_data : pd.DataFrame
+            Normalized data
+        """
+        
+        def sanitize_ranges(range_array: np.ndarray):
+            """
+            Check the ranges are not close to zero and set them to 1 if they are.
+            """
+            for i in range(len(range_array)):
+                if abs(range_array[i]) < 1e-8:
+                    range_array[i] = 1.0
+                    logger.warning(f'Range for feature {i} is close to zero. Setting it to 1.0.')
+            return range_array
+            
+        # Set the mean and range for the normalization
+        if normalization_mode == 'none':
+            means = np.zeros(len(stats["mean"]))
+            ranges = np.ones(len(stats["mean"]))
+        elif normalization_mode == 'mean_std':
+            means = stats["mean"]
+            ranges = stats["std"]
+        elif normalization_mode == 'min_max':
+            means = (stats["min"] + stats["max"]) / 2
+            ranges = (stats["max"] - stats["min"]) / 2
+        else:
+            logger.error(f'Normalization mode {normalization_mode} not recognized. Exiting...')
+            sys.exit(1)
+        
+        # Check the ranges are not close to zero
+        ranges = sanitize_ranges(ranges)
+        
+        # Normalize the data in place
+        for feature, m, r in zip(data.columns, means, ranges):
+            data[feature] = (data[feature] - m) / r
+        
+        return data
+        
     def save_cv(self):
         """
         Saves the collective variable linear weights to a text file.
@@ -448,7 +532,7 @@ class LinearCVCalculator(CVCalculator):
         # Path to output weights
         self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.txt')
         
-        np.savetxt(self.weights_path, self.cv.numpy(), fmt='%.7g')
+        np.savetxt(self.weights_path, self.cv, fmt='%.7g')
         
         if self.feats_norm_mode == 'mean_std':
             np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'], fmt='%.7g')
@@ -459,77 +543,44 @@ class LinearCVCalculator(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
-    def project_reference(self):
+    def project_training_data(self):
         """
-        Projects the reference data onto the CV space.
+        Projects the training data onto the CV space.
         """
         
-        logger.info(f'Projecting reference data onto {cv_names_map[self.cv_name]} ...')
+        logger.info(f'Projecting training data onto {cv_names_map[self.cv_name]} ...')
         
-        # If reference data is provided
-        if self.ref_datasets:
+        # Project the training data onto the CV space
+        self.projected_training_data = self.training_data @ self.cv
+        
+        # Normalize the projected training data
+        self.projected_training_data = self.normalize_data(self.projected_training_data, self.cv_stats, 'min_max')
+        
+    def project_supplementary_data(self):
+        """
+        Projects the supplementary data onto the CV space.
+        """
+        
+        # If supplementary data is not empty
+        if self.supplementary_data is not None:
             
-            for ref_dtset in self.ref_datasets:
-                
-                # Get the torch tensor
-                ref_tensor = ref_dtset[:]['data']
-                
-                # Normalize the reference data
-                ref_tensor = self.features_normalization(ref_tensor)
-                
-                # Project the reference data onto the CV space
-                projected_ref = ref_tensor @ self.cv
-                
-                self.projected_ref.append(self.cv_normalization(projected_ref).numpy())  
-  
-    def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
-        """
-        Projects the samples from the colvars file onto the CV space.
-        
-        NOTE: revisit the need for reading the same data again after training - can't we project the training data instead? 
-        
-        Parameters
-        ----------
-        
-        colvars_path : str  
-            Path to the colvars file
+            logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
+             
+            # Project the supplementary data onto the CV space NOTE: check the dimensions make sense and match
+            self.projected_supplementary_data = self.supplementary_data @ self.cv
             
-        Returns
-        -------
-        
-        projected_colvars : np.ndarray
-            Projected features onto the CV space
-        """
-        
-        if self.cv is None:
-            logger.error('No collective variable to project.')
-            return None
-        
-        logger.info(f'Projecting {Path(colvars_path).stem} features onto {cv_names_map[self.cv_name]} ...')
-        
-        colvars_dataset= self.read_colvars_data(colvars_path)
-        
-        # Get the torch tensor
-        colvars_tensor = colvars_dataset[:]['data']
-        
-        # Normalize the features
-        colvars_tensor = self.features_normalization(colvars_tensor)
-        
-        # Project the features onto the CV space and return the resulting array
-        projected_colvars = colvars_tensor @ self.cv
-        
-        return self.cv_normalization(projected_colvars).numpy()
+            # Normalize the projected supplementary data
+            self.projected_supplementary_data = self.normalize_data(self.projected_supplementary_data, self.cv_stats, 'min_max')
             
     def normalize_cv(self):
         
         # Project the normalized training data onto the CV space
-        projected_training_data = self.normalized_training_data @ self.cv
+        projected_training_data = pd.DataFrame(self.training_data @ self.cv) # NOTE: is this needed or already a dataframe?
         
         # Compute statistics of the projected training data
-        self.cv_stats: Dict = Statistics(projected_training_data).to_dict()
-        
-        # Find the normalization for the CV
-        self.cv_normalization: Normalization =  Normalization(self.cv_dimension, mode='min_max', stats = self.cv_stats )
+        stats = ['min', 'max']
+        stats_df = projected_training_data.agg(stats).T 
+        self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         
         # Save the max/min values of each dimension - part of the final cv definition
         np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
@@ -551,7 +602,7 @@ class LinearCVCalculator(CVCalculator):
             'features_norm_mode': self.feats_norm_mode,
             'features_stats': self.features_stats,
             'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization for the cv
-            'weights': self.cv.numpy()
+            'weights': self.cv
         }
         
         # Construct builder arguments
@@ -589,26 +640,51 @@ class LinearCVCalculator(CVCalculator):
         # Build the plumed input file to perform enhanced sampling
         plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_metad_out.dat')
-        
+
 # Subclass for non-linear collective variables calculators
-class NonLinearCVCalculator(CVCalculator):
+class NonLinear(CVCalculator):
     """
     Non-linear collective variables calculator (e.g. Autoencoder)
     """
     
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict, 
+        training_colvars_paths: List[str], 
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None,
+        sup_topology_paths: Optional[List[str]] = None, 
+        output_path: Union[str, None] = None
+    ):
         """ 
         Initializes a non-linear CV calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+        
+        from mlcolvar.utils.trainer import MetricsCallback
+        from mlcolvar.cvs import AutoEncoderCV, DeepTICA
+                
+        super().__init__(
+            configuration,
+            training_colvars_paths,  
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths, 
+            sup_topology_paths,
+            output_path)
+
+        self.nonlinear_cv_map: Dict = {
+            'ae': AutoEncoderCV,
+            'deep_tica': DeepTICA
+        }
         
         # Main attributes
         self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
         self.checkpoint: Union[ModelCheckpoint, None] = None
         self.metrics: Union[MetricsCallback, None] = None
-        self.weights_path: Union[str, None] = None
         self.weights_path: Union[str, None] = None
         
         # Training configuration
@@ -629,7 +705,6 @@ class NonLinearCVCalculator(CVCalculator):
         self.check_val_every_n_epoch: int = self.general_config['check_val_every_n_epoch']
         self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
         
-        self.num_training_samples: Union[int, None] = None
         self.best_model_score: Union[float, None] = None
         self.converged: bool = False
         self.tries: int = 0
@@ -668,6 +743,15 @@ class NonLinearCVCalculator(CVCalculator):
             
     def train(self):
         
+        import torch
+        import lightning
+        
+        from mlcolvar.data import DictModule
+        from mlcolvar.utils.trainer import MetricsCallback
+        
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+    
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
         # Train until model finds a good solution
@@ -676,7 +760,6 @@ class NonLinearCVCalculator(CVCalculator):
 
                 self.tries += 1
 
-                # Debug
                 logger.debug(f'Splitting the dataset...')
 
                 # Build datamodule, split the dataset into training and validation
@@ -688,18 +771,16 @@ class NonLinearCVCalculator(CVCalculator):
                     shuffle = self.shuffle, 
                     generator = torch.manual_seed(self.seed + self.tries))
         
-                # Debug
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
-                model = nonlinear_cv_map[self.cv_name](self.nn_layers, options=self.cv_options)
+                model = self.nonlinear_cv_map[self.cv_name](self.nn_layers, options=self.cv_options)
 
                 # Set optimizer name
                 model._optimizer_name = self.opt_name
                 
                 logger.info(f"Model architecture: {model}")
                 
-                # Debug
                 logger.debug(f'Initializing metrics and callbacks...')
 
                 # Define MetricsCallback to store the loss
@@ -723,7 +804,6 @@ class NonLinearCVCalculator(CVCalculator):
                     mode="min",                                # Best model is the one with the minimum monitored quantity
                     every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
                 
-                # Debug
                 logger.debug(f'Initializing Trainer...')
 
                 # Define trainer
@@ -735,7 +815,6 @@ class NonLinearCVCalculator(CVCalculator):
                     enable_progress_bar = False, 
                     check_val_every_n_epoch=self.check_val_every_n_epoch)
 
-                # Debug
                 logger.debug(f'Training...')
 
                 trainer.fit(model, datamodule)
@@ -757,7 +836,7 @@ class NonLinearCVCalculator(CVCalculator):
             
             if os.path.exists(self.checkpoint.best_model_path):
                 # Load the best model
-                self.cv = nonlinear_cv_map[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
+                self.cv = self.nonlinear_cv_map[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
                 os.remove(self.checkpoint.best_model_path)
                 
                 # Find the score of the best model
@@ -797,6 +876,7 @@ class NonLinearCVCalculator(CVCalculator):
         """
         Saves the loss of the training.
         """
+        from mlcolvar.utils.plot import plot_metrics
         
         try:        
             # Save the loss if requested
@@ -821,6 +901,11 @@ class NonLinearCVCalculator(CVCalculator):
             logger.error(f'Failed to save/plot the loss. Error message: {e}')
 
     def normalize_cv(self):
+        
+        import torch
+        
+        from mlcolvar.core.transform import Normalization
+        from mlcolvar.core.transform.utils import Statistics
         
         # Data projected onto original latent space of the best model - feature normalization included in the model
         with torch.no_grad():
@@ -864,52 +949,36 @@ class NonLinearCVCalculator(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
-    def project_reference(self):
+    def project_supplementary_data(self):
         """
-        Projects the reference data onto the CV space.
+        Projects the supplementary data onto the CV space.
         """
         
-        logger.info(f'Projecting reference data onto {cv_names_map[self.cv_name]} ...')
+        import torch
+        
+        # If supplementary data is not empty
+        if self.supplementary_data is not None:
+            
+            logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
 
-        # If reference data is provided, project it as well
-        if self.ref_datasets:
-            for dataset in self.ref_datasets:
-                ref_tensor = dataset[:]['data']
-                with torch.no_grad():
-                    self.projected_ref.append(self.cv(ref_tensor).numpy())
-                    
-    def project_colvars(self, colvars_path: str) -> Union[np.ndarray, None]:
+            with torch.no_grad():
+                projected_sup_array = self.cv(torch.tensor(self.supplementary_data.values)).numpy()
+            
+            self.projected_supplementary_data = pd.DataFrame(projected_sup_array, columns=self.cv_labels)
+
+    def project_training_data(self):
         """
-        Projects the samples from the colvars file onto the CV space.
-        
-        Parameters
-        ----------
-        
-        colvars_path : str
-            Path to the colvars file
-        
-        Returns
-        -------
-        
-        projected_colvars : np.ndarray
-            Projected features onto the CV space
+        Projects the training data onto the CV space.
         """
+        import torch 
         
-        if self.cv is None:
-            logger.error('No collective variable to project.')
-            return None
+        logger.info(f'Projecting training data onto {cv_names_map[self.cv_name]} ...')
         
-        logger.info(f'Projecting features onto {cv_names_map[self.cv_name]} ...')
-        
-        colvars_dataset = self.read_colvars_data(colvars_path)
-        
-        colvars_tensor = colvars_dataset[:]['data']
-        
-        # Data projected onto normalized latent space - feature and latent space normalization included in the model
+        # Project the training data onto the CV space
         with torch.no_grad():
-            projected_colvars = self.cv(colvars_tensor).numpy()
-   
-        return projected_colvars
+            projected_training_array = self.cv(torch.tensor(self.training_data.values)).numpy() 
+            
+        self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
     
     def write_plumed_input(self):
         """
@@ -962,81 +1031,102 @@ class NonLinearCVCalculator(CVCalculator):
         plumed_builder.build(f'{self.cv_name}_metad_out.dat')
 
 # Collective variables calculators
-class PCACalculator(LinearCVCalculator):
+class PCACalculator(LinearCalculator):
     """
     Principal component analysis calculator.
     """
 
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict,
+        training_colvars_paths: List[str], 
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+    ):
         """
         Initializes the PCA calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        super().__init__(
+            configuration,
+            training_colvars_paths, 
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths, 
+            sup_topology_paths,
+            output_path)
         
         self.cv_name = 'pca'
         
-        self.initialize()
+        self.initialize_cv()
         
     def compute_cv(self):
         """
         Compute Principal Component Analysis (PCA) on the input features. 
         """
         
-        # NOTE: This could still be useful for large datasets?
-        # Choose between deterministic and non-deterministic PCA
-        # if pca_lowrank_q < self.num_features:
-             # Non-deterministic PCA using randomized SVD
-             # out_features is q in torch.pca_lowrank -> Controls the dimensionality of the random projection in the randomized SVD algorithm (trade-off between speed and accuracy)
-        #    pca_cv = PCA(in_features = self.num_features, out_features=min(pca_lowrank_q, self.num_features, self.num_samples))
-        #    try:
-        #        pca_eigvals, pca_eigvecs = pca_cv.compute(X=torch.tensor(self.normalized_training_data.numpy()), center = True)
-        #    except Exception as e:
-        #        logger.error(f'PCA could not be computed. Error message: {e}')
-        #        return
-        #    # Extract the first cv_dimension eigenvectors as CVs 
-        #    self.cv = pca_eigvecs[:,0:self.cv_dimension].numpy()
-        
         # Create PCA object
         pca = PCA(n_components=self.cv_dimension)
         
         # Fit the PCA model
-        pca.fit(self.normalized_training_data.numpy())
+        pca.fit(self.training_data.to_numpy())
         
         # Save the eigenvectors as CVs
-        self.cv = torch.tensor(pca.components_.T)
+        self.cv = pca.components_.T
         
         # Follow a criteria for the sign of the eigenvectors - first weight of each eigenvector should be positive
         for i in range(self.cv_dimension):
             if self.cv[0,i] < 0:
                 self.cv[:,i] = -self.cv[:,i]
                 
-class TICACalculator(LinearCVCalculator):
+class TICACalculator(LinearCalculator):
     """ 
     Time-lagged independent component analysis calculator.
     """
     
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict,
+        training_colvars_paths: List[str],  
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+    ):
         """
         Initializes the TICA calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        
+        super().__init__(
+            configuration,
+            training_colvars_paths, 
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths, 
+            sup_topology_paths,
+            output_path)
         
         self.cv_name = 'tica'
         
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.training_input_dtset = create_timelagged_dataset(self.normalized_training_data.numpy(), lag_time=self.architecture_config['lag_time'])
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
+        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.architecture_config['lag_time'])
         
-        self.initialize()
+        self.initialize_cv()
         
     def compute_cv(self):
         """
         Compute Time-lagged Independent Component Analysis (TICA) on the input features. 
         """
-
+        from mlcolvar.core.stats import TICA
+        
         # Use TICA to compute slow linear combinations of the input features
         # Here out_features is the number of eigenvectors to keep
         tica_algorithm = TICA(in_features = self.num_features, out_features=self.cv_dimension)
@@ -1049,9 +1139,9 @@ class TICACalculator(LinearCVCalculator):
             return
 
         # Save the first cv_dimension eigenvectors as CVs
-        self.cv = tica_eigvecs
+        self.cv = tica_eigvecs.numpy()
   
-class HTICACalculator(LinearCVCalculator):
+class HTICACalculator(LinearCalculator):
     """ 
     Hierarchical Time-lagged independent component analysis calculator.
     
@@ -1061,13 +1151,30 @@ class HTICACalculator(LinearCVCalculator):
     Computing Slow Modes and Reaction Coordinates for Large Molecular Systems.” Journal of Chemical Theory 
     and Computation 12, no. 12 (December 13, 2016): 6118–29. https://doi.org/10.1021/acs.jctc.6b00738.
     """
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict,
+        training_colvars_paths: List[str], 
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None):
         """
         Initializes the HTICA calculator.
         """
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        
+        super().__init__(
+            configuration,
+            training_colvars_paths,  
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths, 
+            sup_topology_paths,
+            output_path)
         
         self.cv_name = 'htica'
         
@@ -1075,9 +1182,11 @@ class HTICACalculator(LinearCVCalculator):
         self.subspaces_dimension = configuration['subspaces_dimension']
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.training_input_dtset = create_timelagged_dataset(self.normalized_training_data.numpy(), lag_time=self.architecture_config['lag_time'])
+        # NOTE: Are we duplicating the data here? :(
+        # NOTE: this function returns less samples than expected: N-lag_time-2
+        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.architecture_config['lag_time'])
         
-        self.initialize()
+        self.initialize_cv()
         
     
     def compute_cv(self):
@@ -1093,6 +1202,9 @@ class HTICACalculator(LinearCVCalculator):
             4. Compute TICA on the concatenated projected data (TICA LEVEL 2)
             5. Obtain the transformation matrix from features to TICA LEVEL 2 (final CV)
         """
+        import torch
+        from mlcolvar.core.stats import TICA
+        
         data_tensor = self.training_input_dtset['data']
         data_lag_tensor = self.training_input_dtset['data_lag'] 
         
@@ -1147,23 +1259,46 @@ class HTICACalculator(LinearCVCalculator):
             return
         
         # Obtain the transformation matrix from features to TICA LEVEL 2
-        self.cv = torch.tensor(Transform_level_1_TICA @ level_2_eigvecs)
+        self.cv = Transform_level_1_TICA @ level_2_eigvecs
            
-class AECalculator(NonLinearCVCalculator):
+class AECalculator(NonLinear):
     """
     Autoencoder calculator.
     """
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self, 
+        configuration: Dict,
+        training_colvars_paths: List[str],  
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+    ):
         """
         Initializes the Autoencoder calculator.
         """
+        import torch 
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        from mlcolvar.data import DictDataset
+        
+        super().__init__(
+            configuration,
+            training_colvars_paths, 
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths,
+            sup_topology_paths, 
+            output_path)
+        
+        # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
+        dictionary = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
         
         self.cv_name = 'ae'
         
-        self.initialize()
+        self.initialize_cv()
         
         self.check_batch_size()
         
@@ -1172,24 +1307,42 @@ class AECalculator(NonLinearCVCalculator):
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
         
-class DeepTICACalculator(NonLinearCVCalculator):
+class DeepTICACalculator(NonLinear):
     """
     DeepTICA calculator.
     """
-    def __init__(self, colvars_path: str, topology_paths: List[str], feature_constraints: Union[List[str], str], 
-                 ref_colvars_paths: Union[List[str], None], configuration: Dict, output_path: str):
+    def __init__(self,  
+        configuration: Dict, 
+        training_colvars_paths: List[str], 
+        topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+    ):
         """
         Initializes the DeepTICA calculator.
         """      
         
-        super().__init__(colvars_path, topology_paths, feature_constraints, ref_colvars_paths, configuration, output_path)
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        
+        super().__init__(
+            configuration,
+            training_colvars_paths,
+            topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths, 
+            sup_topology_paths,
+            output_path)
         
         self.cv_name = 'deep_tica'
         
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.training_input_dtset = create_timelagged_dataset(self.training_input_dtset[:]['data'].numpy(), lag_time=self.architecture_config['lag_time'])
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
+        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.architecture_config['lag_time'])
         
-        self.initialize()
+        self.initialize_cv()
         
         self.check_batch_size()
             
@@ -1197,10 +1350,13 @@ class DeepTICACalculator(NonLinearCVCalculator):
         self.cv_options.update({"nn": self.nn_options,
                                 "optimizer": self.optimizer_options})
         
-    def cv_specific_tasks(self):
+    def save_cv(self):
         """
         Save the eigenvectors and eigenvalues of the best model.
         """
+        from mlcolvar.utils.plot import plot_metrics
+        
+        super().save_cv()
             
         # Find the epoch where the best model was found
         best_index = self.metrics.metrics['valid_loss'].index(self.best_model_score)
@@ -1232,11 +1388,6 @@ cv_calculators_map = {
     'tica': TICACalculator,
     'htica': HTICACalculator,
     'deep_tica': DeepTICACalculator
-}
-
-nonlinear_cv_map = {
-    'ae': AutoEncoderCV,
-    'deep_tica': DeepTICA
 }
 
 cv_names_map = {

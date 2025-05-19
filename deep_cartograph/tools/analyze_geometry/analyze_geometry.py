@@ -58,45 +58,52 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
     dt_per_frame = float(configuration['dt_per_frame'])* 1e-3 
 
     # For each type of analysis in the configuration
-    for analysis_type in configuration['analysis']:
+    for category, analyses in configuration['analysis'].items():
         
-        # For each analysis of this type
-        for analysis in configuration['analysis'][analysis_type]:
+        # If there are analyses of this type
+        if analyses:
             
-            title = configuration['analysis'][analysis_type][analysis]['title']
-            y_label = f"{analysis_type} (A)"
-            
-            # Save here analysis results for each trajectory
-            y_data = {}
-            x_data = {}
-            
-            # Analyze each trajectory
-            for trajectory, topology in zip(trajectories, topologies):
+            logger.info(f"Analyzing {category}...")
+        
+            # For each analysis of this type
+            for name, params in analyses.items():
                 
-                # Get trajectory name
-                trajectory_name = Path(trajectory).stem
+                logger.info(f" - {name}")
                 
-                # Get selections
-                selection = configuration['analysis'][analysis_type][analysis]['selection']
-                fit_selection = configuration['analysis'][analysis_type][analysis]['fit_selection']
+                title = params['title']
+                y_label = f"{category} (A)"
                 
-                # Execute analysis
-                if analysis_type == 'RMSD':
-                    y_data[trajectory_name] = RMSD(trajectory, topology, selection, fit_selection)
-                    x_data[trajectory_name] = np.arange(0, len(y_data[trajectory_name])) * dt_per_frame
-                    x_label = 'Time (ns)'
-                elif analysis_type == 'RMSF':
-                    y_data[trajectory_name], x_data[trajectory_name] = RMSF(trajectory, topology, selection, fit_selection)
-                    x_label = 'Residue'
-            
-            # Create figure path
-            figure_path = os.path.join(output_folder, f'{analysis}.png')
+                # Save here analysis results for each trajectory
+                y_data = {}
+                x_data = {}
+                
+                # Analyze each trajectory
+                for trajectory, topology in zip(trajectories, topologies):
+                    
+                    # Get trajectory name
+                    trajectory_name = Path(trajectory).stem
+                    
+                    # Get selections
+                    selection = params['selection']
+                    fit_selection = params['fit_selection']
+                    
+                    # Execute analysis
+                    if category == 'RMSD':
+                        y_data[trajectory_name] = RMSD(trajectory, topology, selection, fit_selection)
+                        x_data[trajectory_name] = np.arange(0, len(y_data[trajectory_name])) * dt_per_frame
+                        x_label = 'Time (ns)'
+                    elif category == 'RMSF':
+                        y_data[trajectory_name], x_data[trajectory_name] = RMSF(trajectory, topology, selection, fit_selection)
+                        x_label = 'Residue'
+                
+                # Create figure path
+                figure_path = os.path.join(output_folder, f'{name}_{category}.png')
 
-            # Save figure with results
-            plot_data(y_data, x_data, title, y_label, x_label, figure_path)
-            
-            # Save csv with results
-            save_data(y_data, x_data, y_label, x_label, output_folder)
+                # Save figure with results
+                plot_data(y_data, x_data, title, y_label, x_label, figure_path)
+                
+                # Save csv with results
+                save_data(y_data, x_data, y_label, x_label, output_folder)
 
     # End timer
     elapsed_time = time.time() - start_time

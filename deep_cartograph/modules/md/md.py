@@ -425,16 +425,9 @@ def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
         # Check if both atoms are heavy atoms
         if i_index in heavy_atom_indices and j_index in heavy_atom_indices:
 
-            # Debug:
-            logger.debug(f"Bond atom index i: {i_index}, atom index j: {j_index}")
-
             # Get neighbors of each atom
             i_neighbors = neighbors_dict[i_index]
             j_neighbors = neighbors_dict[j_index]
-
-            # Debug:
-            logger.debug(f"Neighbors of atom i: {i_neighbors}")
-            logger.debug(f"Neighbors of atom j: {j_neighbors}")
 
             # For each possible set of 4 bonded atoms around the bond (i, j)
             for i_neighbor in i_neighbors:
@@ -575,6 +568,8 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
 
     features_labels = []
     
+    logger.debug(f"Searching for features in {Path(topology_path).name}...")
+    
     #############
     # DISTANCES #
     #############
@@ -595,7 +590,7 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
             distance_labels = get_distance_labels(topology_path, group_definition)
 
             # Log number of distances found
-            logger.info(f"Found {len(distance_labels)} features for {group_name}")
+            logger.debug(f"Found {len(distance_labels)} features for {group_name}")
             
             # Add labels to the list
             features_labels.extend(distance_labels)
@@ -619,7 +614,7 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
             dihedral_labels = get_dihedral_labels(topology_path, group_definition)
             
             # Log number of dihedrals found
-            logger.info(f"Found {len(dihedral_labels)} features for {group_name} (sin and cos of each dihedral for periodic encoding)")
+            logger.debug(f"Found {len(dihedral_labels)} features for {group_name} (sin and cos of each dihedral for periodic encoding)")
             
             # Add labels to the list
             features_labels.extend(dihedral_labels)
@@ -649,7 +644,7 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
             # Create labels
             center_labels = [f"dist-{atom}-{center_command_label}" for atom in atoms]
 
-            logger.info(f"Found {len(center_labels)} features for {group_name}")
+            logger.debug(f"Found {len(center_labels)} features for {group_name}")
             
             # Add labels to the list
             features_labels.extend(center_labels)

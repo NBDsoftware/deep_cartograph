@@ -258,11 +258,11 @@ class CollectiveVariableAssembler(Assembler):
         features_stats = self.cv_params['features_stats']
         features_norm_mode = self.cv_params['features_norm_mode']
         if features_norm_mode == 'mean_std':
-            features_offset = features_stats['mean'].numpy()
-            features_scale = 1/features_stats['std'].numpy()
+            features_offset = features_stats['mean']
+            features_scale = 1/features_stats['std']
         elif features_norm_mode == 'min_max':
-            features_offset = (features_stats['min'].numpy() + features_stats['max'].numpy())/2
-            features_scale = 2/(features_stats['max'].numpy() - features_stats['min'].numpy())
+            features_offset = (features_stats['min'] + features_stats['max'])/2
+            features_scale = 2/(features_stats['max'] - features_stats['min'])
         elif features_norm_mode == 'none':
             pass
         else:
@@ -289,8 +289,8 @@ class CollectiveVariableAssembler(Assembler):
         
         # Set up CV normalization
         cv_stats = self.cv_params['cv_stats']
-        cv_offset = (cv_stats['min'].numpy() + cv_stats['max'].numpy())/2
-        cv_scale = 2/(cv_stats['max'].numpy() - cv_stats['min'].numpy())
+        cv_offset = (cv_stats['min'] + cv_stats['max'])/2
+        cv_scale = 2/(cv_stats['max'] - cv_stats['min'])
         
         # Normalize the CV
         self.input_content += "\n# Normalized Collective variable\n"

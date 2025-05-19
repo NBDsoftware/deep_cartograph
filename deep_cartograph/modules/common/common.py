@@ -2,13 +2,12 @@ import os
 import sys
 import yaml
 import math
-import torch
 import logging
 import numpy as np
 import pandas as pd
+import importlib.util
 from pathlib import Path, PurePath
 from typing import Any, Dict, List, Union, Tuple
-from mlcolvar.data import DictDataset
 from pydantic import ValidationError
 from pydantic import BaseModel
 
@@ -20,6 +19,29 @@ default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
 
 
 # General utils
+def package_is_installed(*package_name: str) -> bool:
+    """
+    Check if some packages are installed.
+    
+    Parameters
+    ----------
+    
+    package_name : str
+        Variable number of package names to check
+    
+    Returns
+    -------
+    
+    bool
+        True if all packages are installed, False otherwise
+    """
+    
+    for package in package_name:
+        if importlib.util.find_spec(package) is None:
+            logger.debug(f"Package {package} is not installed")
+            return False
+    return True
+
 def create_output_folder(output_path: str) -> None:
     """
     Creates the output path if it does not exist.
@@ -57,6 +79,9 @@ def files_exist(*file_path):
         
         this_file_exist = os.path.isfile(path)
         all_exist = all_exist and this_file_exist
+        
+        if not this_file_exist:
+            logger.error(f"File not found {path}")
             
     return all_exist
 
@@ -154,47 +179,6 @@ def merge_configurations(common_config: Dict, specific_config: Union[Dict, None]
 
 
 # Features utils
-def find_feature_names(colvars_paths: List[str]) -> List[str]:
-    """
-    Find feature names present in colvars_paths. Feature names are read from the first line. 
-    Only the common features present in all colvars files will be returned as a list.
-
-    Inputs
-    ------
-
-        colvars_path: Paths to the colvars files with the time series data of the features
-    
-    Outputs
-    -------
-
-        common_features: List of common feature names present in all colvars files
-    """
-    
-    common_features = set()
-    for path in colvars_paths:
-        
-        # Read the first line of the colvars file
-        with open(path, 'r') as colvar_file:
-            first_line = colvar_file.readline().split()
-
-        # Read feature names. Skip first 3 elements, they are: #! FIELDS time
-        feature_names = set()
-        for index in range(3, len(first_line)):
-            feature_names.add(first_line[index])
-            
-        if len(common_features) == 0:
-            common_features = feature_names
-        else:
-            common_features = common_features.intersection(feature_names)
-
-    # Check if there are any features
-    if len(common_features) == 0:
-        logger.error(f'No common features found in the colvars files: {colvars_paths}')
-        sys.exit(1)
-    
-    # Return sorted list to ensure consistency
-    return sorted(common_features)
-
 def read_feature_constraints(features_path: Union[str, None], features_regex: Union[str, None] = None) -> Union[List[str], str]:
     """
     Read the feature constraints from the configuration file. Either a list of features or a regex.
@@ -239,17 +223,29 @@ def read_feature_constraints(features_path: Union[str, None], features_regex: Un
 
 
 # Input validation
-def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], List[str]]: # NOTE merge with check_ref_data and add argument to make existence optional
+def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], List[str]]:
     """
     Function that checks the existence of the necessary input data files.
     
     Inputs
     ------
     
-        trajectory_data    (str): Path to trajectory or folder with trajectories.
-        topology_data      (str): Path to topology or folder with topology files for the trajectories. 
-                                  If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
-                                  If a single topology file is provided, it is used for all trajectories.
+    trajectory_data
+        Path to trajectory or folder with trajectories.
+        
+    topology_data
+        Path to topology or folder with topology files for the trajectories. 
+        If a single topology file is provided, it is used for all trajectories.
+        If a folder is given, each trajectory should have a corresponding topology file with the same name.
+        
+    Returns
+    -------
+    
+    traj_file_paths
+        List of trajectory file paths.
+    
+    top_file_paths
+        List of topology file paths.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -264,7 +260,7 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
         logger.error(f"Trajectory data not found: {trajectory_data}")
         sys.exit(1)
     else:
-        logger.error(f"Trajectory data should be a file or a folder: {trajectory_data}")
+        logger.error(f"Trajectory data should be a path to a file or a folder: {trajectory_data}")
         sys.exit(1)
         
     # Remove any hidden files
@@ -329,96 +325,6 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
             
     return traj_file_paths, top_file_paths
 
-def check_ref_data(ref_trajectory_data: Union[str, None], ref_topology_data: Union[str, None]) -> Tuple[List[str], List[str]]:
-    """
-    Function that checks (if given) the existence of the optional reference data files.
-    
-    Inputs
-    ------
-    
-        ref_trajectory_data (str): Path to the folder with reference data.
-        ref_topology_data   (str): Path to the folder with topology files of the reference data. Should have the same name as the corresponding reference file in the reference folder.
-    """      
-    
-    logger = logging.getLogger("deep_cartograph")
-    
-    if ref_trajectory_data is None and ref_topology_data is not None:
-        logger.error("Reference topology data provided without reference trajectory data.")
-        sys.exit(1)
-    elif ref_trajectory_data is not None and ref_topology_data is None:
-        logger.error("Reference trajectory data provided without reference topology data.")
-        sys.exit(1)
-    elif ref_trajectory_data is None and ref_topology_data is None:
-        logger.debug("No reference data provided.")
-        return [], []
-    
-    # Both reference trajectory and topology data are provided
-    
-    # Check reference data 
-    if os.path.isdir(ref_trajectory_data):
-        # List the files in the reference trajectory folder
-        ref_traj_paths = [os.path.join(ref_trajectory_data, f) for f in os.listdir(ref_trajectory_data) if os.path.isfile(os.path.join(ref_trajectory_data, f))]
-    elif os.path.isfile(ref_trajectory_data):
-        # Single reference trajectory file
-        ref_traj_paths = [ref_trajectory_data]
-    elif not os.path.exists(ref_trajectory_data):
-        logger.error(f"Reference trajectory data not found: {ref_trajectory_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Reference trajectory data should be a file or a folder: {ref_trajectory_data}")
-        sys.exit(1)
-        
-    # Sort them alphabetically
-    ref_traj_paths.sort()
-    
-    # Check if there are any
-    if len(ref_traj_paths) == 0:
-        logger.error("Reference trajectory folder is empty: %s", ref_trajectory_data)
-        sys.exit(1)
-        
-    # Check reference topology data
-    if os.path.isdir(ref_topology_data):
-        # List the files in the reference topology folder
-        ref_top_paths = [os.path.join(ref_topology_data, f) for f in os.listdir(ref_topology_data) if os.path.isfile(os.path.join(ref_topology_data, f))]
-    elif os.path.isfile(ref_topology_data):
-        # Single reference topology file
-        ref_top_paths = [ref_topology_data]
-    elif not os.path.exists(ref_topology_data):
-        logger.error(f"Reference topology data not found: {ref_topology_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Reference topology data should be a file or a folder: {ref_topology_data}")
-        sys.exit(1)
-        
-    # Sort them alphabetically
-    ref_top_paths.sort()
-
-    # Check if there are any
-    if len(ref_top_paths) == 0:
-        logger.error("Reference topology folder is empty: %s", ref_topology_data)
-        sys.exit(1)
-    
-    # Check if we have the same number of reference topology files as reference trajectory files
-    if len(ref_traj_paths) != len(ref_top_paths):
-        logger.error(f"Number of reference topology files is different from the number of reference trajectory files ({len(ref_top_paths)} vs {len(ref_traj_paths)}).")
-        sys.exit(1)
-        
-    # Check if each reference trajectory has a corresponding reference topology file
-    for ref_traj_path, ref_top_path in zip(ref_traj_paths, ref_top_paths):
-            
-        # Find name of reference trajectory file
-        ref_traj_name = Path(ref_traj_path).stem
-        
-        # Find name of reference topology file
-        ref_top_name = Path(ref_top_path).stem
-        
-        # Check if they have the same name
-        if ref_traj_name != ref_top_name:
-            logger.error(f"Reference trajectory file does not have a corresponding reference topology file with the same name: {ref_traj_name}")
-            sys.exit(1)
-            
-    return ref_traj_paths, ref_top_paths
-
 # Related to i/o
 def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, verbose: bool = True):
     """
@@ -441,6 +347,9 @@ def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, ve
     torch.Dataset
         Torch labeled dataset of the given data
     """
+    
+    import torch
+    from mlcolvar.data import DictDataset
 
     # filter inputs
     df_data = df.filter(**filter_args) if filter_args is not None else df.copy()

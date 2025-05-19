@@ -5,56 +5,104 @@ import shutil
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Literal, Union
+from typing import Dict, List, Literal, Optional
+
+from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
+from deep_cartograph.tools import (
+    analyze_geometry,
+    compute_features,
+    filter_features,
+    train_colvars
+)
+from deep_cartograph.modules.common import (
+    check_data,
+    create_output_folder,
+    get_unique_path,
+    validate_configuration,
+    read_feature_constraints,
+    read_configuration
+)
 
 ########
 # TOOL #
 ########
 
-def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: str, ref_trajectory_data: Union[str, None] = None, 
-                    ref_topology_data: Union[str, None] = None, label_reference: bool = False, dimension: Union[int, None] = None, 
-                    cvs: Union[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']], None] = None, 
-                    restart: bool = False, output_folder: Union[str, None] = None) -> None:
+def deep_cartograph(
+    configuration: Dict,
+    trajectory_data: str,
+    topology_data: str,
+    supplementary_traj_data: Optional[str] = None,
+    supplementary_top_data: Optional[str] = None,
+    reference_topology: Optional[str] = None,
+    dimension: Optional[int] = None,
+    cvs: Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]] = None,
+    restart: bool = False,
+    output_folder: Optional[str] = None,
+) -> None:
     """
-    Function that maps a set of trajectories onto a set of collective variables.
+    Main API for the Deep Cartograph workflow.
 
-    Parameters
-    ----------
+    NOTE:
+        Currently, the number of trajectories and topologies must match.
+        Future versions may allow individual topologies per data file or 
+        support generating PLUMED enhanced sampling files.
 
-        configuration:         
-            Configuration dictionary (see default_config.yml for more information)
-            
-        trajectory_data:       
-            Path to trajectory or folder with trajectories to compute the CVs.
-            
-        topology_data:         
-            Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in trajectory_data.
-            
-        ref_trajectory_data:   
-            (Optional) Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
+    Args:
+        configuration (Dict): 
+            Configuration dictionary (refer to `default_config.yml` for details).
         
-        ref_topology_data:     
-            (Optional) Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in ref_trajectory_data.
+        trajectory_data (str): 
+            Path to a trajectory file or directory containing multiple trajectories.
+            These will be used to compute the collective variables.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        label_reference:       
-            (Optional) Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
+        topology_data (str): 
+            Path to a topology file or directory with topology files for trajectories.
+            - If a single topology file is provided, it is used for all trajectories.
+            - If a directory is provided, each topology file must match a trajectory filename.
+            Accepted format: `.pdb`.
         
-        dimension:             
-            (Optional) Dimension of the collective variables to train or compute, overwrites the value in the configuration if provided
+        supplementary_traj_data (Optional[str]): 
+            Path to a supplementary trajectory file or directory.
+            These trajectories will be projected onto the CV but not used for computing CVs.
+            Example: experimental structures, coarse-grained simulations.
+            Default: `None`.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        cvs:                   
-            (Optional) List of collective variables to train or compute ['pca', 'ae', 'tica', 'htica', 'deep_tica'], overwrites the value in the configuration if provided
+        supplementary_top_data (Optional[str]): 
+            Path to a supplementary topology file or directory.
+            - If a single topology file is provided, it is used for all supplementary trajectories.
+            - If a directory is provided, each supplementary trajectory must have a matching topology file.
+            Default: `None`.
+            Accepted format: `.pdb`.
         
-        output_folder:         
-            (Optional) Path to the output folder, if not given, a folder named 'deep_cartograph' is created
+        reference_topology (Optional[str]): 
+            Path to a reference topology file used to determine features from user selections.
+            Default: first topology file in `topology_data`.
+            Accepted format: `.pdb`.
+        
+        dimension (Optional[int]): 
+            Number of dimensions for the collective variables.
+            If provided, this overrides the value in the configuration file.
+            Default: `None`.
+        
+        cvs (Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]]): 
+            List of collective variables to train or compute.
+            If provided, this overrides the configuration file settings.
+            Default: `None`.
+        
+        restart (bool): 
+            If `True`, restarts the workflow from the last completed step.
+            Deletes step folders that need to be recomputed.
+            Default: `False`.
+        
+        output_folder (Optional[str]): 
+            Path to the output directory.
+            Default: `"deep_cartograph"`.
+
+    Returns:
+        None
     """
-    from deep_cartograph.modules.common import check_data, check_ref_data, create_output_folder, get_unique_path, validate_configuration, read_feature_constraints
-    from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
-    
-    from deep_cartograph.tools import analyze_geometry
-    from deep_cartograph.tools import compute_features
-    from deep_cartograph.tools import filter_features
-    from deep_cartograph.tools import train_colvars
     
     # Set logger
     logger = logging.getLogger("deep_cartograph")
@@ -79,123 +127,110 @@ def deep_cartograph(configuration: Dict, trajectory_data: str, topology_data: st
     # Check main input folders
     trajectories, topologies = check_data(trajectory_data, topology_data)
     
-    # Check reference input folders
-    ref_trajectories, ref_topologies = check_ref_data(ref_trajectory_data, ref_topology_data)
+    # Set reference topology
+    if not reference_topology:
+        reference_topology = topologies[0]
+    elif not os.path.exists(reference_topology):
+        logger.error(f"Reference topology file missing: {reference_topology}")
+        sys.exit(1)
     
     # Step 0: Analyze geometry
-    step0_output_folder = os.path.join(output_folder, 'analyze_geometry')
+    # ------------------------
     
-    if os.path.exists(step0_output_folder):
-        logger.info("Analyzed geometry folder already exists. Skipping analysis of geometry.")
-    else:
-        analyze_geometry(
-            configuration = configuration['analyze_geometry'], 
-            trajectories = trajectories, 
-            topologies = topologies, 
-            output_folder = step0_output_folder)
+    args = {
+        'configuration': configuration['analyze_geometry'],
+        'trajectories': trajectories,
+        'topologies': topologies,
+        'output_folder': os.path.join(output_folder, 'analyze_geometry')
+    }
+    analyze_geometry(**args)
 
     # Step 1: Compute features
-    step1_parent_path = os.path.join(output_folder, 'compute_features')
+    # ------------------------
     
-    # Step 1.1: Compute features for trajectories
-    traj_colvars_paths = []
-    traj_names = []
-    for trajectory, topology in zip(trajectories, topologies):
-        
-        # Create unique output folder
-        traj_name = Path(trajectory).stem
-        step1_output_folder = os.path.join(step1_parent_path, traj_name)
-        colvars_path = os.path.join(step1_output_folder, 'colvars.dat')
-        
-        # Compute features for trajectory if colvars file does not exist
-        if os.path.exists(colvars_path):
-            logger.info(f"Colvars file already exists for trajectory {traj_name}. Skipping computation of features.")
-        else:
-            compute_features(
-                configuration = configuration['compute_features'], 
-                trajectory = trajectory, 
-                topology = topology, 
-                colvars_path = colvars_path,
-                output_folder = step1_output_folder)
-            
-        # Save path to colvars file and name of trajectory file
-        traj_colvars_paths.append(colvars_path)
-        traj_names.append(traj_name)
-
-    # Step 1.2: Compute features for reference data
-    ref_colvars_paths = []
-    ref_names = []    
-    for ref_trajectory, ref_topology in zip(ref_trajectories, ref_topologies):
-
-        # Create unique output folder
-        ref_name = Path(ref_trajectory).stem
-        step1_output_folder = os.path.join(step1_parent_path, ref_name)
-        ref_colvars_path = os.path.join(step1_output_folder, 'colvars.dat')
-
-        if os.path.exists(ref_colvars_path):
-            logger.info("Colvars file already exists for reference file. Skipping computation of features.")
-        else:
-            ref_colvars_path = compute_features(
-                configuration = configuration['compute_features'], 
-                trajectory = ref_trajectory,
-                topology = ref_topology,
-                colvars_path = ref_colvars_path,
-                output_folder = step1_output_folder)
-        
-        # Save path to colvars file and name of reference file
-        ref_colvars_paths.append(ref_colvars_path)
-        ref_names.append(ref_name)
-
-    if not label_reference:
-        ref_names = None
-
-    # Step 2: Filter features
-    step2_output_folder = os.path.join(output_folder, 'filter_features')
-    output_features_path = os.path.join(step2_output_folder, 'filtered_features.txt')
+    # Compute features for all trajectories
+    args = {
+        'configuration': configuration['compute_features'], 
+        'trajectories': trajectories, 
+        'topologies': topologies, 
+        'output_folder': os.path.join(output_folder, 'compute_features')
+    }
+    traj_colvars_paths = compute_features(**args)
     
-    if os.path.exists(output_features_path):
-        logger.info("Filtered features file already exists. Skipping filtering of features.")
+    # Compute features for supplementary data
+    if supplementary_traj_data:
+        supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
+        args = {
+            'configuration': configuration['compute_features'], 
+            'trajectories': supplementary_trajs, 
+            'topologies': supplementary_tops, 
+            'output_folder': os.path.join(output_folder, 'compute_ref_features')
+        }
+        supplementary_colvars_paths = compute_features(**args)
+        
+        # If there are less than 10 supplementary trajectories, use their names as labels
+        if len(supplementary_trajs) < 10: 
+            supplementary_labels = [Path(val_trajectory).stem for val_trajectory in supplementary_trajs]
     else:
-        output_features_path = filter_features(
-                configuration = configuration['filter_features'], 
-                colvars_paths = traj_colvars_paths,
-                output_features_path = output_features_path,
-                output_folder = step2_output_folder)
+        supplementary_trajs, supplementary_tops = None, None
+        supplementary_colvars_paths = None
+        supplementary_labels = None
+
+    ## Step 2: Filter features
+    # ------------------------
+    
+    # NOTE: Here we are assuming that MDAnalysis hasn't changed: resid, resname, atomnames of the topologies
+    #       Otherwise there would be a mismatch between the feature names in the colvars and the original topologies    
+    args = {
+        'configuration': configuration['filter_features'], 
+        'colvars_paths': traj_colvars_paths,
+        'topologies': topologies,
+        'reference_topology': reference_topology,
+        'output_folder': os.path.join(output_folder, 'filter_features')
+    }
+    output_features_path = filter_features(**args)
 
     # Read filtered features
     filtered_features = read_feature_constraints(output_features_path) 
 
     # Step 3: Train colvars
-    step3_output_folder = os.path.join(output_folder, 'train_colvars')
-    train_colvars(
-        configuration = configuration['train_colvars'],
-        colvars_paths = traj_colvars_paths,
-        feature_constraints = filtered_features,
-        ref_colvars_paths = ref_colvars_paths,
-        ref_labels = ref_names,
-        dimension = dimension,
-        cvs = cvs,
-        trajectories = trajectories,
-        topologies = topologies,
-        samples_per_frame = 1/configuration['compute_features']['plumed_settings']['traj_stride'],
-        output_folder = step3_output_folder)
+    # ---------------------
+    # NOTE: we'll need to include the supplementary tops and trajs
+    args = {
+        'configuration': configuration['train_colvars'],
+        'colvars_paths': traj_colvars_paths,
+        'feature_constraints': filtered_features,
+        'sup_colvars_paths': supplementary_colvars_paths,
+        'sup_labels': supplementary_labels,
+        'dimension': dimension,
+        'cvs': cvs,
+        'trajectories': trajectories,
+        'topologies': topologies,
+        'reference_topology': reference_topology,
+        'samples_per_frame': 1/configuration['compute_features']['plumed_settings']['traj_stride'],
+        'output_folder': os.path.join(output_folder, 'train_colvars')
+    }
+    train_colvars(**args)
             
     # End timer
     elapsed_time = time.time() - start_time
 
     # Write time to log in hours, minutes and seconds
-    logger.info('Total elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
-    
-         
+    logger.info('Total elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))   
+
 def set_logger(verbose: bool):
     """
-    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
-    If verbose is False, it sets the logging level to INFO.
+    Configures logging for Deep Cartograph. 
+    
+    If `verbose` is `True`, sets the logging level to DEBUG.
+    Otherwise, sets it to INFO.
 
     Inputs
     ------
 
-        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
+    Args:
+        verbose (bool): If `True`, logging level is set to DEBUG. 
+                        If `False`, logging level is set to INFO.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -226,35 +261,92 @@ def set_logger(verbose: bool):
 
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
 
+def parse_arguments():
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(
+        prog="Deep Cartograph",
+        description="Map trajectories onto Collective Variables."
+    )
+
+    # Required input files
+    parser.add_argument(
+        '-conf', '-configuration', dest='configuration_path', type=str, required=True,
+        help="Path to configuration file (.yml)."
+    )
+    parser.add_argument(
+        '-traj_data', dest='trajectory_data', required=True,
+        help=(
+            "Path to trajectory or folder with trajectories to analyze. "
+            "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
+        )
+    )
+    parser.add_argument(
+        '-top_data', dest='topology_data', required=True,
+        help=(
+            "Path to topology or folder with topology files for the trajectories. "
+            "If a folder is provided, each topology should have the same name as the "
+            "corresponding trajectory in -traj_data. Accepted format: .pdb."
+        )
+    )
+
+    # Optional input files
+    parser.add_argument(
+        '-sup_traj_data', dest='supplementary_traj_data', required=False,
+        help=(
+            "Path to supplementary trajectory or folder with supplementary trajectories. "
+            "Used to project onto the CV alongside 'trajectory_data' but not for computing CVs."
+        )
+    )
+    parser.add_argument(
+        '-sup_topology_data', dest='supplementary_top_data', required=False,
+        help=(
+            "Path to supplementary topology or folder with supplementary topologies. "
+            "If a folder is provided, each topology should match the corresponding "
+            "supplementary trajectory in -sup_traj_data."
+        )
+    )
+    parser.add_argument(
+        '-ref_top', dest='reference_topology', required=False,
+        help=(
+            "Path to reference topology file. Used to find features from user selections. "
+            "Defaults to the first topology in topology_data. Accepted format: .pdb."
+        )
+    )
+
+    # Options
+    parser.add_argument(
+        '-restart', dest='restart', action='store_true', default=False,
+        help="Restart workflow from the last finished step. Deletes step folders for repeated steps."
+    )
+    parser.add_argument(
+        '-dim', '-dimension', dest='dimension', type=int, required=False,
+        help="Dimension of the CV to train or compute. Overrides the configuration input YML."
+    )
+    parser.add_argument(
+        '-cvs', nargs='+', required=False,
+        help="Collective variables to train or compute (pca, ae, tica, htica, deep_tica). "
+             "Overrides the configuration input YML."
+    )
+    parser.add_argument(
+        '-out', '-output', dest='output_folder', required=False,
+        help="Path to the output folder."
+    )
+    parser.add_argument(
+        '-v', '-verbose', dest='verbose', action='store_true', default=False,
+        help="Set logging level to DEBUG."
+    )
+
+    return parser.parse_args()
+
 ########
 # MAIN #
 ########
 
-def main():
-    
-    parser = argparse.ArgumentParser("Deep Cartograph", description="Map trajectories onto Collective Variables.")
-    
-    parser.add_argument('-conf', '-configuration', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
-    
-    # Input files
-    parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to compute the CVs. Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd ", required=True)
-    parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data. Accepted formats: .pdb", required=True)
-    
-    parser.add_argument('-ref_traj_data', dest='ref_trajectory_data', help="Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.", required=False)
-    parser.add_argument('-ref_topology_data', dest='ref_topology_data', help="Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in -ref_traj_data.", required=False)
-    
-    parser.add_argument('-label_reference', dest='label_reference', action='store_true', help="Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.", default=False)
-    
-    # Options
-    parser.add_argument('-restart', dest='restart', action='store_true', help="Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat.", default=False)
-    parser.add_argument('-dim', '-dimension', dest='dimension', type=int, help="Dimension of the CV to train or compute, overwrites the configuration input YML.", required=False)
-    parser.add_argument('-cvs', nargs='+', help='Collective variables to train or compute (pca, ae, tica, htica, deep_tica), overwrites the configuration input YML.', required=False)
-    parser.add_argument('-out', '-output', dest='output_folder', help="Path to the output folder", required=False)
-    parser.add_argument('-v', '-verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
-    args = parser.parse_args()
+def main():
+    """Main function to execute Deep Cartograph workflow."""
     
-    from deep_cartograph.modules.common import read_configuration, get_unique_path
+    args = parse_arguments()
 
     # Set logger
     set_logger(verbose=args.verbose)
@@ -262,33 +354,31 @@ def main():
     # Read configuration
     configuration = read_configuration(args.configuration_path)
 
-    # If output folder is not given, create default
-    if args.output_folder is None:
-        output_folder = 'deep_cartograph'
-    else:
-        output_folder = args.output_folder
-          
-    # If restart is False, create unique output folder
+    # Determine output folder
+    output_folder = args.output_folder if args.output_folder else 'deep_cartograph'
+
+    # If restart is False, create a unique output folder
     if not args.restart:
         output_folder = get_unique_path(output_folder)
-    
-    # Run tool
+
+    # Run Deep Cartograph tool
     deep_cartograph(
-        configuration = configuration, 
-        trajectory_data = args.trajectory_data, 
-        topology_data = args.topology_data,
-        ref_trajectory_data = args.ref_trajectory_data,
-        ref_topology_data = args.ref_topology_data,
-        label_reference = args.label_reference,
-        dimension = args.dimension, 
-        cvs = args.cvs, 
-        restart = args.restart,
-        output_folder = output_folder)
-    
+        configuration=configuration,
+        trajectory_data=args.trajectory_data,
+        topology_data=args.topology_data,
+        supplementary_traj_data=args.supplementary_traj_data,
+        supplementary_top_data=args.supplementary_top_data,
+        reference_topology=args.reference_topology,
+        dimension=args.dimension,
+        cvs=args.cvs,
+        restart=args.restart,
+        output_folder=output_folder
+    )
+
     # Move log file to output folder
-    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
-    
-    
+    log_path = os.path.join(output_folder, 'deep_cartograph.log')
+    shutil.move('deep_cartograph.log', log_path)
+
+
 if __name__ == "__main__":
-    
     main()

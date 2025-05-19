@@ -3,7 +3,6 @@ import os
 import sys
 import logging
 import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Union, Literal
 
@@ -12,9 +11,9 @@ from deep_cartograph.modules.md import md
 from deep_cartograph.modules.figures import figures
 from deep_cartograph.modules.statistics import statistics
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
-from deep_cartograph.modules.common import validate_configuration, files_exist, merge_configurations 
+from deep_cartograph.modules.common import package_is_installed, validate_configuration, files_exist, merge_configurations 
 
-from deep_cartograph.tools.train_colvars.cv_calculator import CVCalculator, cv_calculators_map
+from deep_cartograph.tools.train_colvars.cv_calculator import cv_calculators_map
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -25,14 +24,15 @@ class TrainColvarsWorkflow:
     """
     def __init__(self, 
                  configuration: Dict, 
-                 colvars_paths: List[str], 
+                 training_colvars_paths: List[str], 
                  feature_constraints: Union[List[str], str] = None,
-                 ref_colvars_paths: Union[List[str], None] = None, 
-                 ref_labels: Union[List[str], None] = None,
+                 sup_colvars_paths: Union[List[str], None] = None, 
+                 sup_labels: Union[List[str], None] = None,
                  cv_dimension: Union[int, None] = None,
                  cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = None,
                  trajectory_paths: Union[List[str], None] = None,
-                 topology_paths: Union[List[str], None] = None, 
+                 topology_paths: Union[List[str], None] = None,
+                 ref_topology_path: Union[str, None] = None,  
                  samples_per_frame: Union[float, None] = 1,
                  output_folder: str = 'train_colvars'):
         """
@@ -40,7 +40,7 @@ class TrainColvarsWorkflow:
         
         The class runs the train_colvars workflow, which consists of:
         
-            1. Use colvars_paths files to compute the collective variables.
+            1. Use training_colvars_paths files to compute the collective variables.
             2. Plotting the FES of each colvars file in the CV space. 
             3. Plotting the projected features onto the CV space colored by order.
             4. Clustering the input samples according to the distance in the CV space.
@@ -57,18 +57,23 @@ class TrainColvarsWorkflow:
         self.clustering_configuration: Dict = self.configuration['clustering']
                 
         # Input related attributes
-        self.colvars_paths: List[str] = colvars_paths
+        self.training_colvars_paths: List[str] = training_colvars_paths
         self.feature_constraints: Union[List[str], str] = feature_constraints
-        self.ref_colvars_paths: Union[List[str], None] = ref_colvars_paths
+        self.sup_colvars_paths: Union[List[str], None] = sup_colvars_paths
         self.trajectory_paths: Union[str, None] = trajectory_paths
         self.topology_paths: Union[str, None] = topology_paths
+        self.ref_topology_path: Union[str, None] = ref_topology_path
+        
+        if self.topology_paths:
+            if self.ref_topology_path is None:
+                self.ref_topology_path = self.topology_paths[0]
         
         if not samples_per_frame:
             self.samples_per_frame = 1
         else:
             self.samples_per_frame: float = samples_per_frame
             
-        self.ref_labels: Union[List[str], None] = ref_labels
+        self.sup_labels: Union[List[str], None] = sup_labels
         
         # Validate inputs existence
         self._validate_files()
@@ -80,13 +85,13 @@ class TrainColvarsWorkflow:
     def _validate_files(self):
         """Checks if provided input files exist."""
         
-        for path in self.colvars_paths:
+        for path in self.training_colvars_paths:
             if not files_exist(path):
                 logger.error(f"Colvars file {path} does not exist. Exiting...")
                 sys.exit(1)
             
-        if self.ref_colvars_paths: 
-            for path in self.ref_colvars_paths:
+        if self.sup_colvars_paths: 
+            for path in self.sup_colvars_paths:
                 if not files_exist(path):
                     logger.error(f"Reference colvars file {path} does not exist. Exiting...")
                     sys.exit(1)
@@ -102,6 +107,11 @@ class TrainColvarsWorkflow:
                     if not files_exist(path):
                         logger.error(f"Topology file {path} does not exist. Exiting...")
                         sys.exit(1)
+                
+                if self.ref_topology_path:
+                    if not files_exist(self.ref_topology_path):
+                        logger.error(f"Reference topology file {self.ref_topology_path} does not exist. Exiting...")
+                        sys.exit(1)
             else:
                 logger.error("Trajectory file provided but no topology file. Exiting...")
                 sys.exit(1)
@@ -110,44 +120,10 @@ class TrainColvarsWorkflow:
                 logger.error("Different number of trajectory and topology files provided. Exiting...")
                 sys.exit(1)
             
-            if len(self.trajectory_paths) != len(self.colvars_paths):
+            if len(self.trajectory_paths) != len(self.training_colvars_paths):
                 logger.error("Different number of trajectory and colvars files provided. Exiting...")
                 sys.exit(1)
-        
-                
-    def calculate_cv(self, cv: Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']) -> CVCalculator:
-        """
-        Runs the calculation of the requested collective variables using the corresponding calculator.
-        
-        Inputs
-        ------
-        
-            cv:         The collective variable to calculate.
-        
-        Returns
-        -------
-        
-            calculator: The CV calculator object.
-        """
-        
-        # Merge common and cv-specific configuration for this cv 
-        common_configuration = self.configuration['common']
-        cv_specific_configuration = self.configuration.get(cv, {})
-        cv_configuration = merge_configurations(common_configuration, cv_specific_configuration)
-        
-        # Construct the corresponding CV calculator
-        calculator = cv_calculators_map[cv](self.colvars_paths, 
-                                    self.topology_paths,
-                                    self.feature_constraints, 
-                                    self.ref_colvars_paths, 
-                                    cv_configuration,
-                                    self.output_folder)
-        
-        # Run the CV calculator
-        calculator.run(self.cv_dimension)
-        
-        return calculator
-    
+          
     def run(self):
         """
         Run the train_colvars workflow.
@@ -158,17 +134,53 @@ class TrainColvarsWorkflow:
         # For each requested collective variable
         for cv in self.cvs:
             
+            if cv != "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
+                logger.warning(f"Missing packages for {cv}. Skipping this CV.")
+                continue
+            
             cv_output_folder = os.path.join(self.output_folder, cv)
             
-            # Compute collective variable and project features onto the CV space
-            cv_calculator = self.calculate_cv(cv)
+            # Merge common and cv-specific configuration for this cv 
+            common_configuration = self.configuration['common']
+            cv_specific_configuration = self.configuration.get(cv, {})
+            cv_configuration = merge_configurations(common_configuration, cv_specific_configuration)
             
-            # If the CV was calculated successfully
-            if cv_calculator.cv_ready():
+            # Construct the corresponding CV calculator NOTE: we need here the sup topology as well
+            args = {
+                'training_colvars_paths': self.training_colvars_paths,
+                'configuration': cv_configuration,
+                'topology_paths': self.topology_paths,
+                'ref_topology_path': self.ref_topology_path,
+                'feature_constraints': self.feature_constraints,
+                'sup_colvars_paths': self.sup_colvars_paths,
+                'output_path': self.output_folder
+            }
+            cv_calculator = cv_calculators_map[cv](**args)
             
-                # Project each colvars and trajectory file:
-                for colvars, trajectory, topology in zip(self.colvars_paths, self.trajectory_paths, self.topology_paths):
+            # Run the CV calculator - obtain a DictDataset with the projected colvars
+            projected_data_df = cv_calculator.run(self.cv_dimension) # NOTE: These should contain the labels as well
+                
+            # Obtain the projected supplementary data if any NOTE: there is a type mismatch here
+            projected_sup_data_df = cv_calculator.get_projected_sup_data()
+            if projected_sup_data_df is not None:
+                X_ref = [projected_sup_data_df[projected_sup_data_df['label'] == index] for index in range(len(self.sup_colvars_paths))]
+                X_ref = [df.drop('label', axis=1).to_numpy() for df in X_ref]
+                X_ref_labels = [Path(path).stem for path in self.sup_colvars_paths]
+            else:
+                X_ref = None
+                X_ref_labels = None
+                
+            # If the DictDataset is not empty, proceed with the workflow
+            if projected_data_df is not None:
+                
+                # Iterate over the training data
+                for file_index in range(len(self.training_colvars_paths)):
                     
+                    # Get the colvars, trajectory and topology files
+                    colvars = self.training_colvars_paths[file_index]
+                    trajectory = self.trajectory_paths[file_index] if self.trajectory_paths else None
+                    topology = self.topology_paths[file_index] if self.topology_paths else None
+
                     # Log
                     logger.info(f"Projecting colvars file: {colvars}")
                     logger.info(f"Corresponding trajectory file: {trajectory}")
@@ -178,29 +190,27 @@ class TrainColvarsWorkflow:
                     traj_output_folder = os.path.join(cv_output_folder, Path(trajectory).stem)
                     os.makedirs(traj_output_folder, exist_ok=True)
                     
-                    # Project the colvars data onto the CV space
-                    projected_colvars = cv_calculator.project_colvars(colvars)
+                    # Get the projected data for this colvars file
+                    projected_colvars_df = projected_data_df[projected_data_df['label'] == file_index]
+                    projected_colvars_df.drop('label', axis=1, inplace=True)
                 
                     # Plot FES of the CV space - add ref data if available
                     figures.plot_fes(
-                        X = projected_colvars,
+                        X = projected_colvars_df.to_numpy(),
                         cv_labels = cv_calculator.get_labels(),
-                        X_ref = cv_calculator.get_projected_ref(),
-                        X_ref_labels = self.ref_labels,
+                        X_ref = X_ref,
+                        X_ref_labels = X_ref_labels,
                         settings = self.figures_configuration['fes'],
                         output_path = traj_output_folder)
-                
-                    # Create a dataframe with the projected input data
-                    projected_colvars_df = pd.DataFrame(projected_colvars, columns=cv_calculator.get_labels())
-                
-                    # Add a column with the order of the data points
-                    projected_colvars_df['order'] = np.arange(projected_colvars_df.shape[0])
 
                     # If clustering is enabled
                     if self.clustering_configuration['run']:
                         
                         # Cluster the input samples
-                        cluster_labels, centroids = statistics.optimize_clustering(projected_colvars, self.clustering_configuration)
+                        cluster_labels, centroids = statistics.optimize_clustering(projected_colvars_df.to_numpy(), self.clustering_configuration)
+                        
+                        # Add a column with the order of the data points
+                        projected_colvars_df['order'] = np.arange(projected_colvars_df.shape[0])
                         
                         # Add cluster labels to the projected input dataframe
                         projected_colvars_df['cluster'] = cluster_labels
@@ -233,6 +243,9 @@ class TrainColvarsWorkflow:
                             logger.debug(f"Trajectory: {trajectory}")
                             logger.debug(f"Topology: {topology}")
                     
+                    # Add a column with the order of the data points
+                    projected_colvars_df['order'] = np.arange(projected_colvars_df.shape[0])
+                        
                     # 2D plots of the input data projected onto the CV space
                     if cv_calculator.get_cv_dimension() == 2:
                         
@@ -261,3 +274,7 @@ class TrainColvarsWorkflow:
                     
                     # Save the projected input data
                     projected_colvars_df.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
+            
+            else:
+                logger.warning(f"Projected colvars dataframe is empty for {cv}. Skipping this CV.")
+                continue

@@ -1,6 +1,6 @@
 from deep_cartograph.run import deep_cartograph
 import importlib.resources as resources
-from deep_cartograph.modules.plumed.colvars import read_as_pandas
+from deep_cartograph.modules.plumed.colvars import read_colvars
 import deep_cartograph.modules.plumed as plumed
 import deep_cartograph.modules.md as md
 from deep_cartograph import tests
@@ -148,8 +148,8 @@ def test_deep_cartograph():
     deep_cartograph(configuration=get_config(),
                     trajectory_data=trajectory_folder,
                     topology_data=topology_folder,
-                    ref_trajectory_data=trajectory_folder,
-                    ref_topology_data=topology_folder,
+                    supplementary_traj_data=trajectory_folder,
+                    supplementary_top_data=topology_folder,
                     output_folder=output_path)
     
     # Find path to train_colvars step
@@ -162,7 +162,7 @@ def test_deep_cartograph():
       # Find paths to csv files
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
       computed_projection_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
-      computed_ref_data_path = os.path.join(train_colvars_path, cv, "reference_data", "colvars.csv")
+      computed_ref_data_path = os.path.join(train_colvars_path, cv, "supplementary_data", "colvars.csv")
       
       # Read csv files
       reference_df = pd.read_csv(reference_projection_path)
@@ -202,7 +202,7 @@ def test_deep_cartograph():
       # Find colvars path
       colvars_path = os.path.join(cv_output_path, f"{cv}_out.dat")
       plumed.colvars.check(colvars_path)
-      plumed_projection_df = read_as_pandas(colvars_path)
+      plumed_projection_df = read_colvars(colvars_path)
       
       # Find reference file
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
