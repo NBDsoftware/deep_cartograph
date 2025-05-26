@@ -82,6 +82,11 @@ def compute_features(
     if isinstance(topologies, str):
         topologies = [topologies]
         
+    # Check the number of trajectories and topologies is the same
+    if len(trajectories) != len(topologies):
+        logger.error(f"Number of trajectories ({len(trajectories)}) and topologies ({len(topologies)}) do not match. Exiting...")
+        sys.exit(1) 
+        
     # Check if files exist
     if not files_exist(*trajectories):
         logger.error(f"Trajectory file missing. Exiting...")
@@ -109,17 +114,21 @@ def compute_features(
  
     # Find feature names for each topology
     features_lists = []
-    for topology in topologies:
+    for i in range(len(topologies)):
         
-        # Find top name
+        topology = topologies[i]
+        trajectory = trajectories[i]
+        
+        # Find top and traj names
         top_name = Path(topology).stem
-    
+        traj_name = Path(trajectory).stem
+        
         # Create output folder
-        top_output_folder = os.path.join(output_folder, top_name)
-        create_output_folder(top_output_folder)
+        traj_output_folder = os.path.join(output_folder, traj_name)
+        create_output_folder(traj_output_folder)
         
         # Create new topology file
-        plumed_topology = os.path.join(top_output_folder, 'plumed_topology.pdb')
+        plumed_topology = os.path.join(traj_output_folder, 'plumed_topology.pdb')
         md.create_pdb(topology, plumed_topology)
         
         # Translate features to new topology
@@ -158,17 +167,21 @@ def compute_features(
     for i in range(len(topologies)):
 
         topology = topologies[i]
-        top_name = Path(topology).stem
         trajectory = trajectories[i]
+        
+        # Find top and traj names
+        top_name = Path(topology).stem
+        traj_name = Path(trajectory).stem
+        
         features_list = common_features_lists[i]
         
-        logger.info(f"Computing features for {top_name} using {Path(trajectory).stem}")
+        logger.info(f"Computing features for {traj_name} with topology {top_name}...")
 
-        top_output_folder = os.path.join(output_folder, top_name)
+        traj_output_folder = os.path.join(output_folder, traj_name)
 
-        plumed_input_path = os.path.join(top_output_folder, 'plumed_input.dat')
-        plumed_topology_path = os.path.abspath(os.path.join(top_output_folder, 'plumed_topology.pdb'))
-        colvars_path = os.path.join(top_output_folder, 'colvars.dat')
+        plumed_input_path = os.path.join(traj_output_folder, 'plumed_input.dat')
+        plumed_topology_path = os.path.abspath(os.path.join(traj_output_folder, 'plumed_topology.pdb'))
+        colvars_path = os.path.join(traj_output_folder, 'colvars.dat')
         colvars_paths.append(colvars_path)
         
         # Skip if colvars file already exists
@@ -191,7 +204,7 @@ def compute_features(
             'plumed_input': plumed_input_path,
             'traj_path': trajectory,
             'num_atoms':  md.get_number_atoms(topology),
-            'output_path': top_output_folder
+            'output_path': traj_output_folder
         }
         plumed_command = plumed.cli.get_driver_command(**driver_command_args)
 

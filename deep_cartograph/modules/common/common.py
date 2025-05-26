@@ -323,6 +323,11 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
         logger.error(f"Number of topology files is different from the number of trajectory files ({len(top_file_paths)} vs {len(traj_file_paths)}).")
         sys.exit(1)
             
+    # Log the found files
+    for traj_file, top_file in zip(traj_file_paths, top_file_paths):
+        logger.debug(f"Found trajectory file: {Path(traj_file).name}")
+        logger.debug(f"Corresponding topology file: {Path(top_file).name}")
+    
     return traj_file_paths, top_file_paths
 
 # Related to i/o
