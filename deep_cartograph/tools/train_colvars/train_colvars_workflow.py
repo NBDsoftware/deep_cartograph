@@ -287,7 +287,43 @@ class TrainColvarsWorkflow:
                     
                     # Save the projected input data
                     projected_colvars_df.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
-            
+
+                if projected_sup_df is not None:
+                    
+                    # Iterate over supplementary data
+                    for file_index in range(len(self.sup_colvars_paths)):
+                        
+                        # Get the colvars and topology files
+                        sup_colvars = self.sup_colvars_paths[file_index]
+                        sup_topology = self.sup_topology_paths[file_index] if self.sup_topology_paths else None
+
+                        # Log
+                        logger.info(f"Supplementary colvars file: {sup_colvars}")
+                        logger.info(f"Corresponding topology file: {sup_topology}")
+                    
+                        # Output folder for this topology
+                        sup_output_folder = os.path.join(cv_output_folder, f"sup_{Path(sup_topology).stem}")
+                        os.makedirs(sup_output_folder, exist_ok=True)
+                        
+                        # Create plumed inputs for this CV and topology
+                        cv_calculator.write_plumed_input(sup_topology, sup_output_folder)
+                
+                        logger.debug(f'Saving supplementary data from {sup_colvars} to {sup_output_folder}')
+                        
+                        # Extract the projected data for this colvars file
+                        projected_sup_colvars_df = projected_sup_df[projected_sup_df["label"] == file_index]
+                        projected_sup_colvars_df.drop('label', axis=1, inplace=True)
+                        
+                        # Plot FES of the CV space
+                        figures.plot_fes(
+                            X = projected_sup_colvars_df.to_numpy(),
+                            cv_labels = cv_calculator.get_labels(),
+                            settings = self.figures_configuration['fes'],
+                            output_path = sup_output_folder)
+                        
+                        # Save the projected sup data
+                        projected_sup_colvars_df.to_csv(os.path.join(sup_output_folder,'projected_data.csv'), index=False, float_format='%.4f')
+                
             else:
                 logger.warning(f"Projected colvars dataframe is empty for {cv}. Skipping this CV.")
                 continue
