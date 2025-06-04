@@ -3,7 +3,6 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from scipy.sparse import block_diag
 from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
@@ -355,51 +354,33 @@ class CVCalculator:
         
         raise NotImplementedError
 
+    def get_cv_parameters(self) -> Dict:
+        """
+        Returns the parameters for the CV. Implement in subclasses.
+        """
+        
+        raise NotImplementedError
+    
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the CV. Implement in subclasses.
+        """
+        
+        raise NotImplementedError
+    
     def project_training_data(self):
         """ 
-        Projects the training data onto the CV space and saves the projection to a csv file.
+        Projects the training data onto the CV space.
         Implement in subclasses.
         """
         
     def project_supplementary_data(self):
         """
-        Projects the supplementary data onto the CV space and saves the projection to a csv file. 
+        Projects the supplementary data onto the CV space. 
         Implement in subclasses.
         """
         
         raise NotImplementedError
-    
-    def save_projected_supplementary_data(self):
-        """
-        Saves the projected supplementary data to csv files, if there is any.
-        """
-        
-        supplementary_data_folder = os.path.join(self.output_path, 'supplementary_data')
-        
-        if self.projected_supplementary_data is not None:
-            
-            if not os.path.exists(supplementary_data_folder):
-                os.makedirs(supplementary_data_folder)
-        
-            # Find the names of the supplementary colvars paths
-            sup_colvars_names = [Path(path).stem for path in self.sup_colvars_paths]
-            
-            # For each supplementary colvars
-            for i in range(len(sup_colvars_names)):
-                
-                # Get path to projected data
-                projected_data_path = os.path.join(supplementary_data_folder, f'{sup_colvars_names[i]}.csv')
-                
-                logger.debug(f'Saving supplementary data from {self.sup_colvars_paths[i]} to {projected_data_path}')
-                
-                # Extract the projected data for this colvars file
-                projected_data = self.projected_supplementary_data[self.projected_supplementary_data["label"] == i]
-                
-                # Drop file_label column
-                projected_data = projected_data.drop(columns=["label"])
-                
-                # Save the projected data to a csv file NOTE: We are assuming that the dataframe has the correct labels
-                projected_data.to_csv(projected_data_path, index=False, float_format='%.4f')
           
     def set_labels(self):
         """
@@ -418,13 +399,70 @@ class CVCalculator:
         
         raise NotImplementedError
         
-    def write_plumed_input(self):
-        """ 
-        Create a plumed input file that computes the collective variable from the features. 
-        Implement in subclasses.
+    def write_plumed_input(self, topology: str, output_folder: str) -> None:
         """
+        Creates a plumed input file that computes the collective variable from the features 
+        for the given topology.
         
-        raise NotImplementedError
+        Parameters
+        ----------
+        
+        topology : str
+            Path to the topology file
+            
+        output_folder : str
+            Path to the output folder where the plumed input file and the mda topology will be saved
+        """
+
+        # Save new PLUMED-compliant topology
+        plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
+        md.create_pdb(topology, plumed_topology_path)
+        
+        # Save new temporary reference PLUMED-compliant topology
+        ref_plumed_topology_path = os.path.join(output_folder, 'ref_plumed_topology.pdb')
+        md.create_pdb(self.ref_topology_path, ref_plumed_topology_path)
+        
+        # Translate the features from the reference topology to this topology
+        features_list = plumed.features.FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.feature_labels).run()
+        
+        # Construct builder arguments for these features and this CV
+        builder_args = {
+            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat'),
+            'topology_path': plumed_topology_path,
+            'feature_list': features_list,
+            'traj_stride': 1,
+            'cv_type': self.get_cv_type(),
+            'cv_params': self.get_cv_parameters()
+        }
+        
+        # Build the plumed input file to track the CV
+        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_out.dat')
+        
+        # Save enhanced sampling parameters to parameters dictionary
+        sampling_params = {
+            'sigma': 0.05,
+            'height': 1.0,
+            'biasfactor': 10.0,
+            'temp': 300,
+            'pace': 500,
+            'grid_min': -1,
+            'grid_max': 1,
+            'grid_bin': 300
+        }
+        
+        builder_args.update({
+            'sampling_method': 'wt-metadynamics', 
+            'sampling_params': sampling_params,
+            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}_metad.dat')
+            })
+            
+        # Build the plumed input file to perform enhanced sampling
+        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
+        
+        # Erase the temporary reference topology
+        os.remove(ref_plumed_topology_path)
 
     # Getters
     def get_projected_sup_data(self) -> Union[pd.DataFrame, None]:
@@ -580,6 +618,29 @@ class LinearCalculator(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
+    def get_cv_parameters(self):
+        """ 
+        Get the collective variable parameters.
+        """
+
+        # Save CV data to parameters dictionary
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'features_norm_mode': self.feats_norm_mode,
+            'features_stats': self.features_stats,
+            'cv_stats': self.cv_stats,
+            'weights': self.cv
+        }
+        return cv_parameters
+    
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the collective variable.
+        """
+        
+        return 'linear'
+    
     def project_training_data(self):
         """
         Projects the training data onto the CV space.
@@ -622,61 +683,6 @@ class LinearCalculator(CVCalculator):
         # Save the max/min values of each dimension - part of the final cv definition
         np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
         np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
-    
-    def write_plumed_input(self):
-        """
-        Creates a plumed input file that computes the collective variable from the features.
-        """
-        
-        # Save new PLUMED-compliant topology
-        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
-        md.create_pdb(self.topologies[0], plumed_topology_path)
-        
-        # Save CV data to parameters dictionary
-        cv_parameters = {
-            'cv_name': self.cv_name,
-            'cv_dimension': self.cv_dimension,
-            'features_norm_mode': self.feats_norm_mode,
-            'features_stats': self.features_stats,
-            'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization for the cv
-            'weights': self.cv
-        }
-        
-        # Construct builder arguments
-        builder_args = {
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
-            'topology_path': plumed_topology_path,
-            'feature_list': self.feature_labels,
-            'traj_stride': 1,
-            'cv_type': 'linear',
-            'cv_params': cv_parameters
-        }
-        
-        # Build the plumed input file to track the CV
-        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_out.dat')
-        
-        # Save enhanced sampling parameters to parameters dictionary
-        sampling_params = {
-            'sigma': 0.05,
-            'height': 1.0,
-            'biasfactor': 10.0,
-            'temp': 300,
-            'pace': 500,
-            'grid_min': -1,
-            'grid_max': 1,
-            'grid_bin': 300
-        }
-        
-        builder_args.update({
-            'sampling_method': 'wt-metadynamics', 
-            'sampling_params': sampling_params,
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
-            })
-            
-        # Build the plumed input file to perform enhanced sampling
-        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
 
 # Subclass for non-linear collective variables calculators
 class NonLinear(CVCalculator):
@@ -986,6 +992,24 @@ class NonLinear(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
+    def get_cv_parameters(self):
+        """
+        Get the collective variable parameters.
+        """
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'weights_path': self.weights_path
+        }
+        return cv_parameters
+    
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the collective variable.
+        """
+        
+        return "non-linear"
+    
     def project_supplementary_data(self):
         """
         Projects the supplementary data onto the CV space.
@@ -1016,56 +1040,6 @@ class NonLinear(CVCalculator):
             projected_training_array = self.cv(torch.tensor(self.training_data.values)).numpy() 
             
         self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
-    
-    def write_plumed_input(self):
-        """
-        Creates a plumed input file that computes the collective variable from the features.
-        """
-        
-        # Save new PLUMED-compliant topology
-        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
-        md.create_pdb(self.topologies[0], plumed_topology_path)
-        
-        cv_parameters = {
-            'cv_name': self.cv_name,
-            'cv_dimension': self.cv_dimension,
-            'weights_path': self.weights_path
-        }
-        
-        builder_args = {
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
-            'topology_path': plumed_topology_path,
-            'feature_list': self.feature_labels,
-            'traj_stride': 1,
-            'cv_type': 'non-linear',
-            'cv_params': cv_parameters
-        }
-        
-        # Build the plumed input file to track the CV
-        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_out.dat')
-        
-        # Save enhanced sampling parameters to parameters dictionary
-        sampling_params = {
-            'sigma': 0.05,
-            'height': 1.0,
-            'biasfactor': 10.0,
-            'temp': 300,
-            'pace': 500,
-            'grid_min': -1,
-            'grid_max': 1,
-            'grid_bin': 300
-        }
-        
-        builder_args.update({
-            'sampling_method': 'wt-metadynamics',
-            'sampling_params': sampling_params,
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
-            })
-        
-        # Build the plumed input file to perform enhanced sampling
-        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
 
 # Collective variables calculators
 class PCACalculator(LinearCalculator):

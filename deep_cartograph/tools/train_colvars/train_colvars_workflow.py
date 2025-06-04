@@ -192,6 +192,9 @@ class TrainColvarsWorkflow:
                     traj_output_folder = os.path.join(cv_output_folder, Path(trajectory).stem)
                     os.makedirs(traj_output_folder, exist_ok=True)
                     
+                    # Create plumed inputs for this CV and topology
+                    cv_calculator.write_plumed_input(topology, traj_output_folder)
+                    
                     # Get the projected data for this colvars file
                     projected_colvars_df = projected_train_df[projected_train_df['label'] == file_index]
                     projected_colvars_df.drop('label', axis=1, inplace=True)
