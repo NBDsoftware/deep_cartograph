@@ -1,4 +1,6 @@
-name: deep_cartograph_lite
+# This version of the environment has less dependencies (no torch, mlcolvar or lightning needed)
+# The only supported CV in this case is PCA
+name: deep_cartograph_lite 
 channels:
 
   - conda-forge
