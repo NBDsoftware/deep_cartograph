@@ -390,9 +390,14 @@ def create_dataframe_from_files(
     # load data
     for file_index in range(num_files):
         
+        logger.debug(f"Reading colvars file: {colvars_paths[file_index]}")
+        
         tmp_df = load_dataframe(colvars_paths[file_index], **load_args[file_index], **kwargs)
         
         if topology_paths:
+            
+            
+            logger.debug(f"Translating feature names from topology {topology_paths[file_index]} to reference topology {reference_topology}")
             
             # Original feature names
             feature_names = list(tmp_df.columns)
@@ -403,7 +408,7 @@ def create_dataframe_from_files(
             # Check if any feature didn't have a translation - all features in the provided colvars should be translatable
             for feature_index in range(len(ref_feature_names)):
                 if ref_feature_names[feature_index] is None:
-                    logger.error(f'Feature {feature_names[feature_index]} from {Path(colvars_paths).name} not found in the reference topology.')
+                    logger.error(f'Feature {feature_names[feature_index]} from {colvars_paths[file_index]} not found in the reference topology.')
                     sys.exit(1)
                     
             # Change the column names to the reference names before concatenating
