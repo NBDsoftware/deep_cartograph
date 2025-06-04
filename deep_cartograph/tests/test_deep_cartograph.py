@@ -162,7 +162,7 @@ def test_deep_cartograph():
       # Find paths to csv files
       reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
       computed_projection_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
-      computed_ref_data_path = os.path.join(train_colvars_path, cv, "supplementary_data", "colvars.csv")
+      computed_ref_data_path = os.path.join(train_colvars_path, cv, "sup_CA_example", "projected_data.csv")
       
       # Read csv files
       reference_df = pd.read_csv(reference_projection_path)
@@ -178,29 +178,29 @@ def test_deep_cartograph():
 
     assert test_passed
     
-    # For each linear cv
+    # For each linear cv - NOTE: we should add the non-linear ones when we have a working PLUMED with pytorch installation
     linear_cvs = ['pca', 'tica', 'htica']
     for cv in linear_cvs:
       
-      cv_output_path = os.path.join(train_colvars_path, cv)
+      traj_output_path = os.path.join(train_colvars_path, cv, "CA_example")
       
       # Find path to plumed input file that tracks the cv
-      plumed_input_path = os.path.join(train_colvars_path, cv, f"plumed_input_{cv}.dat")
+      plumed_input_path = os.path.join(traj_output_path, f"plumed_input_{cv}.dat")
       
-      # Check if the file exists
-      test_passed = test_passed and os.path.exists(plumed_input_path)
-      print(f"{cv} plumed input file exists: {os.path.exists(plumed_input_path)}")
+      # Check if the plumed input file exists
+      if not os.path.isfile(plumed_input_path):
+        print(f"PLUMED input for cv {cv} doesn't exist!")
       
       # Construct plumed driver command
       traj_path = os.path.join(trajectory_folder, "CA_example.dcd")
       top_path = os.path.join(topology_folder, "CA_example.pdb")
-      plumed_command = plumed.cli.get_driver_command(plumed_input_path, traj_path, md.get_number_atoms(top_path), cv_output_path)
+      plumed_command = plumed.cli.get_driver_command(plumed_input_path, traj_path, md.get_number_atoms(top_path), traj_output_path)
 
       # Execute plumed command
-      plumed.cli.run_plumed(plumed_command, working_dir=cv_output_path)
+      plumed.cli.run_plumed(plumed_command, working_dir=traj_output_path)
       
       # Find colvars path
-      colvars_path = os.path.join(cv_output_path, f"{cv}_out.dat")
+      colvars_path = os.path.join(traj_output_path, f"{cv}_out.dat")
       plumed.colvars.check(colvars_path)
       plumed_projection_df = read_colvars(colvars_path)
       

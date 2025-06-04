@@ -42,11 +42,6 @@ def deep_cartograph(
     """
     Main API for the Deep Cartograph workflow.
 
-    NOTE:
-        Currently, the number of trajectories and topologies must match.
-        Future versions may allow individual topologies per data file or 
-        support generating PLUMED enhanced sampling files.
-
     Args:
         configuration (Dict): 
             Configuration dictionary (refer to `default_config.yml` for details).
@@ -153,6 +148,7 @@ def deep_cartograph(
         'configuration': configuration['compute_features'], 
         'trajectories': trajectories, 
         'topologies': topologies, 
+        'reference_topology': reference_topology,
         'output_folder': os.path.join(output_folder, 'compute_features')
     }
     traj_colvars_paths = compute_features(**args)
@@ -164,6 +160,7 @@ def deep_cartograph(
             'configuration': configuration['compute_features'], 
             'trajectories': supplementary_trajs, 
             'topologies': supplementary_tops, 
+            'reference_topology': reference_topology,
             'output_folder': os.path.join(output_folder, 'compute_ref_features')
         }
         supplementary_colvars_paths = compute_features(**args)
@@ -195,18 +192,18 @@ def deep_cartograph(
 
     # Step 3: Train colvars
     # ---------------------
-    # NOTE: we'll need to include the supplementary tops and trajs
     args = {
         'configuration': configuration['train_colvars'],
         'colvars_paths': traj_colvars_paths,
-        'feature_constraints': filtered_features,
-        'sup_colvars_paths': supplementary_colvars_paths,
-        'sup_labels': supplementary_labels,
-        'dimension': dimension,
-        'cvs': cvs,
         'trajectories': trajectories,
         'topologies': topologies,
         'reference_topology': reference_topology,
+        'feature_constraints': filtered_features,
+        'sup_colvars_paths': supplementary_colvars_paths,
+        'sup_topology_paths': supplementary_tops,
+        'sup_labels': supplementary_labels,
+        'dimension': dimension,
+        'cvs': cvs,
         'samples_per_frame': 1/configuration['compute_features']['plumed_settings']['traj_stride'],
         'output_folder': os.path.join(output_folder, 'train_colvars')
     }
@@ -298,7 +295,7 @@ def parse_arguments():
         )
     )
     parser.add_argument(
-        '-sup_topology_data', dest='supplementary_top_data', required=False,
+        '-sup_top_data', dest='supplementary_top_data', required=False,
         help=(
             "Path to supplementary topology or folder with supplementary topologies. "
             "If a folder is provided, each topology should match the corresponding "

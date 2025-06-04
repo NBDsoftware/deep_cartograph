@@ -22,8 +22,8 @@ class CVCalculator:
     """
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str],
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str],
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -39,10 +39,10 @@ class CVCalculator:
         configuration
             Configuration dictionary with settings for the CV
             
-        training_colvars_paths 
+        train_colvars_paths 
             List of paths to colvars files with the main data used for training
                 
-        topology_paths (Optional)
+        train_topology_paths (Optional)
             List of paths to topology files corresponding to the training colvars files (same order)
         
         ref_topology_path (Optional)
@@ -74,11 +74,11 @@ class CVCalculator:
         self.feats_norm_mode: Literal['mean_std', 'min_max', 'none'] = configuration['features_normalization']
         
         # Colvars paths
-        self.training_colvars_paths: List[str] = training_colvars_paths
+        self.train_colvars_paths: List[str] = train_colvars_paths
         self.sup_colvars_paths: Optional[List[str]] = sup_colvars_paths
         
         # Topologies
-        self.topologies: Optional[List[str]] = topology_paths     # NOTE: Should these be attributes?
+        self.topologies: Optional[List[str]] = train_topology_paths     # NOTE: Should these be attributes?
         self.ref_topology_path: Optional[str] = ref_topology_path
         if self.topologies is not None:
             if self.ref_topology_path is None:
@@ -87,7 +87,7 @@ class CVCalculator:
         # Filtered training data used to train / compute the CVs
         logger.info('Reading training data from colvars files...')
         reading_args = {
-            'colvars_paths': training_colvars_paths,
+            'colvars_paths': train_colvars_paths,
             'topology_paths': self.topologies,
             'ref_topology_path': self.ref_topology_path,
             'load_args': self.training_reading_settings}
@@ -99,11 +99,6 @@ class CVCalculator:
         
         # Number of samples used to train / compute the CV - depends on the specific CV calculator
         self.num_training_samples: Union[int, None] = None
-        
-        # List of features used for training (features in the colvars files after filtering) 
-        self.feature_labels: List[str] = self.training_data.columns.tolist()
-        self.num_features: int = len(self.feature_labels)
-        logger.info(f'Number of features: {self.num_features}')
         
         # Read the supplementary data
         if sup_colvars_paths:
@@ -117,18 +112,16 @@ class CVCalculator:
             self.supplementary_data: pd.DataFrame = self.read_data(**reading_args)
             self.supplementary_data_labels: np.array = self.supplementary_data.pop("label").to_numpy()
     
-            # Check if the feature labels are the same as the training data
-            sup_feature_labels = self.supplementary_data.columns.tolist()
-            if len(sup_feature_labels) != self.num_features:
-                logger.error(f"""Number of features in supplementary colvars files ({len(sup_feature_labels)}) is different 
-                             from the number of features in the training dataset ({self.num_features}). Exiting...""")
-                sys.exit(1)
-            if self.feature_labels != sup_feature_labels:
-                logger.error(f"""Feature labels in supplementary colvars files ({sup_feature_labels}) are different 
-                             from the feature labels in the training dataset ({self.feature_labels}). Exiting...""")
-                sys.exit(1)
+            # Make sure we use the same features between training and supplementary data
+            self.training_data, self.supplementary_data = self.align_dataframes(self.training_data, self.supplementary_data)
+            
         else:
             self.supplementary_data: Optional[pd.DataFrame] = None
+            
+        # List of features used for training (features in the colvars files after filtering) 
+        self.feature_labels: List[str] = self.training_data.columns.tolist()
+        self.num_features: int = len(self.feature_labels)
+        logger.info(f'Number of features: {self.num_features}')
         
         # Projected supplementary data
         self.projected_supplementary_data : Optional[pd.DataFrame] = None
@@ -214,6 +207,54 @@ class CVCalculator:
         
         return df
     
+    def align_dataframes(self, training_data: pd.DataFrame, supplementary_data: pd.DataFrame):
+        """
+        Align two pandas DataFrames to have the same columns in the same order, 
+        based on the columns of the first DataFrame.
+
+        This function:
+        - Identifies the common columns between training_data and supplementary_data.
+        - Keeps the column order as in training_data.
+        - Drops any columns not shared by both DataFrames.
+        - Prints a warning if any columns are dropped from either DataFrame.
+
+        Parameters
+        ----------
+            training_data : pd.DataFrame
+                The reference DataFrame whose column order is preserved.
+            supplementary_data : pd.DataFrame
+                The DataFrame to be aligned with training_data.
+
+        Returns
+        -------
+            training_data_aligned : pd.DataFrame
+                A version of training_data with only the common columns.
+            supplementary_data_aligned : pd.DataFrame
+                A version of supplementary_data with columns aligned to training_data's order.
+        """
+        
+        # Get column name sets
+        cols1 = set(training_data.columns)
+        cols2 = set(supplementary_data.columns)
+
+        # Find common columns, preserving order of training_data
+        common_cols = [col for col in training_data.columns if col in cols2]
+
+        # Warn if any columns are discarded
+        dropped_from_training_data = cols1 - cols2
+        dropped_from_supplementary_data = cols2 - cols1
+
+        if dropped_from_training_data:
+            logger.warning(f"Dropping columns from training_data: {sorted(dropped_from_training_data)}")
+        if dropped_from_supplementary_data:
+            logger.warning(f"Dropping columns from supplementary_data: {sorted(dropped_from_supplementary_data)}")
+
+        # Align both DataFrames
+        training_data_aligned = training_data[common_cols]
+        supplementary_data_aligned = supplementary_data[common_cols]
+
+        return training_data_aligned, supplementary_data_aligned
+
     def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
         """
         Create the filter dictionary to select the features to use from the feature constraints.
@@ -296,11 +337,7 @@ class CVCalculator:
                 # Return file labels to the projected supplementary data
                 self.projected_supplementary_data["label"] = self.supplementary_data_labels
             
-            self.save_projected_supplementary_data()
-            
             self.save_cv()
-            
-            self.write_plumed_input()
 
         return self.projected_training_data
         
@@ -427,8 +464,8 @@ class LinearCalculator(CVCalculator):
     
     def __init__(self, 
         configuration: Dict, 
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None,
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None,
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -440,8 +477,8 @@ class LinearCalculator(CVCalculator):
         """
         super().__init__(
             configuration, 
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -649,8 +686,8 @@ class NonLinear(CVCalculator):
     
     def __init__(self, 
         configuration: Dict, 
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None,
@@ -668,8 +705,8 @@ class NonLinear(CVCalculator):
                 
         super().__init__(
             configuration,
-            training_colvars_paths,  
-            topology_paths, 
+            train_colvars_paths,  
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1038,8 +1075,8 @@ class PCACalculator(LinearCalculator):
 
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1052,8 +1089,8 @@ class PCACalculator(LinearCalculator):
         
         super().__init__(
             configuration,
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1090,8 +1127,8 @@ class TICACalculator(LinearCalculator):
     
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str],  
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str],  
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1106,8 +1143,8 @@ class TICACalculator(LinearCalculator):
         
         super().__init__(
             configuration,
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1153,8 +1190,8 @@ class HTICACalculator(LinearCalculator):
     """
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1168,8 +1205,8 @@ class HTICACalculator(LinearCalculator):
         
         super().__init__(
             configuration,
-            training_colvars_paths,  
-            topology_paths, 
+            train_colvars_paths,  
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1267,8 +1304,8 @@ class AECalculator(NonLinear):
     """
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str],  
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str],  
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1284,8 +1321,8 @@ class AECalculator(NonLinear):
         
         super().__init__(
             configuration,
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths,
@@ -1313,8 +1350,8 @@ class DeepTICACalculator(NonLinear):
     """
     def __init__(self,  
         configuration: Dict, 
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1329,8 +1366,8 @@ class DeepTICACalculator(NonLinear):
         
         super().__init__(
             configuration,
-            training_colvars_paths,
-            topology_paths, 
+            train_colvars_paths,
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
