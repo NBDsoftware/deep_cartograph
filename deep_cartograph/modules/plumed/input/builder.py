@@ -42,6 +42,30 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
     Builder to create an input file that computes a collective variable during an MD simulation or trajectory.
     """
     def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict):
+        """
+        Class that builds a PLUMED input file to compute a collective variable.
+        
+        Parameters
+        ----------
+        
+            input_path (str):
+                Path to the PLUMED input file. The file that will be written.
+                
+            topology_path (str):
+                Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
+                
+            feature_list (list):
+                List of features to be tracked. Make sure the features are defined for this topoogy.
+            
+            traj_stride (int):
+                Stride to use when computing the features from a trajectory or MD simulation.
+                
+            cv_type (str):
+                Type of collective variable to compute. Can be 'linear' or 'non-linear'.
+                
+            cv_params (dict):
+                Parameters for the collective variable. The parameters depend on the CV type.
+        """
         return super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params)
     
     def build(self, colvars_path: str):

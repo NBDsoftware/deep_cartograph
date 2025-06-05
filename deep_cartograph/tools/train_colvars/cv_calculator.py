@@ -3,7 +3,6 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from scipy.sparse import block_diag
 from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
@@ -22,8 +21,8 @@ class CVCalculator:
     """
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str],
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str],
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -39,10 +38,10 @@ class CVCalculator:
         configuration
             Configuration dictionary with settings for the CV
             
-        training_colvars_paths 
+        train_colvars_paths 
             List of paths to colvars files with the main data used for training
                 
-        topology_paths (Optional)
+        train_topology_paths (Optional)
             List of paths to topology files corresponding to the training colvars files (same order)
         
         ref_topology_path (Optional)
@@ -74,11 +73,11 @@ class CVCalculator:
         self.feats_norm_mode: Literal['mean_std', 'min_max', 'none'] = configuration['features_normalization']
         
         # Colvars paths
-        self.training_colvars_paths: List[str] = training_colvars_paths
+        self.train_colvars_paths: List[str] = train_colvars_paths
         self.sup_colvars_paths: Optional[List[str]] = sup_colvars_paths
         
         # Topologies
-        self.topologies: Optional[List[str]] = topology_paths     # NOTE: Should these be attributes?
+        self.topologies: Optional[List[str]] = train_topology_paths     # NOTE: Should these be attributes?
         self.ref_topology_path: Optional[str] = ref_topology_path
         if self.topologies is not None:
             if self.ref_topology_path is None:
@@ -87,7 +86,7 @@ class CVCalculator:
         # Filtered training data used to train / compute the CVs
         logger.info('Reading training data from colvars files...')
         reading_args = {
-            'colvars_paths': training_colvars_paths,
+            'colvars_paths': train_colvars_paths,
             'topology_paths': self.topologies,
             'ref_topology_path': self.ref_topology_path,
             'load_args': self.training_reading_settings}
@@ -99,11 +98,6 @@ class CVCalculator:
         
         # Number of samples used to train / compute the CV - depends on the specific CV calculator
         self.num_training_samples: Union[int, None] = None
-        
-        # List of features used for training (features in the colvars files after filtering) 
-        self.feature_labels: List[str] = self.training_data.columns.tolist()
-        self.num_features: int = len(self.feature_labels)
-        logger.info(f'Number of features: {self.num_features}')
         
         # Read the supplementary data
         if sup_colvars_paths:
@@ -117,18 +111,16 @@ class CVCalculator:
             self.supplementary_data: pd.DataFrame = self.read_data(**reading_args)
             self.supplementary_data_labels: np.array = self.supplementary_data.pop("label").to_numpy()
     
-            # Check if the feature labels are the same as the training data
-            sup_feature_labels = self.supplementary_data.columns.tolist()
-            if len(sup_feature_labels) != self.num_features:
-                logger.error(f"""Number of features in supplementary colvars files ({len(sup_feature_labels)}) is different 
-                             from the number of features in the training dataset ({self.num_features}). Exiting...""")
-                sys.exit(1)
-            if self.feature_labels != sup_feature_labels:
-                logger.error(f"""Feature labels in supplementary colvars files ({sup_feature_labels}) are different 
-                             from the feature labels in the training dataset ({self.feature_labels}). Exiting...""")
-                sys.exit(1)
+            # Make sure we use the same features between training and supplementary data
+            self.training_data, self.supplementary_data = self.align_dataframes(self.training_data, self.supplementary_data)
+            
         else:
             self.supplementary_data: Optional[pd.DataFrame] = None
+            
+        # List of features used for training (features in the colvars files after filtering) 
+        self.feature_labels: List[str] = self.training_data.columns.tolist()
+        self.num_features: int = len(self.feature_labels)
+        logger.info(f'Number of features: {self.num_features}')
         
         # Projected supplementary data
         self.projected_supplementary_data : Optional[pd.DataFrame] = None
@@ -214,6 +206,54 @@ class CVCalculator:
         
         return df
     
+    def align_dataframes(self, training_data: pd.DataFrame, supplementary_data: pd.DataFrame):
+        """
+        Align two pandas DataFrames to have the same columns in the same order, 
+        based on the columns of the first DataFrame.
+
+        This function:
+        - Identifies the common columns between training_data and supplementary_data.
+        - Keeps the column order as in training_data.
+        - Drops any columns not shared by both DataFrames.
+        - Prints a warning if any columns are dropped from either DataFrame.
+
+        Parameters
+        ----------
+            training_data : pd.DataFrame
+                The reference DataFrame whose column order is preserved.
+            supplementary_data : pd.DataFrame
+                The DataFrame to be aligned with training_data.
+
+        Returns
+        -------
+            training_data_aligned : pd.DataFrame
+                A version of training_data with only the common columns.
+            supplementary_data_aligned : pd.DataFrame
+                A version of supplementary_data with columns aligned to training_data's order.
+        """
+        
+        # Get column name sets
+        cols1 = set(training_data.columns)
+        cols2 = set(supplementary_data.columns)
+
+        # Find common columns, preserving order of training_data
+        common_cols = [col for col in training_data.columns if col in cols2]
+
+        # Warn if any columns are discarded
+        dropped_from_training_data = cols1 - cols2
+        dropped_from_supplementary_data = cols2 - cols1
+
+        if dropped_from_training_data:
+            logger.warning(f"Dropping columns from training_data: {sorted(dropped_from_training_data)}")
+        if dropped_from_supplementary_data:
+            logger.warning(f"Dropping columns from supplementary_data: {sorted(dropped_from_supplementary_data)}")
+
+        # Align both DataFrames
+        training_data_aligned = training_data[common_cols]
+        supplementary_data_aligned = supplementary_data[common_cols]
+
+        return training_data_aligned, supplementary_data_aligned
+
     def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
         """
         Create the filter dictionary to select the features to use from the feature constraints.
@@ -296,11 +336,7 @@ class CVCalculator:
                 # Return file labels to the projected supplementary data
                 self.projected_supplementary_data["label"] = self.supplementary_data_labels
             
-            self.save_projected_supplementary_data()
-            
             self.save_cv()
-            
-            self.write_plumed_input()
 
         return self.projected_training_data
         
@@ -318,51 +354,33 @@ class CVCalculator:
         
         raise NotImplementedError
 
+    def get_cv_parameters(self) -> Dict:
+        """
+        Returns the parameters for the CV. Implement in subclasses.
+        """
+        
+        raise NotImplementedError
+    
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the CV. Implement in subclasses.
+        """
+        
+        raise NotImplementedError
+    
     def project_training_data(self):
         """ 
-        Projects the training data onto the CV space and saves the projection to a csv file.
+        Projects the training data onto the CV space.
         Implement in subclasses.
         """
         
     def project_supplementary_data(self):
         """
-        Projects the supplementary data onto the CV space and saves the projection to a csv file. 
+        Projects the supplementary data onto the CV space. 
         Implement in subclasses.
         """
         
         raise NotImplementedError
-    
-    def save_projected_supplementary_data(self):
-        """
-        Saves the projected supplementary data to csv files, if there is any.
-        """
-        
-        supplementary_data_folder = os.path.join(self.output_path, 'supplementary_data')
-        
-        if self.projected_supplementary_data is not None:
-            
-            if not os.path.exists(supplementary_data_folder):
-                os.makedirs(supplementary_data_folder)
-        
-            # Find the names of the supplementary colvars paths
-            sup_colvars_names = [Path(path).stem for path in self.sup_colvars_paths]
-            
-            # For each supplementary colvars
-            for i in range(len(sup_colvars_names)):
-                
-                # Get path to projected data
-                projected_data_path = os.path.join(supplementary_data_folder, f'{sup_colvars_names[i]}.csv')
-                
-                logger.debug(f'Saving supplementary data from {self.sup_colvars_paths[i]} to {projected_data_path}')
-                
-                # Extract the projected data for this colvars file
-                projected_data = self.projected_supplementary_data[self.projected_supplementary_data["label"] == i]
-                
-                # Drop file_label column
-                projected_data = projected_data.drop(columns=["label"])
-                
-                # Save the projected data to a csv file NOTE: We are assuming that the dataframe has the correct labels
-                projected_data.to_csv(projected_data_path, index=False, float_format='%.4f')
           
     def set_labels(self):
         """
@@ -381,13 +399,70 @@ class CVCalculator:
         
         raise NotImplementedError
         
-    def write_plumed_input(self):
-        """ 
-        Create a plumed input file that computes the collective variable from the features. 
-        Implement in subclasses.
+    def write_plumed_input(self, topology: str, output_folder: str) -> None:
         """
+        Creates a plumed input file that computes the collective variable from the features 
+        for the given topology.
         
-        raise NotImplementedError
+        Parameters
+        ----------
+        
+        topology : str
+            Path to the topology file
+            
+        output_folder : str
+            Path to the output folder where the plumed input file and the mda topology will be saved
+        """
+
+        # Save new PLUMED-compliant topology
+        plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
+        md.create_pdb(topology, plumed_topology_path)
+        
+        # Save new temporary reference PLUMED-compliant topology
+        ref_plumed_topology_path = os.path.join(output_folder, 'ref_plumed_topology.pdb')
+        md.create_pdb(self.ref_topology_path, ref_plumed_topology_path)
+        
+        # Translate the features from the reference topology to this topology
+        features_list = plumed.features.FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.feature_labels).run()
+        
+        # Construct builder arguments for these features and this CV
+        builder_args = {
+            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat'),
+            'topology_path': plumed_topology_path,
+            'feature_list': features_list,
+            'traj_stride': 1,
+            'cv_type': self.get_cv_type(),
+            'cv_params': self.get_cv_parameters()
+        }
+        
+        # Build the plumed input file to track the CV
+        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_out.dat')
+        
+        # Save enhanced sampling parameters to parameters dictionary
+        sampling_params = {
+            'sigma': 0.05,
+            'height': 1.0,
+            'biasfactor': 10.0,
+            'temp': 300,
+            'pace': 500,
+            'grid_min': -1,
+            'grid_max': 1,
+            'grid_bin': 300
+        }
+        
+        builder_args.update({
+            'sampling_method': 'wt-metadynamics', 
+            'sampling_params': sampling_params,
+            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}_metad.dat')
+            })
+            
+        # Build the plumed input file to perform enhanced sampling
+        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
+        
+        # Erase the temporary reference topology
+        os.remove(ref_plumed_topology_path)
 
     # Getters
     def get_projected_sup_data(self) -> Union[pd.DataFrame, None]:
@@ -427,8 +502,8 @@ class LinearCalculator(CVCalculator):
     
     def __init__(self, 
         configuration: Dict, 
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None,
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None,
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -440,8 +515,8 @@ class LinearCalculator(CVCalculator):
         """
         super().__init__(
             configuration, 
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -543,6 +618,29 @@ class LinearCalculator(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
+    def get_cv_parameters(self):
+        """ 
+        Get the collective variable parameters.
+        """
+
+        # Save CV data to parameters dictionary
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'features_norm_mode': self.feats_norm_mode,
+            'features_stats': self.features_stats,
+            'cv_stats': self.cv_stats,
+            'weights': self.cv
+        }
+        return cv_parameters
+    
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the collective variable.
+        """
+        
+        return 'linear'
+    
     def project_training_data(self):
         """
         Projects the training data onto the CV space.
@@ -585,61 +683,6 @@ class LinearCalculator(CVCalculator):
         # Save the max/min values of each dimension - part of the final cv definition
         np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
         np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
-    
-    def write_plumed_input(self):
-        """
-        Creates a plumed input file that computes the collective variable from the features.
-        """
-        
-        # Save new PLUMED-compliant topology
-        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
-        md.create_pdb(self.topologies[0], plumed_topology_path)
-        
-        # Save CV data to parameters dictionary
-        cv_parameters = {
-            'cv_name': self.cv_name,
-            'cv_dimension': self.cv_dimension,
-            'features_norm_mode': self.feats_norm_mode,
-            'features_stats': self.features_stats,
-            'cv_stats': self.cv_stats, # NOTE: the builder will assume max-min normalization for the cv
-            'weights': self.cv
-        }
-        
-        # Construct builder arguments
-        builder_args = {
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
-            'topology_path': plumed_topology_path,
-            'feature_list': self.feature_labels,
-            'traj_stride': 1,
-            'cv_type': 'linear',
-            'cv_params': cv_parameters
-        }
-        
-        # Build the plumed input file to track the CV
-        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_out.dat')
-        
-        # Save enhanced sampling parameters to parameters dictionary
-        sampling_params = {
-            'sigma': 0.05,
-            'height': 1.0,
-            'biasfactor': 10.0,
-            'temp': 300,
-            'pace': 500,
-            'grid_min': -1,
-            'grid_max': 1,
-            'grid_bin': 300
-        }
-        
-        builder_args.update({
-            'sampling_method': 'wt-metadynamics', 
-            'sampling_params': sampling_params,
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
-            })
-            
-        # Build the plumed input file to perform enhanced sampling
-        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
 
 # Subclass for non-linear collective variables calculators
 class NonLinear(CVCalculator):
@@ -649,8 +692,8 @@ class NonLinear(CVCalculator):
     
     def __init__(self, 
         configuration: Dict, 
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None,
@@ -668,8 +711,8 @@ class NonLinear(CVCalculator):
                 
         super().__init__(
             configuration,
-            training_colvars_paths,  
-            topology_paths, 
+            train_colvars_paths,  
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -949,6 +992,24 @@ class NonLinear(CVCalculator):
         
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
+    def get_cv_parameters(self):
+        """
+        Get the collective variable parameters.
+        """
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'weights_path': self.weights_path
+        }
+        return cv_parameters
+    
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the collective variable.
+        """
+        
+        return "non-linear"
+    
     def project_supplementary_data(self):
         """
         Projects the supplementary data onto the CV space.
@@ -979,56 +1040,6 @@ class NonLinear(CVCalculator):
             projected_training_array = self.cv(torch.tensor(self.training_data.values)).numpy() 
             
         self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
-    
-    def write_plumed_input(self):
-        """
-        Creates a plumed input file that computes the collective variable from the features.
-        """
-        
-        # Save new PLUMED-compliant topology
-        plumed_topology_path = os.path.join(self.output_path, 'plumed_topology.pdb')
-        md.create_pdb(self.topologies[0], plumed_topology_path)
-        
-        cv_parameters = {
-            'cv_name': self.cv_name,
-            'cv_dimension': self.cv_dimension,
-            'weights_path': self.weights_path
-        }
-        
-        builder_args = {
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}.dat'),
-            'topology_path': plumed_topology_path,
-            'feature_list': self.feature_labels,
-            'traj_stride': 1,
-            'cv_type': 'non-linear',
-            'cv_params': cv_parameters
-        }
-        
-        # Build the plumed input file to track the CV
-        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_out.dat')
-        
-        # Save enhanced sampling parameters to parameters dictionary
-        sampling_params = {
-            'sigma': 0.05,
-            'height': 1.0,
-            'biasfactor': 10.0,
-            'temp': 300,
-            'pace': 500,
-            'grid_min': -1,
-            'grid_max': 1,
-            'grid_bin': 300
-        }
-        
-        builder_args.update({
-            'sampling_method': 'wt-metadynamics',
-            'sampling_params': sampling_params,
-            'input_path': os.path.join(self.output_path, f'plumed_input_{self.cv_name}_metad.dat')
-            })
-        
-        # Build the plumed input file to perform enhanced sampling
-        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
 
 # Collective variables calculators
 class PCACalculator(LinearCalculator):
@@ -1038,8 +1049,8 @@ class PCACalculator(LinearCalculator):
 
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1052,8 +1063,8 @@ class PCACalculator(LinearCalculator):
         
         super().__init__(
             configuration,
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1090,8 +1101,8 @@ class TICACalculator(LinearCalculator):
     
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str],  
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str],  
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1106,8 +1117,8 @@ class TICACalculator(LinearCalculator):
         
         super().__init__(
             configuration,
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1153,8 +1164,8 @@ class HTICACalculator(LinearCalculator):
     """
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1168,8 +1179,8 @@ class HTICACalculator(LinearCalculator):
         
         super().__init__(
             configuration,
-            training_colvars_paths,  
-            topology_paths, 
+            train_colvars_paths,  
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 
@@ -1267,8 +1278,8 @@ class AECalculator(NonLinear):
     """
     def __init__(self, 
         configuration: Dict,
-        training_colvars_paths: List[str],  
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str],  
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1284,8 +1295,8 @@ class AECalculator(NonLinear):
         
         super().__init__(
             configuration,
-            training_colvars_paths, 
-            topology_paths, 
+            train_colvars_paths, 
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths,
@@ -1313,8 +1324,8 @@ class DeepTICACalculator(NonLinear):
     """
     def __init__(self,  
         configuration: Dict, 
-        training_colvars_paths: List[str], 
-        topology_paths: Optional[List[str]] = None, 
+        train_colvars_paths: List[str], 
+        train_topology_paths: Optional[List[str]] = None, 
         ref_topology_path: Optional[str] = None, 
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
@@ -1329,8 +1340,8 @@ class DeepTICACalculator(NonLinear):
         
         super().__init__(
             configuration,
-            training_colvars_paths,
-            topology_paths, 
+            train_colvars_paths,
+            train_topology_paths, 
             ref_topology_path, 
             feature_constraints, 
             sup_colvars_paths, 

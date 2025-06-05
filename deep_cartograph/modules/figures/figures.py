@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, rgb2hex
 
@@ -15,7 +15,7 @@ from deep_cartograph.modules.common import package_is_installed
 # Set logger
 logger = logging.getLogger(__name__)
 
-def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray], None] , X_ref_labels: Union[List[str], None], settings: Dict, output_path: str):
+def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: str, X_ref: Optional[List[np.ndarray]] = None, X_ref_labels: Optional[List[str]] = None):
     """
     Creates a figure of the free energy surface and saves it to a file.
 
@@ -24,10 +24,10 @@ def plot_fes(X: np.ndarray, cv_labels: List[str], X_ref: Union[List[np.ndarray],
 
         X:            data with time series of the variables along which the FES is computed (1D or 2D)
         cv_labels:    labels of the variables along which the FES is computed
-        X_ref:        data with the reference values of the variables along which the FES is computed
-        X_ref_labels: labels of the reference variables
         settings:     dictionary with the settings of the FES plot
         output_path:  path where the outputs are saved
+        X_ref:        data with the reference values of the variables along which the FES is computed
+        X_ref_labels: labels of the reference variables
     """
     
     if not package_is_installed('mlcolvar', 'torch'):

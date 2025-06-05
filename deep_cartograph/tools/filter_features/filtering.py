@@ -117,7 +117,7 @@ class Filter:
             logger.debug(f'There are {len(feature_names)} features in {Path(colvars_path).name}: {feature_names}')
             
             if self.topology_paths:
-                # Translate the feature names to the reference topology
+                # Translate the feature names to the reference topology # NOTE: Here we are assuming that the mda topology is the same as the original one to translate features - won't be true when we start looking at individual atoms
                 ref_feature_names = FeatureTranslator(self.topology_paths[i], self.ref_topology_path, feature_names).run()
                 # Check if any feature didn't have a translation
                 for i in range(len(feature_names)):
