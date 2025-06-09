@@ -707,7 +707,7 @@ class NonLinear(CVCalculator):
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
         
         from mlcolvar.utils.trainer import MetricsCallback
-        from mlcolvar.cvs import AutoEncoderCV, DeepTICA
+        from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
                 
         super().__init__(
             configuration,
@@ -721,11 +721,12 @@ class NonLinear(CVCalculator):
 
         self.nonlinear_cv_map: Dict = {
             'ae': AutoEncoderCV,
-            'deep_tica': DeepTICA
+            'deep_tica': DeepTICA,
+            'vae': VariationalAutoEncoderCV
         }
         
         # Main attributes
-        self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
+        self.cv: Union[AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV, None] = None
         self.checkpoint: Union[ModelCheckpoint, None] = None
         self.metrics: Union[MetricsCallback, None] = None
         self.weights_path: Union[str, None] = None
@@ -749,7 +750,6 @@ class NonLinear(CVCalculator):
         self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
         
         self.best_model_score: Union[float, None] = None
-        self.converged: bool = False
         self.tries: int = 0
         
         self.patience: int = self.early_stopping_config['patience']
@@ -783,8 +783,34 @@ class NonLinear(CVCalculator):
             self.batch_size = closest_power_of_two(self.num_samples*self.training_validation_lengths[0])
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
-            
-    def train(self):
+    
+    def create_model(self):
+        
+        """
+        Implement this method in subclasses to create the non-linear model.
+        
+        Creates the non-linear model based on the configuration. 
+        This is needed because there is no common API for all non-linear models in the mlcolvars library,
+        thus the creation of the model has to be done in each specific CV calculator.
+        
+        Returns
+        -------
+        
+        model : AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
+            Non-linear model object
+        """
+        raise NotImplementedError("This method should be implemented in subclasses.")
+
+    def train(self) -> bool:
+        """
+        Trains the non-linear collective variable using the training data.
+        
+        Returns
+        -------
+        
+        successfully_trained : bool
+            True if the training was successful, False otherwise.
+        """
         
         import torch
         import lightning
@@ -797,8 +823,11 @@ class NonLinear(CVCalculator):
     
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
+        # Training was successful
+        successfully_trained = False
+        
         # Train until model finds a good solution
-        while not self.converged and self.tries < self.max_tries:
+        while not successfully_trained and self.tries < self.max_tries:
             try: 
 
                 self.tries += 1
@@ -817,7 +846,7 @@ class NonLinear(CVCalculator):
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
-                model = self.nonlinear_cv_map[self.cv_name](self.nn_layers, options=self.cv_options)
+                model = self.create_model()
 
                 # Set optimizer name
                 model._optimizer_name = self.opt_name
@@ -842,7 +871,7 @@ class NonLinear(CVCalculator):
                     monitor="valid_loss",                      # Quantity to monitor
                     save_last=False,                           # Save the last checkpoint
                     save_top_k=1,                              # Number of best models to save according to the quantity monitored
-                    save_weights_only=True,                    # Save only the weights
+                    save_weights_only=False,                   # Save only the weights
                     filename=None,                             # Default checkpoint file name '{epoch}-{step}'
                     mode="min",                                # Best model is the one with the minimum monitored quantity
                     every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
@@ -866,8 +895,8 @@ class NonLinear(CVCalculator):
                 validation_loss = self.metrics.metrics['valid_loss']
 
                 # Check the evolution of the loss
-                self.converged = self.model_has_converged(validation_loss)
-                if not self.converged:
+                successfully_trained = self.loss_decreased(validation_loss)
+                if not successfully_trained:
                     logger.warning(f'{cv_names_map[self.cv_name]} has not found a good solution. Re-starting training...')
 
             except Exception as e:
@@ -875,7 +904,7 @@ class NonLinear(CVCalculator):
                 logger.info(f'Retrying {cv_names_map[self.cv_name]} training...')
         
         # Check if the checkpoint exists
-        if self.converged:
+        if successfully_trained:
             
             if os.path.exists(self.checkpoint.best_model_path):
                 # Load the best model
@@ -889,28 +918,22 @@ class NonLinear(CVCalculator):
                 logger.error('The best model checkpoint does not exist.')
         else:
             logger.error(f'{cv_names_map[self.cv_name]} has not converged after {self.max_tries} tries.')
+    
+        return successfully_trained
             
-    def model_has_converged(self, validation_loss: List):
+    def loss_decreased(self, loss: List):
         """
-        Check if there is any problem with the training of the model.
-
-        - Check if the validation loss has decreased by the end of the training.
-        - Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs.
+        Check if the loss has decreased by the end of the training.
 
         Inputs
         ------
 
-            validation_loss:         Validation loss for each epoch.
+            loss:         loss for each epoch.
         """
 
         # Soft convergence condition: Check if the minimum of the validation loss is lower than the initial value
-        if min(validation_loss) > validation_loss[0]:
+        if min(loss) > loss[0]:
             logger.warning('Validation loss has not decreased by the end of the training.')
-            return False
-
-        # Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs
-        if len(validation_loss) < self.patience*self.check_val_every_n_epoch:
-            logger.warning('The trainer did not run for enough epochs.')
             return False
 
         return True
@@ -984,13 +1007,16 @@ class NonLinear(CVCalculator):
         """
 
         # Train the non-linear model
-        self.train()  
+        successfully_trained = self.train()  
         
-        # Save the loss 
-        self.save_loss()
+        # If training was successful
+        if successfully_trained:
+        
+            # Save the loss 
+            self.save_loss()
 
-        # After training, put model in evaluation mode - needed for cv normalization and data projection
-        self.cv.eval()
+            # After training, put model in evaluation mode - needed for cv normalization and data projection
+            self.cv.eval()
         
     def save_cv(self):
         """
@@ -1039,7 +1065,7 @@ class NonLinear(CVCalculator):
             logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
 
             with torch.no_grad():
-                projected_sup_array = self.cv(torch.tensor(self.supplementary_data.values)).numpy()
+                projected_sup_array = self.cv(torch.tensor(self.supplementary_data.values).to(self.cv.device)).numpy()
             
             self.projected_supplementary_data = pd.DataFrame(projected_sup_array, columns=self.cv_labels)
 
@@ -1339,6 +1365,24 @@ class AECalculator(NonLinear):
         self.cv_options.update({"encoder": self.nn_options,
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
+    
+    def create_model(self):
+        """ 
+        Create the Autoencoder model.
+        
+        Returns
+        -------
+        
+        model : AutoEncoderCV
+        """
+        
+        from mlcolvar.cvs import AutoEncoderCV
+        
+        model = AutoEncoderCV(
+            encoder_layers=self.nn_layers, 
+            options=self.cv_options)
+         
+        return model
         
 class DeepTICACalculator(NonLinear):
     """
@@ -1382,7 +1426,26 @@ class DeepTICACalculator(NonLinear):
         # Update options
         self.cv_options.update({"nn": self.nn_options,
                                 "optimizer": self.optimizer_options})
+       
+    def create_model(self):
+        """
+        Create the DeepTICA model.
         
+        Returns
+        -------
+        
+        model : DeepTICA
+            DeepTICA model object.
+        """
+        
+        from mlcolvar.cvs import DeepTICA
+        
+        model = DeepTICA(
+            layers=self.nn_layers,
+            options=self.cv_options)
+        
+        return model
+    
     def save_cv(self):
         """
         Save the eigenvectors and eigenvalues of the best model.
@@ -1414,13 +1477,80 @@ class DeepTICACalculator(NonLinear):
         ax.figure.savefig(os.path.join(self.output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
 
+class VAECalculator(NonLinear):
+    """
+    Variational Autoencoder calculator.
+    """
+    def __init__(self, 
+        configuration: Dict,
+        train_colvars_paths: List[str],  
+        train_topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+    ):
+        """
+        Initializes the Variational Autoencoder calculator.
+        """
+        import torch 
+        
+        from mlcolvar.data import DictDataset
+        
+        super().__init__(
+            configuration,
+            train_colvars_paths, 
+            train_topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths,
+            sup_topology_paths, 
+            output_path)
+        
+        # Create DictDataset
+        dictionary = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
+        
+        self.cv_name = 'vae'
+        
+        self.initialize_cv()
+        
+        self.check_batch_size()
+        
+        # Update options
+        self.cv_options.update({"encoder": self.nn_options,
+                                "decoder": self.nn_options,
+                                "optimizer": self.optimizer_options})
+        
+    def create_model(self):
+        """
+        Create the Variational Autoencoder model.
+        
+        Returns
+        -------
+        
+        model : VariationalAutoEncoderCV
+            Variational Autoencoder model object.
+        """
+        
+        from mlcolvar.cvs import VariationalAutoEncoderCV
+        
+        model = VariationalAutoEncoderCV(
+            n_cvs=self.cv_dimension,
+            encoder_layers=self.nn_layers, 
+            options=self.cv_options)
+         
+        return model
+               
 # Mappings
 cv_calculators_map = {
     'pca': PCACalculator,
     'ae': AECalculator,
     'tica': TICACalculator,
     'htica': HTICACalculator,
-    'deep_tica': DeepTICACalculator
+    'deep_tica': DeepTICACalculator,
+    'vae': VAECalculator
 }
 
 cv_names_map = {
@@ -1428,7 +1558,8 @@ cv_names_map = {
     'ae': 'AE',
     'tica': 'TICA',
     'htica': 'HTICA',
-    'deep_tica': 'DeepTICA'
+    'deep_tica': 'DeepTICA',
+    'vae': 'VAE'
 }
 
 cv_components_map = {
@@ -1436,5 +1567,6 @@ cv_components_map = {
     'ae': 'AE',
     'tica': 'TIC',
     'htica': 'HTIC',
-    'deep_tica': 'DeepTIC'
+    'deep_tica': 'DeepTIC',
+    'vae': 'VAE'
 }
