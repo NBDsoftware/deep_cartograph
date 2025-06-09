@@ -920,17 +920,30 @@ class NonLinear(CVCalculator):
         Saves the loss of the training.
         """
         from mlcolvar.utils.plot import plot_metrics
+        import torch
         
         try:        
+            # Move the best_model_score tensor to the CPU
+            # Check if it's a tensor before calling .cpu()
+            best_model_score_cpu = self.best_model_score
+            if isinstance(self.best_model_score, torch.Tensor):
+                best_model_score_cpu = best_model_score_cpu.cpu().detach()
+            
             # Save the loss if requested
             if self.training_config['save_loss']:
                 np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
                 np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
-                np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
-                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([self.best_model_score]), fmt='%.7g')
+                np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch'])) # Epoch are not tensors
+                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                 
-            # Plot loss
-            ax = plot_metrics(self.metrics.metrics, 
+            # 3. Create a dictionary with CPU-based data for plotting
+            # This ensures the plotting function doesn't receive GPU tensors.
+            metrics_for_plotting = self.metrics.metrics.copy()
+            metrics_for_plotting['train_loss'] = self.metrics.metrics['train_loss']
+            metrics_for_plotting['valid_loss'] = self.metrics.metrics['valid_loss']
+
+            # Plot loss using the CPU-safe metrics dictionary
+            ax = plot_metrics(metrics_for_plotting, 
                                 labels=['Training', 'Validation'], 
                                 keys=['train_loss', 'valid_loss'], 
                                 linestyles=['-','-'], colors=['fessa1','fessa5'], 
@@ -941,7 +954,8 @@ class NonLinear(CVCalculator):
             ax.figure.clf()
 
         except Exception as e:
-            logger.error(f'Failed to save/plot the loss. Error message: {e}')
+            import traceback
+            logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
 
     def normalize_cv(self):
         
@@ -950,11 +964,13 @@ class NonLinear(CVCalculator):
         from mlcolvar.core.transform import Normalization
         from mlcolvar.core.transform.utils import Statistics
         
-        # Data projected onto original latent space of the best model - feature normalization included in the model
+        # Data projected onto original latent space of the best model
+        # The feature normalization is included in the model
+        # We move the data to the device of the model (GPU or CPU) manually
         with torch.no_grad():
             self.cv.postprocessing = None
-            projected_training_data = self.cv(self.training_input_dtset[:]['data'])
-
+            projected_training_data = self.cv(self.training_input_dtset[:]['data'].to(self.cv.device))
+        
         # Compute statistics of the projected training data
         stats = Statistics(projected_training_data)
         
@@ -1037,7 +1053,13 @@ class NonLinear(CVCalculator):
         
         # Project the training data onto the CV space
         with torch.no_grad():
-            projected_training_array = self.cv(torch.tensor(self.training_data.values)).numpy() 
+            # Move data to the device of the model (GPU or CPU)
+            training_data_on_model_device = torch.tensor(self.training_data.values).to(self.cv.device)
+            # Project the training data onto the CV space
+            projected_training_tensor = self.cv(training_data_on_model_device)
+            
+        # Move to CPU and convert to numpy array
+        projected_training_array = projected_training_tensor.cpu().numpy()
             
         self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
 

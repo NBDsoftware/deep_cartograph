@@ -47,6 +47,8 @@ cd deep_cartograph
 pip install .
 ```
 
+If you want to use GPU support be sure to install the environment in the machine that has an available GPU. In a cluster for example you can connect with an interactive session to the computation node and perform the installation there. In this way conda will install the necessary dependencies to have gpu support. 
+
 ## Usage
 
 The main workflow can be used calling `deep_carto` within the environment:
