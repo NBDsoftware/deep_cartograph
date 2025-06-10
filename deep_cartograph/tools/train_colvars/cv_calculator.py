@@ -1066,23 +1066,38 @@ class NonLinear(CVCalculator):
 
             # After training, put model in evaluation mode - needed for cv normalization and data projection
             self.cv.eval()
-        
+
     def save_cv(self):
         """
-        Saves the collective variable non-linear weights to a pytorch script file.
+        Saves the collective variable model to a PyTorch TorchScript file.
         """
-        
+
         # Path to output model
-        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.pt')
-        
+        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_model.pt')
+
         if self.cv is None:
-            logger.error('No collective variable to save.')
+            logger.error('No collective variable model to save.')
             return
 
-        self.cv.to_torchscript(file_path = self.weights_path, method='trace') # NOTE: check if this also saves the normalization layer
-        
-        logger.info(f'Collective variable weights saved to {self.weights_path}')
-
+        successfully_saved = False
+        try:
+            # The model is set to evaluation mode before tracing
+            self.cv.eval() 
+            self.cv.to_torchscript(file_path=self.weights_path, method='trace')
+            logger.info(f'Collective variable model saved to {self.weights_path}')
+            successfully_saved = True
+        except Exception as e:
+            logger.error(f'Failed to save TorchScript model using trace mode. Error: {e}')
+            
+        if not successfully_saved:
+            logger.info('Attempting to save the model using script mode instead of trace...')
+            try:
+                # Attempt to save the model using script mode
+                self.cv.to_torchscript(file_path=self.weights_path, method='script')
+                logger.info(f'Collective variable model saved to {self.weights_path} using script mode')
+            except Exception as e:
+                logger.error(f'Failed to save TorchScript model using script mode. Error: {e}')
+                
     def get_cv_parameters(self):
         """
         Get the collective variable parameters.
