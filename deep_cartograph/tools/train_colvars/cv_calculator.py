@@ -28,7 +28,7 @@ class CVCalculator:
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Optional[str] = None
-    ):
+        ):
         """
         Initializes the base CV calculator.
         
@@ -509,7 +509,7 @@ class LinearCalculator(CVCalculator):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """ 
         Initializes a linear CV calculator.
         """
@@ -699,7 +699,7 @@ class NonLinear(CVCalculator):
         sup_colvars_paths: Optional[List[str]] = None,
         sup_topology_paths: Optional[List[str]] = None, 
         output_path: Union[str, None] = None
-    ):
+        ):
         """ 
         Initializes a non-linear CV calculator.
         """
@@ -707,7 +707,7 @@ class NonLinear(CVCalculator):
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
         
         from mlcolvar.utils.trainer import MetricsCallback
-        from mlcolvar.cvs import AutoEncoderCV, DeepTICA
+        from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
                 
         super().__init__(
             configuration,
@@ -721,11 +721,12 @@ class NonLinear(CVCalculator):
 
         self.nonlinear_cv_map: Dict = {
             'ae': AutoEncoderCV,
-            'deep_tica': DeepTICA
+            'deep_tica': DeepTICA,
+            'vae': VariationalAutoEncoderCV
         }
         
         # Main attributes
-        self.cv: Union[AutoEncoderCV, DeepTICA, None] = None
+        self.cv: Union[AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV, None] = None
         self.checkpoint: Union[ModelCheckpoint, None] = None
         self.metrics: Union[MetricsCallback, None] = None
         self.weights_path: Union[str, None] = None
@@ -749,7 +750,6 @@ class NonLinear(CVCalculator):
         self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
         
         self.best_model_score: Union[float, None] = None
-        self.converged: bool = False
         self.tries: int = 0
         
         self.patience: int = self.early_stopping_config['patience']
@@ -758,9 +758,9 @@ class NonLinear(CVCalculator):
         self.hidden_layers: List = self.architecture_config['hidden_layers']
         
         # Neural network settings
-        self.nn_layers: List = [self.num_features] + self.hidden_layers + [self.cv_dimension]
-        self.nn_options: Dict = {'activation': 'shifted_softplus', 'dropout': self.dropout} 
-        
+        self.nn_layers: List = self.set_layers()
+        self.nn_options: Dict = self.set_options()
+
         # Normalization of features in the Non-linear models: min_max or mean_std
         if self.feats_norm_mode == 'min_max':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
@@ -783,22 +783,121 @@ class NonLinear(CVCalculator):
             self.batch_size = closest_power_of_two(self.num_samples*self.training_validation_lengths[0])
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
+    
+    def set_layers() -> List:
+        """ 
+        Set the layers for the non-linear model.
+        Implement in subclasses.
+        
+        self.nn_layers: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
+            input_dim: number of features
+            hidden_layer_i: number of neurons in the i-th hidden layer
+            output_dim: dimension of the collective variable
             
-    def train(self):
+        Returns
+        -------
+        
+        nn_layers : List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        raise NotImplementedError("This method should be implemented in subclasses.")
+        
+    def set_options(self) -> Dict:
+        """ 
+        Set the options for the non-linear model.
+        Implement in subclasses.
+        
+        self.nn_options: {'activation': 'shifted_softplus', 'dropout': self.dropout} 
+            activation
+            dropout
+            batchnorm
+            last_layer_activation
+            torch.nn.Module args
+
+        Returns
+        -------
+        
+        nn_options : Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        raise NotImplementedError("This method should be implemented in subclasses.")
+        
+    def create_model(self):
+        
+        """
+        Implement this method in subclasses to create the non-linear model.
+        
+        Creates the non-linear model based on the configuration. 
+        This is needed because there is no common API for all non-linear models in the mlcolvars library,
+        thus the creation of the model has to be done in each specific CV calculator.
+        
+        Returns
+        -------
+        
+        model : AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
+            Non-linear model object
+        """
+        raise NotImplementedError("This method should be implemented in subclasses.")
+
+    def get_callbacks(self) -> List:
+        """ 
+        Get the callbacks for the training of the Nonlinear model.
+        """
+        
+        from mlcolvar.utils.trainer import MetricsCallback
+        
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+        
+        # Define MetricsCallback to store the loss
+        self.metrics = MetricsCallback()
+
+        # Define EarlyStopping callback to stop training
+        self.early_stopping = EarlyStopping(
+            monitor="valid_loss", 
+            min_delta=self.min_delta, 
+            patience=self.patience, 
+            mode = "min")
+
+        # Define ModelCheckpoint callback to save the best model
+        self.checkpoint = ModelCheckpoint(
+            dirpath=self.output_path,
+            monitor="valid_loss",                      # Quantity to monitor
+            save_last=False,                           # Save the last checkpoint
+            save_top_k=1,                              # Number of best models to save according to the quantity monitored
+            save_weights_only=False,                   # Save only the weights
+            filename=None,                             # Default checkpoint file name '{epoch}-{step}'
+            mode="min",                                # Best model is the one with the minimum monitored quantity
+            every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
+                
+        return [self.metrics, self.early_stopping, self.checkpoint]
+    
+    def train(self) -> bool:
+        """
+        Trains the non-linear collective variable using the training data.
+        
+        Returns
+        -------
+        
+        successfully_trained : bool
+            True if the training was successful, False otherwise.
+        """
         
         import torch
         import lightning
         
         from mlcolvar.data import DictModule
-        from mlcolvar.utils.trainer import MetricsCallback
-        
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
     
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
+        # Training was successful
+        successfully_trained = False
+        
         # Train until model finds a good solution
-        while not self.converged and self.tries < self.max_tries:
+        while not successfully_trained and self.tries < self.max_tries:
             try: 
 
                 self.tries += 1
@@ -817,7 +916,7 @@ class NonLinear(CVCalculator):
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
-                model = self.nonlinear_cv_map[self.cv_name](self.nn_layers, options=self.cv_options)
+                model = self.create_model()
 
                 # Set optimizer name
                 model._optimizer_name = self.opt_name
@@ -825,33 +924,12 @@ class NonLinear(CVCalculator):
                 logger.info(f"Model architecture: {model}")
                 
                 logger.debug(f'Initializing metrics and callbacks...')
-
-                # Define MetricsCallback to store the loss
-                self.metrics = MetricsCallback()
-
-                # Define EarlyStopping callback to stop training
-                early_stopping = EarlyStopping(
-                    monitor="valid_loss", 
-                    min_delta=self.min_delta, 
-                    patience=self.patience, 
-                    mode = "min")
-
-                # Define ModelCheckpoint callback to save the best model
-                self.checkpoint = ModelCheckpoint(
-                    dirpath=self.output_path,
-                    monitor="valid_loss",                      # Quantity to monitor
-                    save_last=False,                           # Save the last checkpoint
-                    save_top_k=1,                              # Number of best models to save according to the quantity monitored
-                    save_weights_only=True,                    # Save only the weights
-                    filename=None,                             # Default checkpoint file name '{epoch}-{step}'
-                    mode="min",                                # Best model is the one with the minimum monitored quantity
-                    every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
                 
                 logger.debug(f'Initializing Trainer...')
 
                 # Define trainer
                 trainer = lightning.Trainer(          
-                    callbacks=[self.metrics, early_stopping, self.checkpoint],
+                    callbacks=self.get_callbacks(),
                     max_epochs=self.max_epochs, 
                     logger=False, 
                     enable_checkpointing=True,
@@ -866,8 +944,8 @@ class NonLinear(CVCalculator):
                 validation_loss = self.metrics.metrics['valid_loss']
 
                 # Check the evolution of the loss
-                self.converged = self.model_has_converged(validation_loss)
-                if not self.converged:
+                successfully_trained = self.loss_decreased(validation_loss)
+                if not successfully_trained:
                     logger.warning(f'{cv_names_map[self.cv_name]} has not found a good solution. Re-starting training...')
 
             except Exception as e:
@@ -875,7 +953,7 @@ class NonLinear(CVCalculator):
                 logger.info(f'Retrying {cv_names_map[self.cv_name]} training...')
         
         # Check if the checkpoint exists
-        if self.converged:
+        if successfully_trained:
             
             if os.path.exists(self.checkpoint.best_model_path):
                 # Load the best model
@@ -889,28 +967,22 @@ class NonLinear(CVCalculator):
                 logger.error('The best model checkpoint does not exist.')
         else:
             logger.error(f'{cv_names_map[self.cv_name]} has not converged after {self.max_tries} tries.')
+    
+        return successfully_trained
             
-    def model_has_converged(self, validation_loss: List):
+    def loss_decreased(self, loss: List):
         """
-        Check if there is any problem with the training of the model.
-
-        - Check if the validation loss has decreased by the end of the training.
-        - Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs.
+        Check if the loss has decreased by the end of the training.
 
         Inputs
         ------
 
-            validation_loss:         Validation loss for each epoch.
+            loss:         loss for each epoch.
         """
 
         # Soft convergence condition: Check if the minimum of the validation loss is lower than the initial value
-        if min(validation_loss) > validation_loss[0]:
+        if min(loss) > loss[0]:
             logger.warning('Validation loss has not decreased by the end of the training.')
-            return False
-
-        # Check if we have at least 'patience' x 'check_val_every_n_epoch' epochs
-        if len(validation_loss) < self.patience*self.check_val_every_n_epoch:
-            logger.warning('The trainer did not run for enough epochs.')
             return False
 
         return True
@@ -920,17 +992,30 @@ class NonLinear(CVCalculator):
         Saves the loss of the training.
         """
         from mlcolvar.utils.plot import plot_metrics
+        import torch
         
         try:        
+            # Move the best_model_score tensor to the CPU
+            # Check if it's a tensor before calling .cpu()
+            best_model_score_cpu = self.best_model_score
+            if isinstance(self.best_model_score, torch.Tensor):
+                best_model_score_cpu = best_model_score_cpu.cpu().detach()
+            
             # Save the loss if requested
             if self.training_config['save_loss']:
                 np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
                 np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
                 np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
-                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([self.best_model_score]), fmt='%.7g')
+                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                 
-            # Plot loss
-            ax = plot_metrics(self.metrics.metrics, 
+            # 3. Create a dictionary with CPU-based data for plotting
+            # This ensures the plotting function doesn't receive GPU tensors.
+            metrics_for_plotting = self.metrics.metrics.copy()
+            metrics_for_plotting['train_loss'] = self.metrics.metrics['train_loss']
+            metrics_for_plotting['valid_loss'] = self.metrics.metrics['valid_loss']
+
+            # Plot loss using the CPU-safe metrics dictionary
+            ax = plot_metrics(metrics_for_plotting, 
                                 labels=['Training', 'Validation'], 
                                 keys=['train_loss', 'valid_loss'], 
                                 linestyles=['-','-'], colors=['fessa1','fessa5'], 
@@ -941,7 +1026,8 @@ class NonLinear(CVCalculator):
             ax.figure.clf()
 
         except Exception as e:
-            logger.error(f'Failed to save/plot the loss. Error message: {e}')
+            import traceback
+            logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
 
     def normalize_cv(self):
         
@@ -950,11 +1036,13 @@ class NonLinear(CVCalculator):
         from mlcolvar.core.transform import Normalization
         from mlcolvar.core.transform.utils import Statistics
         
-        # Data projected onto original latent space of the best model - feature normalization included in the model
+        # Data projected onto original latent space of the best model
+        # The feature normalization is included in the model
+        # We move the data to the device of the model (GPU or CPU) manually
         with torch.no_grad():
             self.cv.postprocessing = None
-            projected_training_data = self.cv(self.training_input_dtset[:]['data'])
-
+            projected_training_data = self.cv(self.training_input_dtset[:]['data'].to(self.cv.device))
+        
         # Compute statistics of the projected training data
         stats = Statistics(projected_training_data)
         
@@ -968,30 +1056,48 @@ class NonLinear(CVCalculator):
         """
 
         # Train the non-linear model
-        self.train()  
+        successfully_trained = self.train()  
         
-        # Save the loss 
-        self.save_loss()
+        # If training was successful
+        if successfully_trained:
+        
+            # Save the loss 
+            self.save_loss()
 
-        # After training, put model in evaluation mode - needed for cv normalization and data projection
-        self.cv.eval()
-        
+            # After training, put model in evaluation mode - needed for cv normalization and data projection
+            self.cv.eval()
+
     def save_cv(self):
         """
-        Saves the collective variable non-linear weights to a pytorch script file.
+        Saves the collective variable model to a PyTorch TorchScript file.
         """
-        
+
         # Path to output model
-        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.pt')
-        
+        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_model.pt')
+
         if self.cv is None:
-            logger.error('No collective variable to save.')
+            logger.error('No collective variable model to save.')
             return
 
-        self.cv.to_torchscript(file_path = self.weights_path, method='trace') # NOTE: check if this also saves the normalization layer
-        
-        logger.info(f'Collective variable weights saved to {self.weights_path}')
-
+        successfully_saved = False
+        try:
+            # The model is set to evaluation mode before tracing
+            self.cv.eval() 
+            self.cv.to_torchscript(file_path=self.weights_path, method='trace')
+            logger.info(f'Collective variable model saved to {self.weights_path}')
+            successfully_saved = True
+        except Exception as e:
+            logger.error(f'Failed to save TorchScript model using trace mode. Error: {e}')
+            
+        if not successfully_saved:
+            logger.info('Attempting to save the model using script mode instead of trace...')
+            try:
+                # Attempt to save the model using script mode
+                self.cv.to_torchscript(file_path=self.weights_path, method='script')
+                logger.info(f'Collective variable model saved to {self.weights_path} using script mode')
+            except Exception as e:
+                logger.error(f'Failed to save TorchScript model using script mode. Error: {e}')
+                
     def get_cv_parameters(self):
         """
         Get the collective variable parameters.
@@ -1023,7 +1129,7 @@ class NonLinear(CVCalculator):
             logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
 
             with torch.no_grad():
-                projected_sup_array = self.cv(torch.tensor(self.supplementary_data.values)).numpy()
+                projected_sup_array = self.cv(torch.tensor(self.supplementary_data.values).to(self.cv.device)).numpy()
             
             self.projected_supplementary_data = pd.DataFrame(projected_sup_array, columns=self.cv_labels)
 
@@ -1037,7 +1143,13 @@ class NonLinear(CVCalculator):
         
         # Project the training data onto the CV space
         with torch.no_grad():
-            projected_training_array = self.cv(torch.tensor(self.training_data.values)).numpy() 
+            # Move data to the device of the model (GPU or CPU)
+            training_data_on_model_device = torch.tensor(self.training_data.values).to(self.cv.device)
+            # Project the training data onto the CV space
+            projected_training_tensor = self.cv(training_data_on_model_device)
+            
+        # Move to CPU and convert to numpy array
+        projected_training_array = projected_training_tensor.cpu().numpy()
             
         self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
 
@@ -1056,7 +1168,7 @@ class PCACalculator(LinearCalculator):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the PCA calculator.
         """
@@ -1108,7 +1220,7 @@ class TICACalculator(LinearCalculator):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the TICA calculator.
         """
@@ -1170,7 +1282,8 @@ class HTICACalculator(LinearCalculator):
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None):
+        output_path: Union[str, None] = None
+        ):
         """
         Initializes the HTICA calculator.
         """
@@ -1285,7 +1398,7 @@ class AECalculator(NonLinear):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the Autoencoder calculator.
         """
@@ -1317,6 +1430,57 @@ class AECalculator(NonLinear):
         self.cv_options.update({"encoder": self.nn_options,
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
+    
+    def set_layers(self) -> List:
+        """ 
+        Set the layers for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_layers: List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        return [self.num_features] + self.hidden_layers + [self.cv_dimension]
+    
+    def set_options(self):
+        """ 
+        Set options for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_options: Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        
+        nn_options = {
+            'activation': 'shifted_softplus', 
+            'dropout': self.dropout
+            } 
+        
+        return nn_options
+        
+    def create_model(self):
+        """ 
+        Create the Autoencoder model.
+        
+        Returns
+        -------
+        
+        model : AutoEncoderCV
+        """
+        
+        from mlcolvar.cvs import AutoEncoderCV
+        
+        model = AutoEncoderCV(
+            encoder_layers=self.nn_layers, 
+            options=self.cv_options)
+         
+        return model
         
 class DeepTICACalculator(NonLinear):
     """
@@ -1331,7 +1495,7 @@ class DeepTICACalculator(NonLinear):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the DeepTICA calculator.
         """      
@@ -1360,7 +1524,59 @@ class DeepTICACalculator(NonLinear):
         # Update options
         self.cv_options.update({"nn": self.nn_options,
                                 "optimizer": self.optimizer_options})
+
+    def set_layers(self) -> List:
+        """ 
+        Set the layers for DeepTICA
         
+        Return
+        ------
+        
+        nn_layers: List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        return [self.num_features] + self.hidden_layers + [self.cv_dimension]
+    
+    def set_options(self):
+        """ 
+        Set options for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_options: Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        
+        nn_options = {
+            'activation': 'shifted_softplus', 
+            'dropout': self.dropout
+            } 
+        
+        return nn_options
+    
+    def create_model(self):
+        """
+        Create the DeepTICA model.
+        
+        Returns
+        -------
+        
+        model : DeepTICA
+            DeepTICA model object.
+        """
+        
+        from mlcolvar.cvs import DeepTICA
+        
+        model = DeepTICA(
+            layers=self.nn_layers,
+            options=self.cv_options)
+        
+        return model
+    
     def save_cv(self):
         """
         Save the eigenvectors and eigenvalues of the best model.
@@ -1392,13 +1608,185 @@ class DeepTICACalculator(NonLinear):
         ax.figure.savefig(os.path.join(self.output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
 
+class VAECalculator(NonLinear):
+    """
+    Variational Autoencoder calculator.
+    """
+    def __init__(self, 
+        configuration: Dict,
+        train_colvars_paths: List[str],  
+        train_topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        feature_constraints: Union[List[str], str, None] = None, 
+        sup_colvars_paths: Optional[List[str]] = None, 
+        sup_topology_paths: Optional[List[str]] = None,
+        output_path: Union[str, None] = None
+        ):
+        """
+        Initializes the Variational Autoencoder calculator.
+        """
+        import torch 
+        
+        from mlcolvar.data import DictDataset
+        
+        super().__init__(
+            configuration,
+            train_colvars_paths, 
+            train_topology_paths, 
+            ref_topology_path, 
+            feature_constraints, 
+            sup_colvars_paths,
+            sup_topology_paths, 
+            output_path)
+        
+        # Create DictDataset
+        dictionary = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
+        
+        self.cv_name = 'vae'
+        
+        self.initialize_cv()
+        
+        self.check_batch_size()
+        
+        # Update options
+        self.cv_options.update({"encoder": self.nn_options,
+                                "decoder": self.nn_options,
+                                "optimizer": self.optimizer_options})
+
+    def set_layers(self) -> List:
+        """ 
+        Set the layers for the VAE
+        
+        Return
+        ------
+        
+        nn_layers: List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        return [self.num_features] + self.hidden_layers
+    
+    def set_options(self):
+        """ 
+        Set options for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_options: Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        
+        nn_options = {
+            'activation': 'leaky_relu', 
+            'dropout': self.dropout
+            } 
+        
+        return nn_options
+   
+    def create_model(self):
+        """
+        Create the Variational Autoencoder model.
+        
+        Returns
+        -------
+        
+        model : VariationalAutoEncoderCV
+            Variational Autoencoder model object.
+        """
+        
+        from mlcolvar.cvs import VariationalAutoEncoderCV
+        
+        model = VariationalAutoEncoderCV(
+            n_cvs=self.cv_dimension,
+            encoder_layers=self.nn_layers, 
+            decoder_layers=[self.num_features],
+            options=self.cv_options)
+         
+        return model
+        
+    def get_callbacks(self) -> List:
+        """ 
+        Get the callbacks for the VAE training.
+        
+        Uses the parent class method to get the callbacks and adds the VAE-specific callbacks.
+        
+        Returns
+        -------
+        
+        callbacks: List
+            List of callbacks for the VAE training.
+        """
+        import deep_cartograph.modules.ml as ml
+        
+        general_callbacks = super().get_callbacks()
+        
+        return general_callbacks + [ml.KLAAnnealing(max_beta=0.01, start_epoch=500, n_epochs_anneal=2000)]
+    
+    def save_loss(self): 
+        """ 
+        Saves the loss of the training. Adds saving of VAE-specific metrics such as KL divergence.
+        """      
+        super().save_loss()
+        
+        from mlcolvar.utils.plot import plot_metrics
+        import torch
+        
+        try:
+            # Save the KL and reconstruction losses if requested
+            if self.training_config['save_loss']:
+                np.save(os.path.join(self.output_path, 'kl_divergence.npy'), np.array(self.metrics.metrics['train_kl_loss']))
+                np.save(os.path.join(self.output_path, 'valid_kl_divergence.npy'), np.array(self.metrics.metrics['valid_kl_loss']))
+                np.save(os.path.join(self.output_path, 'reconstruction_loss.npy'), np.array(self.metrics.metrics['train_reconstruction_loss']))
+                np.save(os.path.join(self.output_path, 'valid_reconstruction_loss.npy'), np.array(self.metrics.metrics['valid_reconstruction_loss']))
+                np.save(os.path.join(self.output_path, 'beta.npy'), np.array(self.metrics.metrics['beta']))
+
+            # Create a dictionary with CPU-based data for plotting
+            # This ensures the plotting function doesn't receive GPU tensors.
+            metrics_for_plotting = self.metrics.metrics.copy()
+            metrics_for_plotting['train_kl_loss'] = self.metrics.metrics['train_kl_loss']
+            metrics_for_plotting['valid_kl_loss'] = self.metrics.metrics['valid_kl_loss']
+            metrics_for_plotting['train_reconstruction_loss'] = self.metrics.metrics['train_reconstruction_loss']
+            metrics_for_plotting['valid_reconstruction_loss'] = self.metrics.metrics['valid_reconstruction_loss']
+            
+            # Plot loss using the CPU-safe metrics dictionary # NOTE: are we assuming that we have one sample per epoch?
+            ax = plot_metrics(metrics_for_plotting, 
+                                labels=['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'], 
+                                keys=['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'], 
+                                linestyles=['-','-','-','-'], colors=['fessa1','fessa5','fessa2','fessa6'], 
+                                yscale='log')
+            # Save figure
+            ax.figure.savefig(os.path.join(self.output_path, f'vae_loss.png'), dpi=300, bbox_inches='tight')
+            ax.figure.clf()
+            
+            metrics_for_plotting['beta'] = self.metrics.metrics['beta']
+            
+            # Plot beta
+            ax = plot_metrics(metrics_for_plotting, 
+                                labels=['Beta'], 
+                                keys=['beta'], 
+                                linestyles=['-'], colors=['fessa3'], 
+                                yscale='linear')
+            
+            # Save figure
+            ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
+            ax.figure.clf()
+            
+        except Exception as e:
+            import traceback
+            logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
+            
 # Mappings
 cv_calculators_map = {
     'pca': PCACalculator,
     'ae': AECalculator,
     'tica': TICACalculator,
     'htica': HTICACalculator,
-    'deep_tica': DeepTICACalculator
+    'deep_tica': DeepTICACalculator,
+    'vae': VAECalculator
 }
 
 cv_names_map = {
@@ -1406,7 +1794,8 @@ cv_names_map = {
     'ae': 'AE',
     'tica': 'TICA',
     'htica': 'HTICA',
-    'deep_tica': 'DeepTICA'
+    'deep_tica': 'DeepTICA',
+    'vae': 'VAE'
 }
 
 cv_components_map = {
@@ -1414,5 +1803,6 @@ cv_components_map = {
     'ae': 'AE',
     'tica': 'TIC',
     'htica': 'HTIC',
-    'deep_tica': 'DeepTIC'
+    'deep_tica': 'DeepTIC',
+    'vae': 'VAE'
 }
