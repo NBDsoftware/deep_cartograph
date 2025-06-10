@@ -1724,6 +1724,60 @@ class VAECalculator(NonLinear):
         general_callbacks = super().get_callbacks()
         
         return general_callbacks + [ml.KLAAnnealing(max_beta=0.01, start_epoch=500, n_epochs_anneal=2000)]
+    
+    def save_loss(self): 
+        """ 
+        Saves the loss of the training. Adds saving of VAE-specific metrics such as KL divergence.
+        """      
+        super().save_loss()
+        
+        from mlcolvar.utils.plot import plot_metrics
+        import torch
+        
+        try:
+            # Save the KL and reconstruction losses if requested
+            if self.training_config['save_loss']:
+                np.save(os.path.join(self.output_path, 'kl_divergence.npy'), np.array(self.metrics.metrics['train_kl_loss']))
+                np.save(os.path.join(self.output_path, 'valid_kl_divergence.npy'), np.array(self.metrics.metrics['valid_kl_loss']))
+                np.save(os.path.join(self.output_path, 'reconstruction_loss.npy'), np.array(self.metrics.metrics['train_reconstruction_loss']))
+                np.save(os.path.join(self.output_path, 'valid_reconstruction_loss.npy'), np.array(self.metrics.metrics['valid_reconstruction_loss']))
+                np.save(os.path.join(self.output_path, 'beta.npy'), np.array(self.metrics.metrics['beta']))
+
+            # Create a dictionary with CPU-based data for plotting
+            # This ensures the plotting function doesn't receive GPU tensors.
+            metrics_for_plotting = self.metrics.metrics.copy()
+            metrics_for_plotting['train_kl_loss'] = self.metrics.metrics['train_kl_loss']
+            metrics_for_plotting['valid_kl_loss'] = self.metrics.metrics['valid_kl_loss']
+            metrics_for_plotting['train_reconstruction_loss'] = self.metrics.metrics['train_reconstruction_loss']
+            metrics_for_plotting['valid_reconstruction_loss'] = self.metrics.metrics['valid_reconstruction_loss']
+            
+            # Plot loss using the CPU-safe metrics dictionary # NOTE: are we assuming that we have one sample per epoch?
+            ax = plot_metrics(metrics_for_plotting, 
+                                labels=['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'], 
+                                keys=['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'], 
+                                linestyles=['-','-','-','-'], colors=['fessa1','fessa5','fessa2','fessa6'], 
+                                yscale='log')
+            # Save figure
+            ax.figure.savefig(os.path.join(self.output_path, f'vae_loss.png'), dpi=300, bbox_inches='tight')
+            ax.figure.clf()
+            
+            metrics_for_plotting['beta'] = self.metrics.metrics['beta']
+            
+            # Plot beta
+            ax = plot_metrics(metrics_for_plotting, 
+                                labels=['Beta'], 
+                                keys=['beta'], 
+                                linestyles=['-'], colors=['fessa3'], 
+                                yscale='linear')
+            
+            # Save figure
+            ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
+            ax.figure.clf()
+            
+        except Exception as e:
+            import traceback
+            logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
+            
 # Mappings
 cv_calculators_map = {
     'pca': PCACalculator,
