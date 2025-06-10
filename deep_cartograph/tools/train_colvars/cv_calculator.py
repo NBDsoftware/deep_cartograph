@@ -758,9 +758,9 @@ class NonLinear(CVCalculator):
         self.hidden_layers: List = self.architecture_config['hidden_layers']
         
         # Neural network settings
-        self.nn_layers: List = [self.num_features] + self.hidden_layers + [self.cv_dimension]
-        self.nn_options: Dict = {'activation': 'shifted_softplus', 'dropout': self.dropout} 
-        
+        self.nn_layers: List = self.set_layers()
+        self.nn_options: Dict = self.set_options()
+
         # Normalization of features in the Non-linear models: min_max or mean_std
         if self.feats_norm_mode == 'min_max':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
@@ -784,6 +784,47 @@ class NonLinear(CVCalculator):
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
     
+    def set_layers() -> List:
+        """ 
+        Set the layers for the non-linear model.
+        Implement in subclasses.
+        
+        self.nn_layers: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
+            input_dim: number of features
+            hidden_layer_i: number of neurons in the i-th hidden layer
+            output_dim: dimension of the collective variable
+            
+        Returns
+        -------
+        
+        nn_layers : List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        raise NotImplementedError("This method should be implemented in subclasses.")
+        
+    def set_options(self) -> Dict:
+        """ 
+        Set the options for the non-linear model.
+        Implement in subclasses.
+        
+        self.nn_options: {'activation': 'shifted_softplus', 'dropout': self.dropout} 
+            activation
+            dropout
+            batchnorm
+            last_layer_activation
+            torch.nn.Module args
+
+        Returns
+        -------
+        
+        nn_options : Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        raise NotImplementedError("This method should be implemented in subclasses.")
+        
     def create_model(self):
         
         """
@@ -801,6 +842,39 @@ class NonLinear(CVCalculator):
         """
         raise NotImplementedError("This method should be implemented in subclasses.")
 
+    def get_callbacks(self) -> List:
+        """ 
+        Get the callbacks for the training of the Nonlinear model.
+        """
+        
+        from mlcolvar.utils.trainer import MetricsCallback
+        
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+        
+        # Define MetricsCallback to store the loss
+        self.metrics = MetricsCallback()
+
+        # Define EarlyStopping callback to stop training
+        self.early_stopping = EarlyStopping(
+            monitor="valid_loss", 
+            min_delta=self.min_delta, 
+            patience=self.patience, 
+            mode = "min")
+
+        # Define ModelCheckpoint callback to save the best model
+        self.checkpoint = ModelCheckpoint(
+            dirpath=self.output_path,
+            monitor="valid_loss",                      # Quantity to monitor
+            save_last=False,                           # Save the last checkpoint
+            save_top_k=1,                              # Number of best models to save according to the quantity monitored
+            save_weights_only=False,                   # Save only the weights
+            filename=None,                             # Default checkpoint file name '{epoch}-{step}'
+            mode="min",                                # Best model is the one with the minimum monitored quantity
+            every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
+                
+        return [self.metrics, self.early_stopping, self.checkpoint]
+    
     def train(self) -> bool:
         """
         Trains the non-linear collective variable using the training data.
@@ -816,10 +890,6 @@ class NonLinear(CVCalculator):
         import lightning
         
         from mlcolvar.data import DictModule
-        from mlcolvar.utils.trainer import MetricsCallback
-        
-        from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-        from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
     
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
@@ -854,33 +924,12 @@ class NonLinear(CVCalculator):
                 logger.info(f"Model architecture: {model}")
                 
                 logger.debug(f'Initializing metrics and callbacks...')
-
-                # Define MetricsCallback to store the loss
-                self.metrics = MetricsCallback()
-
-                # Define EarlyStopping callback to stop training
-                early_stopping = EarlyStopping(
-                    monitor="valid_loss", 
-                    min_delta=self.min_delta, 
-                    patience=self.patience, 
-                    mode = "min")
-
-                # Define ModelCheckpoint callback to save the best model
-                self.checkpoint = ModelCheckpoint(
-                    dirpath=self.output_path,
-                    monitor="valid_loss",                      # Quantity to monitor
-                    save_last=False,                           # Save the last checkpoint
-                    save_top_k=1,                              # Number of best models to save according to the quantity monitored
-                    save_weights_only=False,                   # Save only the weights
-                    filename=None,                             # Default checkpoint file name '{epoch}-{step}'
-                    mode="min",                                # Best model is the one with the minimum monitored quantity
-                    every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
                 
                 logger.debug(f'Initializing Trainer...')
 
                 # Define trainer
                 trainer = lightning.Trainer(          
-                    callbacks=[self.metrics, early_stopping, self.checkpoint],
+                    callbacks=self.get_callbacks(),
                     max_epochs=self.max_epochs, 
                     logger=False, 
                     enable_checkpointing=True,
@@ -1366,6 +1415,39 @@ class AECalculator(NonLinear):
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
     
+    def set_layers(self) -> List:
+        """ 
+        Set the layers for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_layers: List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        return [self.num_features] + self.hidden_layers + [self.cv_dimension]
+    
+    def set_options(self):
+        """ 
+        Set options for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_options: Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        
+        nn_options = {
+            'activation': 'shifted_softplus', 
+            'dropout': self.dropout
+            } 
+        
+        return nn_options
+        
     def create_model(self):
         """ 
         Create the Autoencoder model.
@@ -1426,7 +1508,40 @@ class DeepTICACalculator(NonLinear):
         # Update options
         self.cv_options.update({"nn": self.nn_options,
                                 "optimizer": self.optimizer_options})
-       
+
+    def set_layers(self) -> List:
+        """ 
+        Set the layers for DeepTICA
+        
+        Return
+        ------
+        
+        nn_layers: List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        return [self.num_features] + self.hidden_layers + [self.cv_dimension]
+    
+    def set_options(self):
+        """ 
+        Set options for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_options: Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        
+        nn_options = {
+            'activation': 'shifted_softplus', 
+            'dropout': self.dropout
+            } 
+        
+        return nn_options
+    
     def create_model(self):
         """
         Create the DeepTICA model.
@@ -1522,7 +1637,40 @@ class VAECalculator(NonLinear):
         self.cv_options.update({"encoder": self.nn_options,
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
+
+    def set_layers(self) -> List:
+        """ 
+        Set the layers for the VAE
         
+        Return
+        ------
+        
+        nn_layers: List
+            List with the layers for the non-linear model
+            Contains the input dimension, hidden layers and output dimension.
+        """
+        
+        return [self.num_features] + self.hidden_layers
+    
+    def set_options(self):
+        """ 
+        Set options for the Autoencoder
+        
+        Return
+        ------
+        
+        nn_options: Dict
+            Dictionary with the options for the non-linear model
+            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
+        """
+        
+        nn_options = {
+            'activation': 'leaky_relu', 
+            'dropout': self.dropout
+            } 
+        
+        return nn_options
+   
     def create_model(self):
         """
         Create the Variational Autoencoder model.
@@ -1539,10 +1687,28 @@ class VAECalculator(NonLinear):
         model = VariationalAutoEncoderCV(
             n_cvs=self.cv_dimension,
             encoder_layers=self.nn_layers, 
+            decoder_layers=[self.num_features],
             options=self.cv_options)
          
         return model
-               
+        
+    def get_callbacks(self) -> List:
+        """ 
+        Get the callbacks for the VAE training.
+        
+        Uses the parent class method to get the callbacks and adds the VAE-specific callbacks.
+        
+        Returns
+        -------
+        
+        callbacks: List
+            List of callbacks for the VAE training.
+        """
+        import deep_cartograph.modules.ml as ml
+        
+        general_callbacks = super().get_callbacks()
+        
+        return general_callbacks + [ml.KLAAnnealing(max_beta=0.01, start_epoch=500, n_epochs_anneal=2000)]
 # Mappings
 cv_calculators_map = {
     'pca': PCACalculator,

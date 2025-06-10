@@ -8,8 +8,10 @@ The modules in this folder are designed to provide various functionalities and c
 
 ## List of Modules
 
+- **bio**: Functions leveraging Biopython
 - **common**: Contains general purpose functions used in several tools and modules.
 - **figures**: Contains functions to generate figures and plots.
 - **md**: Contains functions to analyze molecular dynamics trajectories and topologies using MDAnalysis.
 - **plumed**: Contains functions to create and run PLUMED input files.
 - **statistics**: Contains functions to perform statistical analysis on data.
+- **ml**: Functions related to ML models and their training 
