@@ -28,7 +28,7 @@ class CVCalculator:
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Optional[str] = None
-    ):
+        ):
         """
         Initializes the base CV calculator.
         
@@ -509,7 +509,7 @@ class LinearCalculator(CVCalculator):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """ 
         Initializes a linear CV calculator.
         """
@@ -699,7 +699,7 @@ class NonLinear(CVCalculator):
         sup_colvars_paths: Optional[List[str]] = None,
         sup_topology_paths: Optional[List[str]] = None, 
         output_path: Union[str, None] = None
-    ):
+        ):
         """ 
         Initializes a non-linear CV calculator.
         """
@@ -1005,7 +1005,7 @@ class NonLinear(CVCalculator):
             if self.training_config['save_loss']:
                 np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
                 np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
-                np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch'])) # Epoch are not tensors
+                np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
                 np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                 
             # 3. Create a dictionary with CPU-based data for plotting
@@ -1168,7 +1168,7 @@ class PCACalculator(LinearCalculator):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the PCA calculator.
         """
@@ -1220,7 +1220,7 @@ class TICACalculator(LinearCalculator):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the TICA calculator.
         """
@@ -1282,7 +1282,8 @@ class HTICACalculator(LinearCalculator):
         feature_constraints: Union[List[str], str, None] = None, 
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None):
+        output_path: Union[str, None] = None
+        ):
         """
         Initializes the HTICA calculator.
         """
@@ -1397,7 +1398,7 @@ class AECalculator(NonLinear):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the Autoencoder calculator.
         """
@@ -1494,7 +1495,7 @@ class DeepTICACalculator(NonLinear):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the DeepTICA calculator.
         """      
@@ -1620,7 +1621,7 @@ class VAECalculator(NonLinear):
         sup_colvars_paths: Optional[List[str]] = None, 
         sup_topology_paths: Optional[List[str]] = None,
         output_path: Union[str, None] = None
-    ):
+        ):
         """
         Initializes the Variational Autoencoder calculator.
         """
