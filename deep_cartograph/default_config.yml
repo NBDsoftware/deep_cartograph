@@ -206,6 +206,8 @@ train_colvars:
           weight_decay: 0.0
       save_loss: True
       plot_loss: True
+    bias:
+      method: opes_metad
   figures:
     fes:
       compute: True  

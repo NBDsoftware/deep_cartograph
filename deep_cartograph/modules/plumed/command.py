@@ -293,7 +293,7 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
         # Add powers
         combine_command += " POWERS="
         for power in powers:
-            combine_command += f"{power:.17g},"
+            combine_command += f"{power:.10g},"
         combine_command = combine_command[:-1]
 
     # Add periodic keyword
@@ -395,7 +395,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
     
     # Add grid min values
     for grid_min in grid_mins:
-        histogram_command += f"{grid_min:.17g},"
+        histogram_command += f"{grid_min:.10g},"
 
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -405,7 +405,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     # Add grid max values
     for grid_max in grid_maxs:
-        histogram_command += f"{grid_max:.17g},"
+        histogram_command += f"{grid_max:.10g},"
 
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -415,7 +415,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     # Add grid bin values
     for grid_bin in grid_bins:
-        histogram_command += f"{grid_bin:.17g}," 
+        histogram_command += f"{grid_bin:.10g}," 
     
     # Remove last comma
     histogram_command = histogram_command[:-1]
@@ -430,7 +430,7 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
     
         # Add bandwidth values
         for bandwidth in bandwidths:
-            histogram_command += f"{bandwidth:.17g},"
+            histogram_command += f"{bandwidth:.10g},"
 
         # Remove last comma
         histogram_command = histogram_command[:-1]
@@ -598,7 +598,165 @@ def external(command_label, arguments, file):
 
     return external_command
 
-def metad(command_label: str, arguments: List[str], sigmas: List[float], height: float, biasfactor: int, temp: float, pace: int, grid_mins: List[float], grid_maxs: List[float], grid_bins: List[int]) -> str:  
+def opes_metad(
+    command_label: str, 
+    arguments: List[str], 
+    temperature: float, 
+    pace: int, 
+    sigmas: float, 
+    barrier: float, 
+    compression_threshold: float
+    ):
+    """
+    Function that creates a PLUMED OPES_METAD command.
+
+    Inputs
+    ------
+
+        command_label           :     command label
+        arguments               :     arguments
+        temperature             :     temperature
+        pace                    :     pace
+        sigmas                  :     sigmas
+        barrier                 :     barrier
+        compression_threshold   :     compression threshold
+    """
+
+    # Start OPES_METAD command
+    opes_metad_command = command_label + ": OPES_METAD ...\n"
+
+    # Add command label
+    opes_metad_command += " LABEL=" + command_label + "\n"
+
+    # Add arguments
+    opes_metad_command += " ARG=" + ",".join(arguments) + "\n"
+
+    # Add temperature
+    opes_metad_command += " TEMP=" + f"{temperature:.10g}\n"
+
+    # Add pace
+    opes_metad_command += " PACE=" + str(pace) + "\n"
+
+    # Add sigma
+    opes_metad_command += " SIGMA=" + ",".join([f"{sigma:.10g}" for sigma in sigmas])
+
+    # Add barrier
+    opes_metad_command += " BARRIER=" + f"{barrier:.10g}\n"
+
+    # Add compression threshold
+    opes_metad_command += " COMPRESSION_THRESHOLD=" + f"{compression_threshold:.10g}\n"
+
+    # End OPES_METAD command
+    opes_metad_command += "... OPES_METAD\n"
+
+    return opes_metad_command
+
+def opes_metad_explore(
+    command_label: str, 
+    arguments: List[str], 
+    temperature: float, 
+    pace: int, 
+    sigma: float, 
+    barrier: float, 
+    compression_threshold: float
+    ):
+    """
+    Function that creates a PLUMED OPES_METAD_EXPLORE command.
+
+    Inputs
+    ------
+
+        command_label           :     command label
+        arguments               :     arguments
+        temperature             :     temperature
+        pace                    :     pace
+        sigma                   :     sigma
+        barrier                 :     barrier
+        compression_threshold   :     compression threshold
+    """
+
+    # Start OPES_METAD_EXPLORE command
+    opes_metad_explore_command = command_label + ": OPES_METAD_EXPLORE ...\n"
+
+    # Add command label
+    opes_metad_explore_command += " LABEL=" + command_label + "\n"
+
+    # Add arguments
+    opes_metad_explore_command += " ARG=" + ",".join(arguments) + "\n"
+
+    # Add temperature
+    opes_metad_explore_command += " TEMP=" + f"{temperature:.10g}\n"
+
+    # Add pace
+    opes_metad_explore_command += " PACE=" + str(pace) + "\n"
+
+    # Add sigma
+    opes_metad_explore_command += " SIGMA=" + f"{sigma:.10g}\n"
+
+    # Add barrier
+    opes_metad_explore_command += " BARRIER=" + f"{barrier:.10g}\n"
+
+    # Add compression threshold
+    opes_metad_explore_command += " COMPRESSION_THRESHOLD=" + f"{compression_threshold:.10g}\n"
+
+    # End OPES_METAD_EXPLORE command
+    opes_metad_explore_command += "... OPES_METAD_EXPLORE\n"
+
+    return opes_metad_explore_command
+
+def opes_expanded(
+    command_label: str, 
+    arguments: List[str], 
+    pace: int, 
+    observation_steps: int
+    ) -> str:
+    """
+    Function that creates a PLUMED OPES_EXPANDED command.
+
+    Inputs
+    ------
+
+        command_label           :     command label
+        arguments               :     arguments
+        temperature             :     temperature
+        pace                    :     pace
+        sigma                   :     sigma
+        barrier                 :     barrier
+        compression_threshold   :     compression threshold
+    """
+
+    # Start OPES_EXPANDED command
+    opes_expanded_command = command_label + ": OPES_EXPANDED ...\n"
+
+    # Add command label
+    opes_expanded_command += " LABEL=" + command_label + "\n"
+
+    # Add arguments
+    opes_expanded_command += " ARG=" + ",".join(arguments) + "\n"
+
+    # Add pace
+    opes_expanded_command += " PACE=" + str(pace) + "\n"
+
+    # Add observation steps
+    opes_expanded_command += " OBSERVATION_STEPS=" + str(observation_steps) + "\n"
+
+    # End OPES_EXPANDED command
+    opes_expanded_command += "... OPES_EXPANDED\n"
+
+    return opes_expanded_command
+
+def metad(
+    command_label: str, 
+    arguments: List[str], 
+    sigmas: List[float], 
+    height: float, 
+    bias_factor: int, 
+    temperature: float, 
+    pace: int, 
+    grid_mins: List[float], 
+    grid_maxs: List[float], 
+    grid_bins: List[int]
+    ) -> str:  
     """
     Function that creates a PLUMED METAD command.
 
@@ -609,8 +767,8 @@ def metad(command_label: str, arguments: List[str], sigmas: List[float], height:
         arguments       :     arguments
         sigmas          :     sigmas
         height          :     height
-        biasfactor      :     biasfactor
-        temp            :     temperature
+        bias_factor     :     bias_factor
+        temperature     :     temperature
         pace            :     pace
         grid_mins       :     grid mins
         grid_maxs       :     grid maxs
@@ -633,28 +791,28 @@ def metad(command_label: str, arguments: List[str], sigmas: List[float], height:
     metad_command = metad_command[:-1]
 
     # Add sigmas 
-    metad_command += "\nSIGMA=" + ",".join([f"{sigma:.17g}" for sigma in sigmas])
+    metad_command += "\nSIGMA=" + ",".join([f"{sigma:.6g}" for sigma in sigmas])
 
     # Add height
-    metad_command += "\nHEIGHT=" + f"{height:.17g}"
+    metad_command += "\nHEIGHT=" + f"{height:.10g}"
 
-    # Add biasfactor
-    metad_command += "\nBIASFACTOR=" + f"{biasfactor:.17g}"
+    # Add bias_factor
+    metad_command += "\nBIASFACTOR=" + f"{bias_factor:.10g}"
 
     # Add temperature
-    metad_command += "\nTEMP=" + f"{temp:.17g}"
+    metad_command += "\nTEMP=" + f"{temperature:.10g}"
 
     # Add pace
     metad_command += "\nPACE=" + str(pace)
 
     # Add grid mins using .join()
-    metad_command += "\nGRID_MIN=" + ",".join([f"{grid_min:.17g}" for grid_min in grid_mins])
+    metad_command += "\nGRID_MIN=" + ",".join([f"{grid_min:.10g}" for grid_min in grid_mins])
 
     # Add grid maxs
-    metad_command += "\nGRID_MAX=" + ",".join([f"{grid_max:.17g}" for grid_max in grid_maxs])
+    metad_command += "\nGRID_MAX=" + ",".join([f"{grid_max:.10g}" for grid_max in grid_maxs])
 
     # Add grid bins
-    metad_command += "\nGRID_BIN=" + ",".join([f"{grid_bin:.17g}" for grid_bin in grid_bins])
+    metad_command += "\nGRID_BIN=" + ",".join([f"{grid_bin:.10g}" for grid_bin in grid_bins])
 
     # Add c(t) calculation
     metad_command += "\nCALC_RCT"

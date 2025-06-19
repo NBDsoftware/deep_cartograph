@@ -8,7 +8,6 @@ from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
 
 from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
-import deep_cartograph.modules.plumed as plumed
 import deep_cartograph.modules.md as md
 
 # Set logger
@@ -71,6 +70,7 @@ class CVCalculator:
         self.architecture_config: Dict = configuration['architecture']
         self.training_reading_settings: Dict = configuration['input_colvars']
         self.feats_norm_mode: Literal['mean_std', 'min_max', 'none'] = configuration['features_normalization']
+        self.bias: Dict = configuration['bias']
         
         # Colvars paths
         self.train_colvars_paths: List[str] = train_colvars_paths
@@ -192,10 +192,11 @@ class CVCalculator:
         df : pd.DataFrame
             Dataframe with the data from the colvars files
         """
+        from deep_cartograph.modules.plumed.colvars import create_dataframe_from_files
+        
         if load_args is None:
             load_args = {}
-            
-        df = plumed.colvars.create_dataframe_from_files(
+        df = create_dataframe_from_files(
             colvars_paths = colvars_paths,
             topology_paths = topology_paths,
             reference_topology = ref_topology_path,   
@@ -413,6 +414,8 @@ class CVCalculator:
         output_folder : str
             Path to the output folder where the plumed input file and the mda topology will be saved
         """
+        from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
+        from deep_cartograph.modules.plumed.features import FeatureTranslator
 
         # Save new PLUMED-compliant topology
         plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
@@ -423,7 +426,7 @@ class CVCalculator:
         md.create_pdb(self.ref_topology_path, ref_plumed_topology_path)
         
         # Translate the features from the reference topology to this topology
-        features_list = plumed.features.FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.feature_labels).run()
+        features_list = FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.feature_labels).run()
         
         # Construct builder arguments for these features and this CV
         builder_args = {
@@ -436,30 +439,18 @@ class CVCalculator:
         }
         
         # Build the plumed input file to track the CV
-        plumed_builder = plumed.input.builder.ComputeCVBuilder(**builder_args)
+        plumed_builder = ComputeCVBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_out.dat')
         
-        # Save enhanced sampling parameters to parameters dictionary
-        sampling_params = {
-            'sigma': 0.05,
-            'height': 1.0,
-            'biasfactor': 10.0,
-            'temp': 300,
-            'pace': 500,
-            'grid_min': -1,
-            'grid_max': 1,
-            'grid_bin': 300
-        }
-        
         builder_args.update({
-            'sampling_method': 'wt-metadynamics', 
-            'sampling_params': sampling_params,
-            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}_metad.dat')
+            'sampling_method': self.bias["method"], 
+            'sampling_params': self.bias["args"],
+            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
             })
             
         # Build the plumed input file to perform enhanced sampling
-        plumed_builder = plumed.input.builder.ComputeEnhancedSamplingBuilder(**builder_args)
-        plumed_builder.build(f'{self.cv_name}_metad_out.dat')
+        plumed_builder = ComputeEnhancedSamplingBuilder(**builder_args)
+        plumed_builder.build(f'{self.cv_name}_{self.bias["method"]}_out.dat')
         
         # Erase the temporary reference topology
         os.remove(ref_plumed_topology_path)

@@ -64,6 +64,17 @@ common:
         weight_decay: 0.0
     save_loss: True
     plot_loss: True
+  bias:
+    method: wt_metadynamics
+    args:
+      sigma: 0.05
+      height: 1.0
+      bias_factor: 10.0
+      temp: 300
+      pace: 500
+      grid_min: -1
+      grid_max: 1
+      grid_bin: 300
 ae:
   training:
     general: 
