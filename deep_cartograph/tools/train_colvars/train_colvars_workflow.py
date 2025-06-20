@@ -3,8 +3,9 @@ import os
 import sys
 import logging
 import numpy as np
+import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Union, Literal
+from typing import List, Dict, Union, Literal, Optional
 
 # Local imports
 from deep_cartograph.modules.md import md
@@ -219,14 +220,9 @@ class TrainColvarsWorkflow:
             
             cv_output_folder = os.path.join(self.output_folder, cv)
             
-            # Merge common and cv-specific configuration for this cv 
-            common_configuration = self.configuration['common']
-            cv_specific_configuration = self.configuration.get(cv, {})
-            cv_configuration = merge_configurations(common_configuration, cv_specific_configuration)
-            
             # Construct the corresponding CV calculator
             args = {
-                'configuration': cv_configuration,
+                'configuration': merge_configurations(self.configuration['common'], self.configuration.get(cv, {})),
                 'train_colvars_paths': self.train_colvars_paths,
                 'train_topology_paths': self.train_topology_paths,
                 'ref_topology_path': self.ref_topology_path,

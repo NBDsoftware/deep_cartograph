@@ -74,8 +74,8 @@ def train_colvars(
         List of paths to topology files corresponding to the supplementary colvars files.
         
     sup_labels : Optional[List[str]], default=None
-        List of labels to identify the reference data.  
-        If `None`, the reference data is identified as 'reference data i'.
+        List of labels to identify the supplementary data.  
+        If `None`, the supplementary data is identified as 'supplementary data i'.
 
     dimension : Optional[int], default=None
         Dimension of the CVs to train or compute. If `None`, the value in the configuration is used.
