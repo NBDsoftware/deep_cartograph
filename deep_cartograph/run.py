@@ -166,6 +166,7 @@ def deep_cartograph(
         supplementary_colvars_paths = compute_features(**args)
         
         # If there are less than 10 supplementary trajectories, use their names as labels
+        supplementary_labels = None
         if len(supplementary_trajs) < 10: 
             supplementary_labels = [Path(val_trajectory).stem for val_trajectory in supplementary_trajs]
     else:
