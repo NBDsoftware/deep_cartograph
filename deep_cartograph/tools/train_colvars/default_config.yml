@@ -94,7 +94,6 @@ htica:
 #     temperature:                      (int) Temperature in Kelvin
 #     bandwidth:                        (float) Bandwidth for the Kernel Density Estimation of the Free Energy Surface
 #     num_bins:                         (int) Number of bins for the Kernel Density Estimation of the Free Energy Surface
-#     num_blocks:                       (int) Number of blocks for the standard error calculation of the Free Energy Surface
 #     max_fes:                          (float) Maximum value for the Free Energy Surface (above which the value is set to NaN)
 #   traj_projection:                Settings for the Projected Trajectory
 #     plot:                             (bool) Plot the Projected Trajectory

@@ -215,7 +215,6 @@ train_colvars:
       temperature: 300
       bandwidth: 0.025
       num_bins: 200
-      num_blocks: 1
       max_fes: 18
     traj_projection:
       plot: True

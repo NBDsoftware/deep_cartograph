@@ -138,8 +138,6 @@ class FesFigure(BaseModel):
     bandwidth: float = 0.05
     # Number of bins for the Kernel Density Estimation of the Free Energy Surface
     num_bins: int = 150
-    # Number of blocks for the standard error calculation of the Free Energy Surface
-    num_blocks: int = 1
     # Maximum value for the Free Energy Surface (above which the value is set to NaN)
     max_fes: float = 30
 
