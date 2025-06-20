@@ -637,8 +637,8 @@ def opes_metad(
     # Add pace
     opes_metad_command += " PACE=" + str(pace) + "\n"
 
-    # Add sigma
-    opes_metad_command += " SIGMA=" + ",".join([f"{sigma:.10g}" for sigma in sigmas])
+    # Add sigmas
+    opes_metad_command += " SIGMA=" + ",".join([f"{sigma:.10g}" for sigma in sigmas]) + "\n"
 
     # Add barrier
     opes_metad_command += " BARRIER=" + f"{barrier:.10g}\n"
@@ -656,7 +656,7 @@ def opes_metad_explore(
     arguments: List[str], 
     temperature: float, 
     pace: int, 
-    sigma: float, 
+    sigmas: float, 
     barrier: float, 
     compression_threshold: float
     ):
@@ -691,7 +691,7 @@ def opes_metad_explore(
     opes_metad_explore_command += " PACE=" + str(pace) + "\n"
 
     # Add sigma
-    opes_metad_explore_command += " SIGMA=" + f"{sigma:.10g}\n"
+    opes_metad_explore_command += " SIGMA=" + ",".join([f"{sigma:.10g}" for sigma in sigmas]) + "\n"
 
     # Add barrier
     opes_metad_explore_command += " BARRIER=" + f"{barrier:.10g}\n"

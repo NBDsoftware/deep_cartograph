@@ -503,7 +503,7 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         opes_params = {
             'command_label' : bias_name,
             'arguments' : self.cv_labels,
-            'temp' : self.sampling_params['temp'],
+            'temperature' : self.sampling_params['temperature'],
             'pace' : self.sampling_params['pace'],
             'sigmas': [self.sampling_params['sigma'] for _ in range(self.cv_params['cv_dimension'])],
             'barrier': self.sampling_params['barrier'],
