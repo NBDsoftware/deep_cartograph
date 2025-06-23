@@ -1677,7 +1677,16 @@ class VAECalculator(NonLinear):
             sup_topology_paths, 
             output_path)
         
-        # Create DictDataset
+        # VAE-specific settings
+        self.kl_annealing_config = self.training_config['kl_annealing']
+        self.type = self.kl_annealing_config['type']
+        self.start_beta = self.kl_annealing_config['start_beta']
+        self.max_beta = self.kl_annealing_config['max_beta']
+        self.start_epoch = self.kl_annealing_config['start_epoch']
+        self.n_cycles = self.kl_annealing_config['n_cycles']
+        self.n_epochs_anneal = self.kl_annealing_config['n_epochs_anneal']
+        
+        # Create DictDatase
         dictionary = {"data": torch.Tensor(self.training_data.values)}
         self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
         
@@ -1786,7 +1795,17 @@ class VAECalculator(NonLinear):
         
         general_callbacks = super().get_callbacks()
         
-        return general_callbacks + [ml.KLAAnnealing(max_beta=0.01, start_epoch=500, n_epochs_anneal=2000)]
+        kl_annealing_args = {
+            'type': self.type,
+            'start_beta': self.start_beta,
+            'max_beta': self.max_beta,
+            'start_epoch': self.start_epoch,
+            'n_cycles': self.n_cycles,
+            'n_epochs_anneal': self.n_epochs_anneal
+        }
+        kl_anneal_callback = ml.KLAAnnealing(**kl_annealing_args)
+        
+        return general_callbacks.append(kl_anneal_callback)
     
     def save_loss(self): 
         """ 

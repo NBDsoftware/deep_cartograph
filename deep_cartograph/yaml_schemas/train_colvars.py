@@ -56,6 +56,20 @@ class EarlyStopping(BaseModel):
     # Minimum change in the loss function to consider it an improvement
     min_delta: float = 1.0e-05
 
+class KLAnnealing(BaseModel):
+    # Type of KL annealing ('linear' or 'cyclical')
+    type: Literal['linear', 'cyclical'] = 'cyclical'
+    # Sart value for beta (KL divergence weight)
+    start_beta: float = 0.0
+    # Maximum value of the KL divergence weight (beta)
+    max_beta: float = 0.01
+    # Start epoch for the annealing
+    start_epoch: int = 1000
+    # Number of cycles for cyclical annealing
+    n_cycles: int = 4
+    # Number of epochs over which to anneal beta
+    n_epochs_anneal: int = 5000
+    
 class Trainings(BaseModel):
     
     # General settings
@@ -64,6 +78,8 @@ class Trainings(BaseModel):
     early_stopping: EarlyStopping = EarlyStopping()
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
+    # KL Annealing settings (used only with VAE)
+    kl_annealing: KLAnnealing = KLAnnealing()
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training
