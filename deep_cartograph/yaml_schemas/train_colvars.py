@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Union, Literal
+from typing import List, Union, Literal, Optional
 
 class Optimizer(BaseModel):
 
@@ -11,7 +11,9 @@ class Optimizer(BaseModel):
 class Architecture(BaseModel):
 
     # Fully connected hidden layers between the input and latent space
-    hidden_layers: List[int] = [10, 10]
+    encoder: List[int] = [10, 10]
+    # Fully connected hidden layers between the latent space and the output
+    decoder: Optional[List[int]] = None
     # Lag time for TICA and DeepTICA
     lag_time: int = 1
 

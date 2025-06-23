@@ -32,7 +32,7 @@ train_colvars:
       stop: null
       stride: 1 
     architecture:
-      hidden_layers: [5, 3]
+      encoder: [5, 3]
       lag_time: 1                        
     training: 
       general:

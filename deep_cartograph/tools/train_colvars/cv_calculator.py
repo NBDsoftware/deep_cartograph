@@ -746,10 +746,13 @@ class NonLinear(CVCalculator):
         self.patience: int = self.early_stopping_config['patience']
         self.min_delta: float = self.early_stopping_config['min_delta']
         
-        self.hidden_layers: List = self.architecture_config['hidden_layers']
+        self.encoder_hidden_layers: List = self.architecture_config['encoder']
+        # Only used for VAE and AE as DeepTICA has siamese encoder/decoder NN
+        self.decoder_hidden_layers: Optional[List] = self.architecture_config['decoder'] 
         
         # Neural network settings
-        self.nn_layers: List = self.set_layers()
+        self.encoder_layers: List = self.set_encoder()
+        self.decoder_layers: Optional[List] = self.set_decoder()
         self.nn_options: Dict = self.set_options()
 
         # Normalization of features in the Non-linear models: min_max or mean_std
@@ -775,25 +778,50 @@ class NonLinear(CVCalculator):
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
     
-    def set_layers() -> List:
+    def set_encoder() -> List:
         """ 
-        Set the layers for the non-linear model.
+        Set the layers for the encoder of the non-linear model.
         Implement in subclasses.
         
-        self.nn_layers: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
+        self.encoder: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
             input_dim: number of features
             hidden_layer_i: number of neurons in the i-th hidden layer
-            output_dim: dimension of the collective variable
+            output_dim: dimension of the collective variable (latent space)
+            
+        Each non-linear model has different assumptions about the encoder layers input: ae, vae, deep_tica
             
         Returns
         -------
         
         nn_layers : List
-            List with the layers for the non-linear model
+            List with the layers for the encoder of the non-linear model.
             Contains the input dimension, hidden layers and output dimension.
         """
         
         raise NotImplementedError("This method should be implemented in subclasses.")
+    
+    def set_decoder(self) -> Optional[List]:
+        """ 
+        Set the layers for the decoder of the non-linear model.
+        Implement in subclasses.
+        
+        self.decoder: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
+            input_dim: dimension of the collective variable (latent space)
+            hidden_layer_i: number of neurons in the i-th hidden layer
+            output_dim: number of features
+            
+        Each non-linear model has different assumptions about the decoder layers input: ae, vae
+        
+        Returns
+        -------
+        
+        nn_layers : Optional[List]
+            List with the layers for the decoder of the non-linear model.
+            Contains the input dimension, hidden layers and output dimension.
+            If None, no decoder is used (e.g. DeepTICA).
+        """
+        
+        return None
         
     def set_options(self) -> Dict:
         """ 
@@ -1422,19 +1450,37 @@ class AECalculator(NonLinear):
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
     
-    def set_layers(self) -> List:
+    def set_encoder(self) -> List:
         """ 
-        Set the layers for the Autoencoder
+        Set the layers for the encoder of the Autoencoder
         
         Return
         ------
         
-        nn_layers: List
-            List with the layers for the non-linear model
+        nn_layers : List
+            List with the layers for the encoder of the non-linear model.
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.hidden_layers + [self.cv_dimension]
+        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
+    
+    def set_decoder(self) -> Optional[List]:
+        """ 
+        Set the layers for the decoder of the Autoencoder
+        
+        Return
+        ------
+        
+        nn_layers : Optional[List]
+            List with the layers for the decoder of the non-linear model.
+            Contains the input dimension, hidden layers and output dimension.
+            If None, no decoder is used (e.g. DeepTICA).
+        """
+        
+        if self.decoder_hidden_layers is None:
+            return None
+        else:
+            return [self.cv_dimension] + self.decoder_hidden_layers + [self.num_features]
     
     def set_options(self):
         """ 
@@ -1468,7 +1514,8 @@ class AECalculator(NonLinear):
         from mlcolvar.cvs import AutoEncoderCV
         
         model = AutoEncoderCV(
-            encoder_layers=self.nn_layers, 
+            encoder_layers=self.encoder_layers, 
+            decoder_layers=self.decoder_layers,
             options=self.cv_options)
          
         return model
@@ -1516,19 +1563,19 @@ class DeepTICACalculator(NonLinear):
         self.cv_options.update({"nn": self.nn_options,
                                 "optimizer": self.optimizer_options})
 
-    def set_layers(self) -> List:
+    def set_encoder(self) -> List:
         """ 
-        Set the layers for DeepTICA
+        Set the layers for the encoder of DeepTICA
         
         Return
         ------
         
-        nn_layers: List
-            List with the layers for the non-linear model
+        nn_layers : List
+            List with the layers for the encoder of the non-linear model.
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.hidden_layers + [self.cv_dimension]
+        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
     
     def set_options(self):
         """ 
@@ -1563,7 +1610,7 @@ class DeepTICACalculator(NonLinear):
         from mlcolvar.cvs import DeepTICA
         
         model = DeepTICA(
-            layers=self.nn_layers,
+            layers=self.encoder_layers,
             options=self.cv_options)
         
         return model
@@ -1645,19 +1692,43 @@ class VAECalculator(NonLinear):
                                 "decoder": self.nn_options,
                                 "optimizer": self.optimizer_options})
 
-    def set_layers(self) -> List:
+    def set_encoder(self) -> List:
         """ 
         Set the layers for the VAE
+        
+        Here the model already includes a mean and variance layer with
+        cv_dimension outputs, so we do not need to add them explicitly.
         
         Return
         ------
         
-        nn_layers: List
-            List with the layers for the non-linear model
+        nn_layers : List
+            List with the layers for the encoder of the non-linear model.
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.hidden_layers
+        return [self.num_features] + self.encoder_hidden_layers
+    
+    def set_decoder(self):
+        """ 
+        Set the layers for the decoder of the VAE
+        
+        Here the model already includes a layer with the latent space dimension
+        as input, so we do not need to add it explicitly.
+        
+        Return
+        ------
+        
+        nn_layers : Optional[List]
+            List with the layers for the decoder of the non-linear model.
+            Contains the input dimension, hidden layers and output dimension.
+            If None, no decoder is used (e.g. DeepTICA).
+        """
+        
+        if self.decoder_hidden_layers is None:
+            return None
+        else:
+            return self.decoder_hidden_layers + [self.num_features]
     
     def set_options(self):
         """ 
@@ -1693,8 +1764,8 @@ class VAECalculator(NonLinear):
         
         model = VariationalAutoEncoderCV(
             n_cvs=self.cv_dimension,
-            encoder_layers=self.nn_layers, 
-            decoder_layers=[self.num_features],
+            encoder_layers=self.encoder_layers, 
+            decoder_layers=self.decoder_layers,
             options=self.cv_options)
          
         return model

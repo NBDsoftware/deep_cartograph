@@ -33,7 +33,7 @@ train_colvars:
     dimension: 2
     features_normalization: 'min_max'
     architecture:
-      hidden_layers: [20, 20]
+      encoder: [20, 20]
       lag_time: 20
     training: 
       general:

@@ -24,7 +24,7 @@ train_colvars:
   common:
     dimension: 2
     architecture:
-      hidden_layers: [15, 15]
+      encoder: [15, 15]
       lag_time: 1 
     training: 
       general:

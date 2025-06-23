@@ -1,6 +1,6 @@
 ae:
   architecture:
-    hidden_layers:
+    encoder:
     - 15
     - 15
   training:
@@ -22,7 +22,7 @@ clustering:
   - 8
 common:
   architecture:
-    hidden_layers:
+    encoder:
     - 10
     - 10
     lag_time: 30

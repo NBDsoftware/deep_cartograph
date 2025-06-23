@@ -48,7 +48,7 @@ def get_config():
           stop: null
           stride: 1 
         architecture:
-          hidden_layers: [5, 3]
+          encoder: [5, 3]
           lag_time: 1                        
         training: 
           general:
@@ -74,7 +74,7 @@ def get_config():
           plot_loss: True
       ae:           
         architecture:
-          hidden_layers: [5, 3]
+          encoder: [5, 3]
         training:
           general:
             batch_size: 256

@@ -114,7 +114,8 @@ filter_features:
 #       stop:                       (int) Stop index to read the input features (df.iloc[start:stop:stride])
 #       stride:                     (int) Stride to read the input features (df.iloc[start:stop:stride])
 #     architecture:                 Settings for the architecture of the Collective Variables
-#       hidden_layers:              (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
+#       encoder:                   (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
+#       decoder:                   (list) Fully connected hidden layers between the latent space and output, e.g. [15, 15]
 #       lag_time:                   (int) Lag time for the Collective Variables
 #     training:                    Settings for the training of the Collective Variables (when applicable)
 #       general:                    General settings for the training
@@ -182,7 +183,7 @@ train_colvars:
       stop: null
       stride: 1 
     architecture:
-      hidden_layers: [15, 15] # Increase the complexity if needed: [100, 50, 20]
+      encoder: [15, 15] # Increase the complexity if needed: [100, 50, 20]
       lag_time: 1
     training: 
       general:

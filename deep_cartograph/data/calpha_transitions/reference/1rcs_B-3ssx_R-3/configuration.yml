@@ -30,7 +30,7 @@ filter_features:
 train_colvars:
   ae:
     architecture:
-      hidden_layers:
+      encoder:
       - 15
       - 15
     training:
@@ -52,7 +52,7 @@ train_colvars:
     - 8
   common:
     architecture:
-      hidden_layers:
+      encoder:
       - 10
       - 10
       lag_time: 30
