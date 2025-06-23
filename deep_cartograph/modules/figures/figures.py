@@ -108,13 +108,16 @@ def plot_fes(
                 # Cycle through markers
                 marker = markers[i % len(markers)]
 
-                # If the reference data is 2D -> scatter plot
-                if sup_data_i.shape[1] == 2:
-                    ax.scatter(sup_data_i[:,0], sup_data_i[:,1], c='black', s=8, label=label, marker=marker)
-
                 # If the reference data is 1D -> histogram
-                elif sup_data_i.shape[1] == 1:
+                if sup_data_i.ndim == 1:
                     ax.hist(sup_data_i, bins=num_bins, alpha=0.5, density=True, label=label)
+                # If the reference data is 2D -> scatter plot
+                else: 
+                    if sup_data_i.shape[1] == 2:
+                        ax.scatter(sup_data_i[:,0], sup_data_i[:,1], c='black', s=8, label=label, marker=marker)
+                    else:
+                        logger.warning(f"Supplementary data {i} has {sup_data_i.shape[1]} dimensions > 2 dimensions. Skipping scatter plot of this data.")
+                        continue
 
         # Set axis labels
         ax.set_xlabel(cv_labels[0], fontsize = font_size)
