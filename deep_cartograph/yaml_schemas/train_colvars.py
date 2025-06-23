@@ -67,6 +67,46 @@ class Trainings(BaseModel):
     # Wether to plot the loss after training
     plot_loss: bool = True
 
+class BiasArgs(BaseModel):
+    
+    # Common args for all bias methods
+    
+    # Temperature in Kelvin
+    temperature: float = 300.0
+    # Widths of the Gaussian hills (or initial width for opes)
+    sigma: float = 0.05
+    # The frequency for kernel depositions (how often the bias is updated)
+    pace: int = 500
+    # The lower bounds for the grid (lower value that will be explored in the CV, same for all components)
+    grid_min: float = -1.0 
+    # The upper bounds for the grid (upper value that will be explored in the CV, same for all components)
+    grid_max: float = 1.0
+    # The number of grid bins (number of points in the grid, same for all components)
+    grid_bin: int = 300
+    
+    # Metadynamics specific args
+    
+    # Height of the Gaussian hills
+    height: float = 1.0
+    # Bias factor
+    bias_factor: float = 10.0
+    
+    # Opes specific args
+    
+    # Barrier 
+    barrier: float = 50.0
+    # Observation steps (for opes_expanded)
+    observation_steps: int = 100            # pace units
+    # Compression threshold
+    compression_threshold: float = 0.1
+    
+class Bias(BaseModel):
+    
+    # Name of the method
+    method: Literal['wt_metadynamics', 'opes_metad', 'opes_metad_explore', 'opes_expanded'] = 'opes_metad'
+    # Keyword arguments for the method
+    args: BiasArgs = BiasArgs() 
+    
 class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
@@ -83,6 +123,8 @@ class CommonCollectiveVariable(BaseModel):
     num_subspaces: int = 10
     # Dimension of the sub-spaces (used only with Hierarchical TICA)
     subspaces_dimension: int = 5
+    # Bias method for the PLUMED input file (all Collective Variables)
+    bias: Bias = Bias()
 
 class FesFigure(BaseModel):
       
@@ -96,8 +138,6 @@ class FesFigure(BaseModel):
     bandwidth: float = 0.05
     # Number of bins for the Kernel Density Estimation of the Free Energy Surface
     num_bins: int = 150
-    # Number of blocks for the standard error calculation of the Free Energy Surface
-    num_blocks: int = 1
     # Maximum value for the Free Energy Surface (above which the value is set to NaN)
     max_fes: float = 30
 

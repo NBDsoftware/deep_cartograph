@@ -64,6 +64,17 @@ common:
         weight_decay: 0.0
     save_loss: True
     plot_loss: True
+  bias:
+    method: wt_metadynamics
+    args:
+      sigma: 0.05
+      height: 1.0
+      bias_factor: 10.0
+      temp: 300
+      pace: 500
+      grid_min: -1
+      grid_max: 1
+      grid_bin: 300
 ae:
   training:
     general: 
@@ -83,7 +94,6 @@ htica:
 #     temperature:                      (int) Temperature in Kelvin
 #     bandwidth:                        (float) Bandwidth for the Kernel Density Estimation of the Free Energy Surface
 #     num_bins:                         (int) Number of bins for the Kernel Density Estimation of the Free Energy Surface
-#     num_blocks:                       (int) Number of blocks for the standard error calculation of the Free Energy Surface
 #     max_fes:                          (float) Maximum value for the Free Energy Surface (above which the value is set to NaN)
 #   traj_projection:                Settings for the Projected Trajectory
 #     plot:                             (bool) Plot the Projected Trajectory

@@ -415,14 +415,20 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         Add the enhanced sampling section to the contents of the PLUMED input file.
         """
         
-        if self.sampling_method == "wt-metadynamics":
+        if self.sampling_method == "wt_metadynamics":
             self.add_wt_metadynamics()
+        elif self.sampling_method == "opes_metad":
+            self.add_opes_metadynamics()
+        elif self.sampling_method == "opes_metad_explore":
+            self.add_opes_metadynamics_explore()
+        elif self.sampling_method == "opes_expanded":
+            self.add_opes_expanded()
         else:
             raise ValueError(f"Enhanced sampling method {self.sampling_method} not recognized.")
         
     def add_wt_metadynamics(self):
         """
-        Add well-tempered metadynamics to the PLUMED input file.
+        Add well-tempered metadynamics action to the PLUMED input file.
         """
         
         bias_name = 'wt_metad'
@@ -437,8 +443,8 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
             'arguments' : self.cv_labels,
             'sigmas' : [self.sampling_params['sigma'] for _ in range(self.cv_params['cv_dimension'])],
             'height' : self.sampling_params['height'],
-            'biasfactor' : self.sampling_params['biasfactor'],
-            'temp' : self.sampling_params['temp'],
+            'bias_factor' : self.sampling_params['bias_factor'],
+            'temperature' : self.sampling_params['temperature'],
             'pace' : self.sampling_params['pace'],
             'grid_mins' : [self.sampling_params['grid_min'] for _ in range(self.cv_params['cv_dimension'])],
             'grid_maxs' : [self.sampling_params['grid_max'] for _ in range(self.cv_params['cv_dimension'])],
@@ -452,3 +458,71 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         self.input_content += plumed.command.metad(**metad_params)
             
         self.bias_labels.append(f"{bias_name}.rbias")
+        
+    def add_opes_metadynamics(self):
+        """
+        Add OPES metadynamics action to the PLUMED input file.
+        """
+        
+        bias_name = 'opes_metad'
+        
+        # Ensure a CV is defined before applying enhanced sampling
+        if not self.cv_type:
+            raise ValueError("Enhanced sampling requires a collective variable.")
+        
+        # Set up the bias parameters
+        opes_params = {
+            'command_label' : bias_name,
+            'arguments' : self.cv_labels,
+            'temperature' : self.sampling_params['temperature'],
+            'pace' : self.sampling_params['pace'],
+            'sigmas': [self.sampling_params['sigma'] for _ in range(self.cv_params['cv_dimension'])],
+            'barrier': self.sampling_params['barrier'],
+            'compression_threshold': self.sampling_params['compression_threshold']
+        }
+
+        # Add enhanced sampling section title
+        self.input_content += "\n# Enhanced Sampling\n"
+        
+        # Generate the enhanced sampling command
+        self.input_content += plumed.command.opes_metad(**opes_params)
+        
+        self.bias_labels.append(f"{bias_name}.bias")
+        
+    def add_opes_metadynamics_explore(self):
+        """
+        Add OPES metadynamics explore action to the PLUMED input file.
+        """
+        bias_name = 'opes_metad_explore'
+        
+        # Ensure a CV is defined before applying enhanced sampling
+        if not self.cv_type:
+            raise ValueError("Enhanced sampling requires a collective variable.")
+        
+        # Set up the bias parameters
+        opes_params = {
+            'command_label' : bias_name,
+            'arguments' : self.cv_labels,
+            'temperature' : self.sampling_params['temperature'],
+            'pace' : self.sampling_params['pace'],
+            'sigmas': [self.sampling_params['sigma'] for _ in range(self.cv_params['cv_dimension'])],
+            'barrier': self.sampling_params['barrier'],
+            'compression_threshold': self.sampling_params['compression_threshold']
+        }
+
+        # Add enhanced sampling section title
+        self.input_content += "\n# Enhanced Sampling\n"
+
+        # Generate the enhanced sampling command
+        self.input_content += plumed.command.opes_metad_explore(**opes_params)
+        
+        self.bias_labels.append(f"{bias_name}.bias")
+        
+    def add_opes_expanded(self):
+        """
+        Add OPES expanded action to the PLUMED input file.
+        """
+        bias_name = 'opes_expanded'
+        
+        raise NotImplementedError("OPES expanded sampling is not yet implemented.")
+        

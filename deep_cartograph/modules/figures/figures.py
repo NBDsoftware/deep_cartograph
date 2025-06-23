@@ -15,19 +15,28 @@ from deep_cartograph.modules.common import package_is_installed
 # Set logger
 logger = logging.getLogger(__name__)
 
-def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: str, X_ref: Optional[List[np.ndarray]] = None, X_ref_labels: Optional[List[str]] = None):
+def plot_fes(
+    data: np.ndarray, 
+    cv_labels: List[str],  
+    settings: Dict, 
+    output_path: str, 
+    num_blocks: int = 1,
+    sup_data: Optional[List[np.ndarray]] = None, 
+    sup_data_labels: Optional[List[str]] = None
+    ):
     """
     Creates a figure of the free energy surface and saves it to a file.
 
     Parameters
     ----------
 
-        X:            data with time series of the variables along which the FES is computed (1D or 2D)
-        cv_labels:    labels of the variables along which the FES is computed
-        settings:     dictionary with the settings of the FES plot
-        output_path:  path where the outputs are saved
-        X_ref:        data with the reference values of the variables along which the FES is computed
-        X_ref_labels: labels of the reference variables
+        data:             data with time series of the variables along which the FES is computed (1D or 2D)
+        cv_labels:        labels of the variables along which the FES is computed
+        settings:         dictionary with the settings of the FES plot
+        output_path:      path where the outputs are saved
+        num_blocks:       number of blocks to use for the FES computation
+        sup_data:         supplementary data to plot alongside the main data
+        sup_data_labels:  labels of the supplementary data
     """
     
     if not package_is_installed('mlcolvar', 'torch'):
@@ -36,11 +45,6 @@ def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: 
     
     import mlcolvar.utils.plot # NOTE: Defines fessa colormap - issue in mlcolvar
     from mlcolvar.utils.fes import compute_fes
-    
-    # NOTE: If reference data has many samples, resort to 2D contours of different colors instead of scatter plots
-    
-    # List of matplotlib markers to cycle through
-    markers = ['o', 's', 'D', '^', 'v', '<', '>', 'p', 'P', '*', 'h', 'H', '+', 'x', 'X', '|', '_'] 
 
     # Find settings
     font_size = 12
@@ -50,16 +54,8 @@ def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: 
     settings = FesFigure(**settings).model_dump()
 
     if settings['compute']:
-
-        # Create fes folder inside the output path
-        output_path = os.path.join(output_path, 'fes')
-        os.makedirs(output_path, exist_ok=True)
-
-        cv_dimension = X.shape[1]
-
-        if cv_dimension > 2:
-            logger.warning('The FES can only be plotted for 1D or 2D CVs.')
-            return
+        
+        cv_dimension = len(cv_labels)
 
         logger.info(f'Computing FES(' + ', '.join(cv_labels) + ')...')
 
@@ -67,30 +63,30 @@ def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: 
         temperature = settings['temperature']
         max_fes = settings['max_fes']
         num_bins = settings['num_bins']
-        num_blocks = settings['num_blocks']
         bandwidth = settings['bandwidth']
-        min_block_size = 20
+        min_block_size = 100
 
         # Number of samples for the FES
-        num_samples = X.shape[0]
+        num_samples = data.shape[0]
 
         # Find block size
         block_size = int(num_samples/num_blocks)
 
         # If the block size is too small, reduce the number of blocks and issue a warning
         if block_size < min_block_size:
-            num_blocks = int(num_samples/min_block_size)
+            old_num_blocks = num_blocks
+            num_blocks = max(1, int(num_samples/min_block_size))
             block_size = min_block_size
-            logger.warning(f"Block size too small. Reducing the number of blocks to {num_blocks}")
+            logger.warning(f"Block size too small with {old_num_blocks} blocks and {num_samples} samples. Reducing the number of blocks to {num_blocks}")
         
         # Create figure
         fig, ax = plt.subplots()
 
-        # Compute the FES along the given variables
-        fes, fes_grid, fes_bounds, fes_error = compute_fes(X, temp = temperature, ax = ax, plot = True, 
+        # Compute and plot the 1D or 2D FES along the given variables
+        fes, fes_grid, fes_bounds, fes_error = compute_fes(data, temp = temperature, ax = ax, plot = True, 
                                             plot_max_fes = max_fes, backend = "KDEpy",
                                             num_samples = num_bins, bandwidth = bandwidth,
-                                            blocks = num_blocks, eps = 1e-10, bounds = get_ranges(X))
+                                            blocks = num_blocks, eps = 1e-10, bounds = get_ranges(data))
         
         # Save the FE values, the grid, the bounds and the error
         if settings.get('save', False):
@@ -100,26 +96,28 @@ def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: 
             np.save(os.path.join(output_path, 'fes_error.npy'), fes_error)
 
         # Add reference data to the FES plot
-        if X_ref is not None:
+        if sup_data is not None:
+            
+            markers = ['o', 's', 'D', '^', 'v', '<', '>', 'p', 
+                    'P', '*', 'h', 'H', '+', 'x', 'data', '|', '_'] 
+            
+            for i, sup_data_i in enumerate(sup_data):
 
-            for i, X_ref_i in enumerate(X_ref):
-
-                label = X_ref_labels[i] if X_ref_labels else ''
+                label = sup_data_labels[i] if sup_data_labels else ''
                 
                 # Cycle through markers
                 marker = markers[i % len(markers)]
 
-                # If the reference data is 2D
-                if X_ref_i.shape[1] == 2:
-                    
-                    # Add as a scatter plot
-                    ax.scatter(X_ref_i[:,0], X_ref_i[:,1], c='black', s=8, label=label, marker=marker)
-
-                # If the reference data is 1D
-                elif X_ref_i.shape[1] == 1:
-
-                    # Add as a histogram
-                    ax.hist(X_ref_i, bins=num_bins, alpha=0.5, density=True, label=label)
+                # If the reference data is 1D -> histogram
+                if sup_data_i.ndim == 1:
+                    ax.hist(sup_data_i, bins=num_bins, alpha=0.5, density=True, label=label)
+                # If the reference data is 2D -> scatter plot
+                else: 
+                    if sup_data_i.shape[1] == 2:
+                        ax.scatter(sup_data_i[:,0], sup_data_i[:,1], c='black', s=8, label=label, marker=marker)
+                    else:
+                        logger.warning(f"Supplementary data {i} has {sup_data_i.shape[1]} dimensions > 2 dimensions. Skipping scatter plot of this data.")
+                        continue
 
         # Set axis labels
         ax.set_xlabel(cv_labels[0], fontsize = font_size)
@@ -132,16 +130,17 @@ def plot_fes(X: np.ndarray, cv_labels: List[str],  settings: Dict, output_path: 
             ax.set_ylim(0, max_fes)
 
         # Find the range of the data
-        data_range = get_ranges(X, X_ref)
+        data_range = get_ranges(data, sup_data)
         
         # Enforce CV limits, mix data ranges and -1, 1 limits
         if cv_dimension == 1:
-            ax.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
+            ax.set_xlim(min(data_range[0], -1), max(data_range[1], 1))
         elif cv_dimension == 2:
             ax.set_xlim(min(data_range[0][0], -1), max(data_range[0][1], 1))
             ax.set_ylim(min(data_range[1][0], -1), max(data_range[1][1], 1))
 
-        ax.legend(fontsize = font_size, framealpha=0.5)
+        if sup_data_labels:
+            ax.legend(fontsize = font_size, framealpha=0.5)
 
         # Set tick size
         ax.tick_params(axis='both', which='major', labelsize=tick_size)
@@ -375,8 +374,11 @@ def get_ranges(X: np.ndarray, X_ref: Union[List[np.ndarray], None] = None) -> Li
         ranges:       list with the range of the data along each dimension +/- 0.5% of the range
     """
 
-    # Dimensions of the input data
-    data_dimension = X.shape[1]
+    # Check dimension of the data
+    if X.ndim == 1:
+        data_dimension = 1
+    else:
+        data_dimension = X.shape[1]
 
     if data_dimension == 1:
 
@@ -402,7 +404,7 @@ def get_ranges(X: np.ndarray, X_ref: Union[List[np.ndarray], None] = None) -> Li
         offset = 0.005*(data_range[1]-data_range[0])
 
         # Add the offset to the limits
-        data_range = [(data_range[0]-offset, data_range[1]+offset)]
+        data_range = (data_range[0]-offset, data_range[1]+offset)
 
     else:
 
