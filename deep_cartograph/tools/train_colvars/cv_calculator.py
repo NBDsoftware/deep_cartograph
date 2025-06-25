@@ -1805,7 +1805,9 @@ class VAECalculator(NonLinear):
         }
         kl_anneal_callback = ml.KLAAnnealing(**kl_annealing_args)
         
-        return general_callbacks.append(kl_anneal_callback)
+        general_callbacks.append(kl_anneal_callback)
+        
+        return general_callbacks
     
     def save_loss(self): 
         """ 
