@@ -97,3 +97,30 @@ An example for the YAML configuration file can be found here `deep_cartograph/de
 ```
 
 This is related to how PLUMED reads the lattice vector information from the input files. Might be a problem specific to AMBER, see [discussion](https://groups.google.com/g/plumed-users/c/k6QoUu5LGoE/m/uzt4VGooCAAJ?utm_medium=email&utm_source=footer). Try to change the PLUMED version or convert the trajectory to a different format.
+
+## Licensing
+
+This project is offered under a dual-license model, intended to make the software freely available for academic and non-commercial use while protecting its commercial value.
+
+### 1. Academic and Non-Commercial Use
+
+For academic, research, and other non-commercial purposes, this software is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
+
+Under this license, you are free to:
+*   **Share** — copy and redistribute the material in any medium or format.
+*   **Adapt** — remix, transform, and build upon the material.
+
+As long as you follow the license terms:
+*   **Attribution** — You must give appropriate credit.
+*   **Non-Commercial** — You may not use the material for commercial purposes.
+*   **Share-Alike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+A full copy of the license is available in the [LICENSE](LICENSE) file in this repository.
+
+### 2. Commercial Use
+
+**Use of this software for commercial purposes is not permitted under the CC BY-NC-SA 4.0 license.**
+
+If you wish to use this software in a commercial product, for-profit service, or any other commercial context, you must obtain a separate commercial license.
+
+Please contact **it@nostrumbiodiscovery.com** to inquire about purchasing a commercial license.
