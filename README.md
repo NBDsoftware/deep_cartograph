@@ -100,7 +100,7 @@ This is related to how PLUMED reads the lattice vector information from the inpu
 
 ## Licensing
 
-This project is offered under a dual-license model, intended to make the software freely available for academic and non-commercial use while protecting its commercial value.
+This project is offered under a dual-license model, intended to make the software freely available for academic and non-commercial use while preventing its use for profit.
 
 ### 1. Academic and Non-Commercial Use
 
