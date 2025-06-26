@@ -12,7 +12,7 @@ data_path = os.path.join(tests_path, "data")
 
 def get_config():
     yaml_content = """
-  cvs: ['pca', 'deep_tica', 'htica', 'tica', 'ae']
+  cvs: ['pca', 'deep_tica', 'htica', 'tica', 'ae', 'vae']
   common:
     dimension: 2
     num_subspaces: 10
@@ -61,6 +61,21 @@ def get_config():
         kwargs: 
           lr: 1.0e-04
           weight_decay: 0
+  vae:
+    architecture:
+      encoder: [16, 8]
+      decoder: [4, 8]
+    training:
+      general: 
+        batch_size: 128
+      early_stopping:
+        patience: 1000
+      kl_annealing:
+        type: linear
+        start_beta: 0
+        max_beta: 0.001
+        start_epoch: 1000
+        n_epochs_anneal: 5000
   figures:
     fes:
       compute: True  
