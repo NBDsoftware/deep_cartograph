@@ -865,11 +865,11 @@ class NonLinear(CVCalculator):
             patience=self.patience, 
             mode = "min")
 
-        # Define ModelCheckpoint callback to save the best model
+        # Define ModelCheckpoint callback to save the best/last model
         self.checkpoint = ModelCheckpoint(
-            dirpath=self.output_path,
+            dirpath=self.output_path,                  # Directory to save the checkpoints  
             monitor="valid_loss",                      # Quantity to monitor
-            save_last=False,                           # Save the last checkpoint
+            save_last=True,                            # Save the last checkpoint - useful for VAE
             save_top_k=1,                              # Number of best models to save according to the quantity monitored
             save_weights_only=False,                   # Save only the weights
             filename=None,                             # Default checkpoint file name '{epoch}-{step}'
@@ -958,16 +958,19 @@ class NonLinear(CVCalculator):
         # Check if the checkpoint exists
         if successfully_trained:
             
-            if os.path.exists(self.checkpoint.best_model_path):
-                # Load the best model
-                self.cv = self.nonlinear_cv_map[self.cv_name].load_from_checkpoint(self.checkpoint.best_model_path)
-                os.remove(self.checkpoint.best_model_path)
-                
-                # Find the score of the best model
-                self.best_model_score = self.checkpoint.best_model_score
-                logger.info(f'Best model score: {self.best_model_score}')
+            if self.cv_name == 'vae':
+                # Save last model - regularized model is preferred over the best model
+                model_path = os.path.join(self.output_path, 'last.ckpt')
             else:
-                logger.error('The best model checkpoint does not exist.')
+                # Save lowest loss model
+                model_path = self.checkpoint.best_model_path
+
+            if os.path.exists(model_path):
+                self.cv = self.nonlinear_cv_map[self.cv_name].load_from_checkpoint(model_path)
+                self.best_model_score = self.checkpoint.best_model_score
+                logger.info(f'Lowest score during training: {self.best_model_score}')
+            else:
+                logger.error(f'The model checkpoint {model_path} does not exist.')
         else:
             logger.error(f'{cv_names_map[self.cv_name]} has not converged after {self.max_tries} tries.')
     
