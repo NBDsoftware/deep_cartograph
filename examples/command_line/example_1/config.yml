@@ -32,13 +32,13 @@ train_colvars:
   cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
     dimension: 2
+    lag_time: 1
     input_colvars: 
       start: 0
       stop: null
       stride: 1 
     architecture:
-      encoder: [5, 3]
-      lag_time: 1                        
+      encoder: [5, 3]                        
     training: 
       general:
         max_tries: 3

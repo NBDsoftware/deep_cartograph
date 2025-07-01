@@ -55,8 +55,8 @@ train_colvars:
       encoder:
       - 10
       - 10
-      lag_time: 30
     dimension: 2
+    lag_time: 30
     training:
       early_stopping:
         min_delta: 1.0e-05

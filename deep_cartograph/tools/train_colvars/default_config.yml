@@ -1,6 +1,7 @@
 # cvs:                           List of Collective Variables to calculate: pca, ae, tica, deep_tica or htica
 # common:                        Common settings for the Collective Variables
 #   dimension:                    (int) Number of dimensions to calculate
+#   lag_time:                     (int) Lag time for the Collective Variables
 #   num_subspaces:                (int) Number of subspaces to calculate (only for htica) - increase to reduce the memory usage
 #   subspaces_dimension:          (int) Dimension of the subspaces to calculate (only for htica) - reduce to reduce the memory usage
 #   features_normalization:       (str) Normalization of the input features, e.g. 'mean_std', 'min_max', null
@@ -10,7 +11,6 @@
 #     stride:                     (int) Stride to read the input features (df.iloc[start:stop:stride])
 #   architecture:                 Settings for the architecture of the Collective Variables
 #     encoder:              (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
-#     lag_time:                   (int) Lag time for the Collective Variables
 #   training:                    Settings for the training of the Collective Variables (when applicable)
 #     general:                    General settings for the training
 #       max_tries:                    (int) Maximum number of tries for the training
@@ -34,6 +34,7 @@
 cvs: ['pca', 'ae', 'tica', 'deep_tica']
 common:
   dimension: 1
+  lag_time: 10
   features_normalization: 'mean_std' # ['mean_std', 'min_max', null]
   input_colvars: 
     start: 0
@@ -41,7 +42,6 @@ common:
     stride: 1 
   architecture:
     encoder: [15, 15]
-    lag_time: 10
   training:
     general:
       max_tries: 10

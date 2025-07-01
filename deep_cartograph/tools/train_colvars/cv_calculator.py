@@ -736,7 +736,6 @@ class NonLinear(CVCalculator):
         self.shuffle: bool = self.general_config['shuffle']
         self.random_split: bool = self.general_config['random_split']
         self.max_epochs: int = self.general_config['max_epochs']
-        self.dropout: float = self.general_config['dropout']
         self.check_val_every_n_epoch: int = self.general_config['check_val_every_n_epoch']
         self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
         
@@ -746,14 +745,18 @@ class NonLinear(CVCalculator):
         self.patience: int = self.early_stopping_config['patience']
         self.min_delta: float = self.early_stopping_config['min_delta']
         
-        self.encoder_hidden_layers: List = self.architecture_config['encoder']
-        # Only used for VAE and AE as DeepTICA has siamese encoder/decoder NN
-        self.decoder_hidden_layers: Optional[List] = self.architecture_config['decoder'] 
-        
         # Neural network settings
-        self.encoder_layers: List = self.set_encoder()
-        self.decoder_layers: Optional[List] = self.set_decoder()
-        self.nn_options: Dict = self.set_options()
+        self.encoder_config: Dict = self.architecture_config['encoder']
+        self.decoder_config: Optional[Dict] = self.architecture_config['decoder'] 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
+        self.encoder_options: Dict = self.encoder_config.copy()
+        self.encoder_options.pop('layers', {})
+        if self.decoder_config is not None:
+            self.decoder_options = self.decoder_config.copy()
+            self.decoder_options.pop('layers', {})
+        else:
+            self.decoder_options = None
 
         # Normalization of features in the Non-linear models: min_max or mean_std
         if self.feats_norm_mode == 'min_max':
@@ -766,6 +769,8 @@ class NonLinear(CVCalculator):
         # Optimizer
         self.opt_name: str = self.optimizer_config['name']
         self.optimizer_options: Dict = self.optimizer_config['kwargs']
+        
+        self.cv_options["optimizer"] = self.optimizer_options
     
     def check_batch_size(self):
         
@@ -778,7 +783,7 @@ class NonLinear(CVCalculator):
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
     
-    def set_encoder() -> List:
+    def set_encoder_layers() -> List:
         """ 
         Set the layers for the encoder of the non-linear model.
         Implement in subclasses.
@@ -800,7 +805,7 @@ class NonLinear(CVCalculator):
         
         raise NotImplementedError("This method should be implemented in subclasses.")
     
-    def set_decoder(self) -> Optional[List]:
+    def set_decoder_layers(self) -> Optional[List]:
         """ 
         Set the layers for the decoder of the non-linear model.
         Implement in subclasses.
@@ -822,27 +827,6 @@ class NonLinear(CVCalculator):
         """
         
         return None
-        
-    def set_options(self) -> Dict:
-        """ 
-        Set the options for the non-linear model.
-        Implement in subclasses.
-        
-        self.nn_options: {'activation': 'shifted_softplus', 'dropout': self.dropout} 
-            activation
-            dropout
-            batchnorm
-            last_layer_activation
-            torch.nn.Module args
-
-        Returns
-        -------
-        
-        nn_options : Dict
-            Dictionary with the options for the non-linear model
-            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
-        """
-        raise NotImplementedError("This method should be implemented in subclasses.")
         
     def create_model(self):
         
@@ -1259,7 +1243,7 @@ class TICACalculator(LinearCalculator):
         self.cv_name = 'tica'
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.architecture_config['lag_time'])
+        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration['lag_time'])
         
         self.initialize_cv()
         
@@ -1327,7 +1311,7 @@ class HTICACalculator(LinearCalculator):
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         # NOTE: Are we duplicating the data here? :(
         # NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.architecture_config['lag_time'])
+        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration['lag_time'])
         
         self.initialize_cv()
         
@@ -1446,11 +1430,14 @@ class AECalculator(NonLinear):
         self.check_batch_size()
         
         # Update options
-        self.cv_options.update({"encoder": self.nn_options,
-                                "decoder": self.nn_options,
-                                "optimizer": self.optimizer_options})
-    
-    def set_encoder(self) -> List:
+        cv_options = {
+            "encoder": self.encoder_options,
+            "decoder": self.decoder_options if self.decoder_options is not None else self.encoder_options,
+            "optimizer": self.optimizer_options
+        }
+        self.cv_options.update(cv_options)
+
+    def set_encoder_layers(self) -> List:
         """ 
         Set the layers for the encoder of the Autoencoder
         
@@ -1462,9 +1449,9 @@ class AECalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
+        return [self.num_features] + self.architecture_config['encoder']['layers'] + [self.cv_dimension]
     
-    def set_decoder(self) -> Optional[List]:
+    def set_decoder_layers(self) -> Optional[List]:
         """ 
         Set the layers for the decoder of the Autoencoder
         
@@ -1477,29 +1464,10 @@ class AECalculator(NonLinear):
             If None, no decoder is used (e.g. DeepTICA).
         """
         
-        if self.decoder_hidden_layers is None:
+        if self.architecture_config['decoder'] is None:
             return None
         else:
-            return [self.cv_dimension] + self.decoder_hidden_layers + [self.num_features]
-    
-    def set_options(self):
-        """ 
-        Set options for the Autoencoder
-        
-        Return
-        ------
-        
-        nn_options: Dict
-            Dictionary with the options for the non-linear model
-            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
-        """
-        
-        nn_options = {
-            'activation': 'shifted_softplus', 
-            'dropout': self.dropout
-            } 
-        
-        return nn_options
+            return [self.cv_dimension] + self.architecture_config['decoder']['layers'] + [self.num_features]
         
     def create_model(self):
         """ 
@@ -1553,17 +1521,19 @@ class DeepTICACalculator(NonLinear):
         self.cv_name = 'deep_tica'
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.architecture_config['lag_time'])
+        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration['lag_time'])
         
         self.initialize_cv()
         
         self.check_batch_size()
             
         # Update options
-        self.cv_options.update({"nn": self.nn_options,
-                                "optimizer": self.optimizer_options})
+        cv_options = {
+            "nn": self.encoder_options
+        }
+        self.cv_options.update(cv_options)
 
-    def set_encoder(self) -> List:
+    def set_encoder_layers(self) -> List:
         """ 
         Set the layers for the encoder of DeepTICA
         
@@ -1575,26 +1545,7 @@ class DeepTICACalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
-    
-    def set_options(self):
-        """ 
-        Set options for the Autoencoder
-        
-        Return
-        ------
-        
-        nn_options: Dict
-            Dictionary with the options for the non-linear model
-            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
-        """
-        
-        nn_options = {
-            'activation': 'shifted_softplus', 
-            'dropout': self.dropout
-            } 
-        
-        return nn_options
+        return [self.num_features] + self.encoder_config['layers'] + [self.cv_dimension]
     
     def create_model(self):
         """
@@ -1697,11 +1648,13 @@ class VAECalculator(NonLinear):
         self.check_batch_size()
         
         # Update options
-        self.cv_options.update({"encoder": self.nn_options,
-                                "decoder": self.nn_options,
-                                "optimizer": self.optimizer_options})
+        cv_options = {
+            "encoder": self.encoder_options,
+            "decoder": self.decoder_options if self.decoder_options is not None else self.encoder_options
+        }
+        self.cv_options.update(cv_options)
 
-    def set_encoder(self) -> List:
+    def set_encoder_layers(self) -> List:
         """ 
         Set the layers for the VAE
         
@@ -1716,9 +1669,9 @@ class VAECalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_hidden_layers
+        return [self.num_features] + self.encoder_config['layers']
     
-    def set_decoder(self):
+    def set_decoder_layers(self):
         """ 
         Set the layers for the decoder of the VAE
         
@@ -1734,29 +1687,10 @@ class VAECalculator(NonLinear):
             If None, no decoder is used (e.g. DeepTICA).
         """
         
-        if self.decoder_hidden_layers is None:
+        if self.decoder_config is None:
             return None
         else:
-            return self.decoder_hidden_layers + [self.num_features]
-    
-    def set_options(self):
-        """ 
-        Set options for the Autoencoder
-        
-        Return
-        ------
-        
-        nn_options: Dict
-            Dictionary with the options for the non-linear model
-            Contains the activation function, dropout, batch normalization, last layer activation and other torch.nn.Module arguments.
-        """
-        
-        nn_options = {
-            'activation': 'leaky_relu', 
-            'dropout': self.dropout
-            } 
-        
-        return nn_options
+            return self.decoder_config['layers'] + [self.num_features]
    
     def create_model(self):
         """

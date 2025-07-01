@@ -25,7 +25,6 @@ common:
     encoder:
     - 10
     - 10
-    lag_time: 30
   dimension: 2
   training:
     early_stopping:
@@ -35,6 +34,7 @@ common:
       batch_size: 256
       check_val_every_n_epoch: 1
       dropout: 0.1
+      lag_time: 30
       lengths:
       - 0.8
       - 0.2

@@ -8,14 +8,24 @@ class Optimizer(BaseModel):
     # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim Algorithms)
     kwargs: dict = {'lr': 1.0e-03, 'weight_decay': 0.0}
 
+class NeuralNetwork(BaseModel):
+    # Fully connected hidden layers
+    layers: List[int] = [64, 32, 16]
+    # Activation function
+    activation: Literal['relu','elu','tanh','softplus','shifted_softplus','linear','leaky_relu'] = "leaky_relu"
+    # Whether to use batch normalization
+    batchnorm: bool = False
+    # Value for dropout (if 0.0, no dropout is applied)
+    dropout: float = 0.0
+    # Whether to use activation functions for the last layer
+    last_layer_activation: bool = True
+    
 class Architecture(BaseModel):
 
     # Fully connected hidden layers between the input and latent space
-    encoder: List[int] = [10, 10]
+    encoder: NeuralNetwork = NeuralNetwork()
     # Fully connected hidden layers between the latent space and the output
-    decoder: Optional[List[int]] = None
-    # Lag time for TICA and DeepTICA
-    lag_time: int = 1
+    decoder: Optional[NeuralNetwork] = None
 
 class GeneralSettings(BaseModel):
 
@@ -29,8 +39,6 @@ class GeneralSettings(BaseModel):
     batch_size: int = 32
     # Maximum number of epochs for the training
     max_epochs: int = 1000
-    # Dropout rate for the training
-    dropout: float = 0.1
     # Shuffle the data before training
     shuffle: bool = False
     # Randomly split the data into training and validation sets
@@ -129,6 +137,8 @@ class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
     dimension: int = 2
+    # Lag time for TICA and DeepTICA
+    lag_time: int = 1
     # Features normalization
     features_normalization: Literal['mean_std', 'min_max', 'none'] = 'mean_std'
     # Input colvars
