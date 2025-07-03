@@ -38,7 +38,7 @@ def get_config():
             relaxation_time: 1  
           
     train_colvars:
-      cvs: [ 'pca', 'tica', 'deep_tica', 'htica', 'ae'] 
+      cvs: [ 'pca', 'tica', 'deep_tica', 'htica', 'ae', 'vae'] 
       common:
         dimension: 2
         lag_time: 1 
@@ -93,6 +93,27 @@ def get_config():
             kwargs: 
               lr: 1.0e-04
               weight_decay: 0
+      vae:
+        architecture:
+          encoder: 
+            layers: [16, 8]
+            activation: leaky_relu
+            last_layer_activation: False
+          decoder: 
+            layers: [4, 8]
+            activation: leaky_relu
+            last_layer_activation: False
+        training:
+          general: 
+            batch_size: 128
+          early_stopping:
+            patience: 1000
+          kl_annealing:
+            type: linear
+            start_beta: 0
+            max_beta: 0.001
+            start_epoch: 1000
+            n_epochs_anneal: 5000
       figures:
         fes:
           compute: True  
