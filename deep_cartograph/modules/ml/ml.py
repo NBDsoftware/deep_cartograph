@@ -90,7 +90,7 @@ class KLAAnnealing(Callback):
             if self.type == 'linear':
                 beta = self.linear_anneal(annealing_epoch, self.n_epochs_anneal)
             elif self.type == 'cyclical':
-                beta = self.cyclical_anneal(annealing_epoch)
+                beta = self.cyclical_anneal(annealing_epoch, self.n_epochs_anneal)
         
             
         # Set beta in the LightningModule
@@ -104,7 +104,7 @@ class KLAAnnealing(Callback):
         pl_module.log('beta', beta, on_step=False, on_epoch=True)
     
     def linear_anneal(self, epoch: int,
-                      n_epochs_anneal: int,
+                      n_epochs_anneal: int
                       ) -> float:
         """
         Linearly increases beta from start_beta to max_beta over n_epochs_anneal epochs.
@@ -127,7 +127,9 @@ class KLAAnnealing(Callback):
         
         return self.start_beta + (self.max_beta - self.start_beta) * (epoch / n_epochs_anneal)
     
-    def cyclical_anneal(self, epoch: int) -> float:
+    def cyclical_anneal(self, epoch: int,
+                      n_epochs_anneal: int
+                      ) -> float:
         """
         Cyclical annealing of beta, cycling between 0 and max_beta.
         
@@ -138,7 +140,18 @@ class KLAAnnealing(Callback):
         ----------
         epoch : int
             The current epoch since the annealing started.
+            
+        n_epochs_anneal : int
+            The total number of epochs over which to anneal beta.
+        
+        Returns
+        -------
+        float
+            The annealed beta value.
         """
+        
+        if epoch >= n_epochs_anneal:
+            return self.max_beta
         
         # Progress within the current cycle
         cycle_progress = epoch % self.cycle_length
