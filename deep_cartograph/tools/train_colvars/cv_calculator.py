@@ -1135,7 +1135,13 @@ class NonLinear(CVCalculator):
             logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
 
             with torch.no_grad():
-                projected_sup_array = self.cv(torch.tensor(self.supplementary_data.values).to(self.cv.device)).numpy()
+                # Move data to the device of the model (GPU or CPU)
+                supplementary_data_on_model_device = torch.tensor(self.supplementary_data.values).to(self.cv.device)
+                # Project the supplementary data onto the CV space
+                projected_sup_tensor = self.cv(supplementary_data_on_model_device)
+            
+            # Move to CPU and convert to numpy array
+            projected_sup_array = projected_sup_tensor.cpu().numpy()
             
             self.projected_supplementary_data = pd.DataFrame(projected_sup_array, columns=self.cv_labels)
 
