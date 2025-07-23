@@ -106,6 +106,7 @@ filter_features:
 #   cvs:                           List of Collective Variables to calculate: pca, ae, tica, deep_tica or htica
 #   common:                        Common settings for the Collective Variables
 #     dimension:                    (int) Number of dimensions to calculate
+#     lag_time:                   (int) Lag time for the Collective Variables
 #     num_subspaces:                (int) Number of subspaces to calculate (only for htica) - increase to reduce the memory usage
 #     subspaces_dimension:          (int) Dimension of the subspaces to calculate (only for htica) - reduce to reduce the memory usage
 #     features_normalization:       (str) Normalization of the input features, e.g. 'mean_std', 'min_max', null
@@ -114,8 +115,10 @@ filter_features:
 #       stop:                       (int) Stop index to read the input features (df.iloc[start:stop:stride])
 #       stride:                     (int) Stride to read the input features (df.iloc[start:stop:stride])
 #     architecture:                 Settings for the architecture of the Collective Variables
-#       hidden_layers:              (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
-#       lag_time:                   (int) Lag time for the Collective Variables
+#       encoder:                   
+#         layers:                  (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
+#       decoder:                   
+#         layers:                  (list) Fully connected hidden layers between the latent space and output, e.g. [15, 15]
 #     training:                    Settings for the training of the Collective Variables (when applicable)
 #       general:                    General settings for the training
 #         max_tries:                    (int) Maximum number of tries for the training
@@ -123,7 +126,6 @@ filter_features:
 #         lengths:                      (list) Lengths of the training and validation sets, e.g. [0.8, 0.2]
 #         batch_size:                   (int) Batch size for the training
 #         max_epochs:                   (int) Maximum number of epochs for the training
-#         dropout:                      (float) Dropout rate for the training
 #         shuffle:                      (bool) Shuffle the data before training 
 #         check_val_every_n_epoch:      (int) Do a validation check every n epochs
 #         save_check_every_n_epoch:     (int) Save the model every n epochs
@@ -174,6 +176,7 @@ train_colvars:
   cvs: ['pca', 'ae', 'htica', 'deep_tica']
   common:
     dimension: 2
+    lag_time: 1
     num_subspaces: 10
     subspaces_dimension: 5
     features_normalization: 'mean_std'
@@ -182,8 +185,9 @@ train_colvars:
       stop: null
       stride: 1 
     architecture:
-      hidden_layers: [15, 15] # Increase the complexity if needed: [100, 50, 20]
-      lag_time: 1
+      encoder: 
+        layers: [15, 15] # Increase the complexity if needed: [100, 50, 20]
+        dropout: 0.1
     training: 
       general:
         max_tries: 10
@@ -191,7 +195,6 @@ train_colvars:
         lengths: [0.8, 0.2]
         batch_size: 264
         max_epochs: 5000    
-        dropout: 0.1
         shuffle: True
         random_split: True
         check_val_every_n_epoch: 1

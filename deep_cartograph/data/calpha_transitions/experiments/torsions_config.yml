@@ -24,8 +24,9 @@ train_colvars:
   common:
     dimension: 2
     architecture:
-      hidden_layers: [15, 15]
-      lag_time: 1 
+      encoder: 
+        layers: [15, 15] 
+        dropout: 0.1
     training: 
       general:
         max_tries: 10
@@ -33,7 +34,7 @@ train_colvars:
         lengths: [0.8, 0.2]
         batch_size: 64
         max_epochs: 10000
-        dropout: 0.1
+        lag_time: 1
         shuffle: False
         random_split: True
         check_val_every_n_epoch: 1

@@ -623,7 +623,7 @@ def opes_metad(
     """
 
     # Start OPES_METAD command
-    opes_metad_command = command_label + ": OPES_METAD ...\n"
+    opes_metad_command = "OPES_METAD ...\n"
 
     # Add command label
     opes_metad_command += " LABEL=" + command_label + "\n"
@@ -676,7 +676,7 @@ def opes_metad_explore(
     """
 
     # Start OPES_METAD_EXPLORE command
-    opes_metad_explore_command = command_label + ": OPES_METAD_EXPLORE ...\n"
+    opes_metad_explore_command = "OPES_METAD_EXPLORE ...\n"
 
     # Add command label
     opes_metad_explore_command += " LABEL=" + command_label + "\n"
@@ -726,7 +726,7 @@ def opes_expanded(
     """
 
     # Start OPES_EXPANDED command
-    opes_expanded_command = command_label + ": OPES_EXPANDED ...\n"
+    opes_expanded_command = "OPES_EXPANDED ...\n"
 
     # Add command label
     opes_expanded_command += " LABEL=" + command_label + "\n"

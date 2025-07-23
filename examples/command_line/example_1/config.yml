@@ -32,13 +32,13 @@ train_colvars:
   cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
     dimension: 2
+    lag_time: 1
     input_colvars: 
       start: 0
       stop: null
       stride: 1 
     architecture:
-      hidden_layers: [5, 3]
-      lag_time: 1                        
+      encoder: [5, 3]                        
     training: 
       general:
         max_tries: 3
@@ -63,7 +63,7 @@ train_colvars:
       plot_loss: True
   ae:           
     architecture:
-      hidden_layers: [5, 3]
+      encoder: [5, 3]
     training:
       general:
         batch_size: 256

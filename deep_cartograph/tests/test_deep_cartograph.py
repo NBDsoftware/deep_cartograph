@@ -38,9 +38,10 @@ def get_config():
             relaxation_time: 1  
           
     train_colvars:
-      cvs: [ 'pca', 'tica', 'deep_tica', 'htica', 'ae'] 
+      cvs: [ 'pca', 'tica', 'deep_tica', 'htica', 'ae', 'vae'] 
       common:
         dimension: 2
+        lag_time: 1 
         num_subspaces: 10
         subspaces_dimension: 5
         input_colvars: 
@@ -48,16 +49,18 @@ def get_config():
           stop: null
           stride: 1 
         architecture:
-          hidden_layers: [5, 3]
-          lag_time: 1                        
+          encoder: 
+            layers: [5, 3]
+            dropout: 0.1  
+            activation: shifted_softplus    
+            last_layer_activation: False               
         training: 
           general:
             max_tries: 10
             seed: 42
             lengths: [0.8, 0.2]
             batch_size: 256
-            max_epochs: 1000
-            dropout: 0.1
+            max_epochs: 1000  
             shuffle: False
             random_split: True
             check_val_every_n_epoch: 1
@@ -74,12 +77,15 @@ def get_config():
           plot_loss: True
       ae:           
         architecture:
-          hidden_layers: [5, 3]
+          encoder: 
+            layers: [5, 3]
+            dropout: 0.1
+            activation: shifted_softplus
+            last_layer_activation: False
         training:
           general:
             batch_size: 256
             max_epochs: 10000
-            dropout: 0.1
           early_stopping:
             patience: 100
             min_delta: 1.0e-05
@@ -87,6 +93,27 @@ def get_config():
             kwargs: 
               lr: 1.0e-04
               weight_decay: 0
+      vae:
+        architecture:
+          encoder: 
+            layers: [16, 8]
+            activation: leaky_relu
+            last_layer_activation: False
+          decoder: 
+            layers: [4, 8]
+            activation: leaky_relu
+            last_layer_activation: False
+        training:
+          general: 
+            batch_size: 128
+          early_stopping:
+            patience: 1000
+          kl_annealing:
+            type: linear
+            start_beta: 0
+            max_beta: 0.001
+            start_epoch: 1000
+            n_epochs_anneal: 5000
       figures:
         fes:
           compute: True  

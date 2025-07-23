@@ -272,6 +272,9 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     @phi_resid
     
     @psi_resid
+    
+    Note that the phi angle of a given residue requires the existence of the previous residue,
+    and the psi angle of a given residue requires the existence of the next residue.
 
     Input
     -----
@@ -306,7 +309,18 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
 
             # Create dihedral label
             label = f"@{dihedral}_{residue}"
-
+            
+            if dihedral == 'phi':
+                # Check the existence of the previous residue
+                if residue -1 not in residues:
+                    logger.warning(f"Residue {residue} does not have a previous residue, skipping phi dihedral.")
+                    continue
+            elif dihedral == 'psi':
+                # Check the existence of the next residue
+                if residue + 1 not in residues:
+                    logger.warning(f"Residue {residue} does not have a next residue, skipping psi dihedral.")
+                    continue
+                
             # Add dihedral definition
             dihedral_labels.append(label)
     
