@@ -29,7 +29,7 @@ Starting from a trajectory and topology files, Deep cartograph can be used to:
 
 ## Installation
 
-Using conda, create the deep cartograph environment from the `environment.yml` file.
+Using conda, create the deep cartograph environment from the `environment.yml` or `environment_detailed.yml` files.
 
 ```
 git clone https://github.com/NBDsoftware/deep_cartograph.git
@@ -38,7 +38,7 @@ conda env create -f environment_detailed.yml
 ```
 
 The `environment_detailed.yml` file has been produced using `conda env export --no-builds -f environment_detailed.yml` and should be cross-platform compatible. 
-Otherwise try to create the environment from `environment_production.yml`.
+Otherwise try to create the environment from `environment.yml`.
 
 Activate the environment and install the deep cartograph package itself.
 
@@ -47,6 +47,14 @@ cd deep_cartograph
 pip install .
 ```
 
+If you are a developer you can install it in editable mode:
+
+```
+pip install -e .
+```
+
+In this way changes in this working directory will be reflected on the environment.
+
 If you want to use GPU support be sure to install the environment in the machine that has an available GPU. In a cluster for example you can connect with an interactive session to the computation node and perform the installation there. In this way conda will install the necessary dependencies to have gpu support. 
 
 ## Usage
@@ -54,33 +62,35 @@ If you want to use GPU support be sure to install the environment in the machine
 The main workflow can be used calling `deep_carto` within the environment:
 
 ```
-usage: Deep Cartograph [-h] -conf CONFIGURATION_PATH -traj_data TRAJECTORY_DATA -top_data TOPOLOGY_DATA [-ref_traj_data REF_TRAJECTORY_DATA] [-ref_topology_data REF_TOPOLOGY_DATA] [-label_reference]
-                       [-restart] [-dim DIMENSION] [-cvs CVS [CVS ...]] [-out OUTPUT_FOLDER] [-v]
+usage: Deep Cartograph [-h] -conf CONFIGURATION_PATH -traj_data TRAJECTORY_DATA -top_data TOPOLOGY_DATA [-sup_traj_data SUPPLEMENTARY_TRAJ_DATA] [-sup_top_data SUPPLEMENTARY_TOP_DATA]
+                       [-ref_top REFERENCE_TOPOLOGY] [-restart] [-dim DIMENSION] [-cvs CVS [CVS ...]] [-out OUTPUT_FOLDER] [-v]
 
 Map trajectories onto Collective Variables.
 
 options:
   -h, --help            show this help message and exit
   -conf CONFIGURATION_PATH, -configuration CONFIGURATION_PATH
-                        Path to configuration file (.yml)
+                        Path to configuration file (.yml).
   -traj_data TRAJECTORY_DATA
-                        Path to trajectory or folder with trajectories to compute the CVs.
+                        Path to trajectory or folder with trajectories to analyze. Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd.
   -top_data TOPOLOGY_DATA
-                        Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in
-                        -traj_data.
-  -ref_traj_data REF_TRAJECTORY_DATA
-                        Path to reference trajectory or folder with reference trajectories. To project alongside the main trajectory data but not used to compute the CVs.
-  -ref_topology_data REF_TOPOLOGY_DATA
-                        Path to reference topology or folder with reference topologies. If a folder is provided, each topology should have the same name as the corresponding reference trajectory in
-                        -ref_traj_data.
-  -label_reference      Use labels for reference data (names of the files in the reference folder). This option is not recommended if there are many samples in the reference data.
-  -restart              Set to restart the workflow from the last finished step. Erase those step folders that you want to repeat.
+                        Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding
+                        trajectory in -traj_data. Accepted format: .pdb.
+  -sup_traj_data SUPPLEMENTARY_TRAJ_DATA
+                        Path to supplementary trajectory or folder with supplementary trajectories. Used to project onto the CV alongside 'trajectory_data' but not for computing CVs.
+  -sup_top_data SUPPLEMENTARY_TOP_DATA
+                        Path to supplementary topology or folder with supplementary topologies. If a folder is provided, each topology should match the corresponding supplementary
+                        trajectory in -sup_traj_data.
+  -ref_top REFERENCE_TOPOLOGY
+                        Path to reference topology file. Used to find features from user selections. Defaults to the first topology in topology_data. Accepted format: .pdb.
+  -restart              Restart workflow from the last finished step. Deletes step folders for repeated steps.
   -dim DIMENSION, -dimension DIMENSION
-                        Dimension of the CV to train or compute, overwrites the configuration input YML.
-  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, htica, deep_tica), overwrites the configuration input YML.
+                        Dimension of the CV to train or compute. Overrides the configuration input YML.
+  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, htica, deep_tica). Overrides the configuration input YML.
   -out OUTPUT_FOLDER, -output OUTPUT_FOLDER
-                        Path to the output folder
-  -v, -verbose          Set the logging level to DEBUG
+                        Path to the output folder.
+  -v, -verbose          Set logging level to DEBUG.
+
 ```
 
 An example for the YAML configuration file can be found here `deep_cartograph/default_config.yml`.
@@ -97,3 +107,30 @@ An example for the YAML configuration file can be found here `deep_cartograph/de
 ```
 
 This is related to how PLUMED reads the lattice vector information from the input files. Might be a problem specific to AMBER, see [discussion](https://groups.google.com/g/plumed-users/c/k6QoUu5LGoE/m/uzt4VGooCAAJ?utm_medium=email&utm_source=footer). In some cases it can be solved **converting the trajectory to pdb format** and then **erasing the CRYST record**. Otherwise try to change the PLUMED version or convert the trajectory to a different format. 
+
+## Licensing
+
+This project is offered under a dual-license model, intended to make the software freely available for academic and non-commercial use while preventing its use for profit.
+
+### 1. Academic and Non-Commercial Use
+
+For academic, research, and other non-commercial purposes, this software is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
+
+Under this license, you are free to:
+*   **Share** — copy and redistribute the material in any medium or format.
+*   **Adapt** — remix, transform, and build upon the material.
+
+As long as you follow the license terms:
+*   **Attribution** — You must give appropriate credit.
+*   **Non-Commercial** — You may not use the material for commercial purposes.
+*   **Share-Alike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+A full copy of the license is available in the [LICENSE](LICENSE) file in this repository.
+
+### 2. Commercial Use
+
+**Use of this software for commercial purposes is not permitted under the CC BY-NC-SA 4.0 license.**
+
+If you wish to use this software in a commercial product, for-profit service, or any other commercial context, you must obtain a separate commercial license.
+
+Please contact **it@nostrumbiodiscovery.com** to inquire about purchasing a commercial license.

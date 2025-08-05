@@ -292,7 +292,7 @@ def parse_arguments():
         '-sup_traj_data', dest='supplementary_traj_data', required=False,
         help=(
             "Path to supplementary trajectory or folder with supplementary trajectories. "
-            "Used to project onto the CV alongside 'trajectory_data' but not for computing CVs."
+            "Used to project onto the CV alongside 'trajectory_data' but not used for computing CVs."
         )
     )
     parser.add_argument(
@@ -314,7 +314,7 @@ def parse_arguments():
     # Options
     parser.add_argument(
         '-restart', dest='restart', action='store_true', default=False,
-        help="Restart workflow from the last finished step. Deletes step folders for repeated steps."
+        help="Restart workflow from the last finished step."
     )
     parser.add_argument(
         '-dim', '-dimension', dest='dimension', type=int, required=False,
@@ -322,7 +322,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-cvs', nargs='+', required=False,
-        help="Collective variables to train or compute (pca, ae, tica, htica, deep_tica). "
+        help="Collective variables to train or compute (pca, ae, tica, htica, vae, deep_tica). "
              "Overrides the configuration input YML."
     )
     parser.add_argument(
