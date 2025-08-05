@@ -114,7 +114,7 @@ def plot_fes(
                 # If the reference data is 2D -> scatter plot
                 else: 
                     if sup_data_i.shape[1] == 2:
-                        ax.scatter(sup_data_i[:,0], sup_data_i[:,1], c='black', s=8, label=label, marker=marker)
+                        ax.scatter(sup_data_i[:,0], sup_data_i[:,1], s=8, label=label, marker=marker, alpha=0.5)
                     else:
                         logger.warning(f"Supplementary data {i} has {sup_data_i.shape[1]} dimensions > 2 dimensions. Skipping scatter plot of this data.")
                         continue
