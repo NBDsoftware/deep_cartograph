@@ -75,7 +75,8 @@ class Filter:
         self.compute_diptest = settings['compute_diptest']
         self.compute_entropy = settings['compute_entropy']
         self.compute_std = settings['compute_std']
-        
+        self.filter_features = self.compute_diptest or self.compute_entropy or self.compute_std
+
         # Thresholds
         self.diptest_significance_level = settings['diptest_significance_level']
         self.entropy_quantile = settings['entropy_quantile']
@@ -154,52 +155,53 @@ class Filter:
         start_time = time.time()  # Start timer
         
         # Iterate over features
-        for i, reference_feature in enumerate(self.common_ref_features, start=1):
+        if self.filter_features:
+            for i, reference_feature in enumerate(self.common_ref_features, start=1):
+                
+                logger.debug(f"Analyzing feature: {reference_feature}")
+                
+                # Read all the data for this feature
+                args = {
+                    'colvars_paths': self.colvars_paths,
+                    'ref_feature_names': [reference_feature],
+                    'topology_paths': self.topology_paths,
+                    'reference_topology': self.ref_topology_path
+                }
+                feature_df = read_features(**args)
+                    
+                # Entropy
+                if self.compute_entropy:
+                    
+                    from deep_cartograph.modules.statistics import shannon_entropy
+
+                    # Compute and update the entropy of the feature
+                    feature_entropy = shannon_entropy(feature_df)
+                    self.features_data.loc[(self.features_data['name'] == reference_feature), 'entropy'] = feature_entropy
+
+                # Standard deviation
+                if self.compute_std:
+                    
+                    from deep_cartograph.modules.statistics import standard_deviation
+
+                    # Compute and update the standard deviation of the feature
+                    feature_std = standard_deviation(feature_df)
+                    self.features_data.loc[(self.features_data['name'] == reference_feature), 'std'] = feature_std
+                
+                # Dip test
+                if self.compute_diptest:
+                    
+                    from deep_cartograph.modules.statistics import dip_test
+
+                    # Compute and update the p-value of the Hartigan's Dip Test of the feature
+                    feature_hdt_pvalues = dip_test(feature_df)
+                    self.features_data.loc[(self.features_data['name'] == reference_feature), 'hdtp'] = feature_hdt_pvalues[0]
             
-            logger.debug(f"Analyzing feature: {reference_feature}")
-            
-            # Read all the data for this feature
-            args = {
-                'colvars_paths': self.colvars_paths,
-                'ref_feature_names': [reference_feature],
-                'topology_paths': self.topology_paths,
-                'reference_topology': self.ref_topology_path
-            }
-            feature_df = read_features(**args)
-                
-            # Entropy
-            if self.compute_entropy:
-                
-                from deep_cartograph.modules.statistics import shannon_entropy
-
-                # Compute and update the entropy of the feature
-                feature_entropy = shannon_entropy(feature_df)
-                self.features_data.loc[(self.features_data['name'] == reference_feature), 'entropy'] = feature_entropy
-
-            # Standard deviation
-            if self.compute_std:
-                
-                from deep_cartograph.modules.statistics import standard_deviation
-
-                # Compute and update the standard deviation of the feature
-                feature_std = standard_deviation(feature_df)
-                self.features_data.loc[(self.features_data['name'] == reference_feature), 'std'] = feature_std
-            
-            # Dip test
-            if self.compute_diptest:
-                
-                from deep_cartograph.modules.statistics import dip_test
-
-                # Compute and update the p-value of the Hartigan's Dip Test of the feature
-                feature_hdt_pvalues = dip_test(feature_df)
-                self.features_data.loc[(self.features_data['name'] == reference_feature), 'hdtp'] = feature_hdt_pvalues[0]
-        
-            # Estimate remaining time every log_interval iterations
-            if i % log_interval == 0 or i == total_num_features:
-                elapsed_time = time.time() - start_time
-                avg_time_per_feature = elapsed_time / i
-                estimated_remaining = avg_time_per_feature * (total_num_features - i)
-                logger.info(f'Processed {i}/{total_num_features} features. Estimated time left: {estimated_remaining:.2f} seconds.')
+                # Estimate remaining time every log_interval iterations
+                if i % log_interval == 0 or i == total_num_features:
+                    elapsed_time = time.time() - start_time
+                    avg_time_per_feature = elapsed_time / i
+                    estimated_remaining = avg_time_per_feature * (total_num_features - i)
+                    logger.info(f'Processed {i}/{total_num_features} features. Estimated time left: {estimated_remaining:.2f} seconds.')
         
         if self.compute_entropy and self.entropy_quantile > 0:
             # Filter according to the entropy, those features with entropy below the threshold don't pass the filter
