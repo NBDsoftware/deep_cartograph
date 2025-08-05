@@ -756,9 +756,12 @@ class NonLinear(CVCalculator):
             self.decoder_options = self.decoder_config.copy()
             self.decoder_options.pop('layers', {})
         else:
-            self.decoder_options = None
+            self.decoder_options = self.encoder_options.copy()
 
-        # Normalization of features in the Non-linear models: min_max or mean_std
+        # Remove the last activation function of the decoder 
+        self.decoder_options['last_layer_activation'] = False
+        
+        # Normalization of features in the Non-linear models: min_max, mean_std or none
         if self.feats_norm_mode == 'min_max':
             self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
         elif self.feats_norm_mode == 'mean_std':
@@ -1441,7 +1444,7 @@ class AECalculator(NonLinear):
         # Update options
         cv_options = {
             "encoder": self.encoder_options,
-            "decoder": self.decoder_options if self.decoder_options is not None else self.encoder_options,
+            "decoder": self.decoder_options,
             "optimizer": self.optimizer_options
         }
         self.cv_options.update(cv_options)
@@ -1656,10 +1659,26 @@ class VAECalculator(NonLinear):
         
         self.check_batch_size()
         
+        # If the activation functions / dropout are given as a list, add one for the last layer 
+        # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
+        
+        # tanh or linear on last layer
+        if isinstance(self.decoder_options['activation'], list):
+            # If the features are normalizes using min-max, we can use tanh activation
+            if self.feats_norm_mode == 'min_max':
+                self.decoder_options['activation'].append('tanh')
+            # Else, use linear activation
+            else:
+                self.decoder_options['activation'].append(None)
+                
+        # No dropout for the last layer
+        if isinstance(self.decoder_options['dropout'], list):
+            self.decoder_options['dropout'].append(None)
+            
         # Update options
         cv_options = {
             "encoder": self.encoder_options,
-            "decoder": self.decoder_options if self.decoder_options is not None else self.encoder_options
+            "decoder": self.decoder_options
         }
         self.cv_options.update(cv_options)
 
