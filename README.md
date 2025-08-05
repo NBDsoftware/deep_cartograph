@@ -96,4 +96,4 @@ An example for the YAML configuration file can be found here `deep_cartograph/de
 +++ assertion failed: m[1]<=m[2]*onePlusEpsilon
 ```
 
-This is related to how PLUMED reads the lattice vector information from the input files. Might be a problem specific to AMBER, see [discussion](https://groups.google.com/g/plumed-users/c/k6QoUu5LGoE/m/uzt4VGooCAAJ?utm_medium=email&utm_source=footer). Try to change the PLUMED version or convert the trajectory to a different format.
+This is related to how PLUMED reads the lattice vector information from the input files. Might be a problem specific to AMBER, see [discussion](https://groups.google.com/g/plumed-users/c/k6QoUu5LGoE/m/uzt4VGooCAAJ?utm_medium=email&utm_source=footer). In some cases it can be solved **converting the trajectory to pdb format** and then **erasing the CRYST record**. Otherwise try to change the PLUMED version or convert the trajectory to a different format. 
