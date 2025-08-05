@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Union, Literal
+from typing import List, Union, Literal, Optional
 
 class Optimizer(BaseModel):
 
@@ -8,12 +8,24 @@ class Optimizer(BaseModel):
     # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim Algorithms)
     kwargs: dict = {'lr': 1.0e-03, 'weight_decay': 0.0}
 
+class NeuralNetwork(BaseModel):
+    # Fully connected hidden layers
+    layers: List[int] = [64, 32, 16]
+    # Activation function
+    activation: Union[str, List[str]] = "leaky_relu"
+    # Whether to use batch normalization
+    batchnorm: Union[bool, List[bool]] = False
+    # Value for dropout (if 0.0, no dropout is applied)
+    dropout: Union[float, List[float]] = 0.0
+    # Whether to use activation functions for the last layer
+    last_layer_activation: bool = True
+    
 class Architecture(BaseModel):
 
     # Fully connected hidden layers between the input and latent space
-    hidden_layers: List[int] = [10, 10]
-    # Lag time for TICA and DeepTICA
-    lag_time: int = 1
+    encoder: NeuralNetwork = NeuralNetwork()
+    # Fully connected hidden layers between the latent space and the output
+    decoder: Optional[NeuralNetwork] = None
 
 class GeneralSettings(BaseModel):
 
@@ -27,8 +39,6 @@ class GeneralSettings(BaseModel):
     batch_size: int = 32
     # Maximum number of epochs for the training
     max_epochs: int = 1000
-    # Dropout rate for the training
-    dropout: float = 0.1
     # Shuffle the data before training
     shuffle: bool = False
     # Randomly split the data into training and validation sets
@@ -54,6 +64,20 @@ class EarlyStopping(BaseModel):
     # Minimum change in the loss function to consider it an improvement
     min_delta: float = 1.0e-05
 
+class KLAnnealing(BaseModel):
+    # Type of KL annealing ('linear' or 'cyclical')
+    type: Literal['linear', 'cyclical'] = 'cyclical'
+    # Sart value for beta (KL divergence weight)
+    start_beta: float = 0.0
+    # Maximum value of the KL divergence weight (beta)
+    max_beta: float = 0.01
+    # Start epoch for the annealing
+    start_epoch: int = 1000
+    # Number of cycles for cyclical annealing
+    n_cycles: int = 4
+    # Number of epochs over which to anneal beta
+    n_epochs_anneal: int = 5000
+    
 class Trainings(BaseModel):
     
     # General settings
@@ -62,6 +86,8 @@ class Trainings(BaseModel):
     early_stopping: EarlyStopping = EarlyStopping()
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
+    # KL Annealing settings (used only with VAE)
+    kl_annealing: KLAnnealing = KLAnnealing()
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training
@@ -111,6 +137,8 @@ class CommonCollectiveVariable(BaseModel):
 
     # Number of dimensions
     dimension: int = 2
+    # Lag time for TICA and DeepTICA
+    lag_time: int = 1
     # Features normalization
     features_normalization: Literal['mean_std', 'min_max', 'none'] = 'mean_std'
     # Input colvars

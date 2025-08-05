@@ -23,9 +23,9 @@ train_colvars:
   cvs: ['pca', 'deep_tica', 'tica', 'ae']
   common:
     dimension: 2
+    lag_time: 1 
     architecture:
-      hidden_layers: [5, 3]
-      lag_time: 1                        
+      encoder: [5, 3]                       
     training: 
       general:
         max_tries: 10

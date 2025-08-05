@@ -1,0 +1,31 @@
+# This version of the environment has less dependencies (no torch, mlcolvar or lightning needed)
+# The only supported CV in this case is PCA
+name: deep_cartograph_lite 
+channels:
+
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Base depends
+  - python >=3.8,<=3.10
+  - pip
+
+  # Core dependencies
+  - numpy<2               # match with pytorch
+  - pandas
+  - pydantic              # to-try: pydantic<2 workaround to avoid clashes with lightning
+  - mdanalysis
+  - scikit-learn>=1.3     # HDBSCAN is included in scikit-learn>=1.3
+  - scipy
+  - plumed==2.9.0         # (Optional) Otherwise use an external installation
+  - biopython==1.85       # Other versions may work as well
+
+  # Notebooks and plotting
+  - seaborn
+  - matplotlib
+   
+  # Pip-only installs
+  - pip:   
+    - kdepy                # (Optional) Faster than scikit-learn for KDE
+    - diptest

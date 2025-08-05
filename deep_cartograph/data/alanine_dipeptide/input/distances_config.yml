@@ -25,10 +25,12 @@ filter_features:
 train_colvars:
   cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
+    lag_time: 30
     dimension: 2
     architecture:
-      hidden_layers: [10, 10]
-      lag_time: 30
+      encoder: 
+        layers: [10, 10]
+        dropout: 0.1
     training: 
       general:
         max_tries: 10
@@ -36,7 +38,6 @@ train_colvars:
         lengths: [0.8, 0.2]
         batch_size: 256
         max_epochs: 1000
-        dropout: 0.1
         shuffle: False
         random_split: False
         check_val_every_n_epoch: 1

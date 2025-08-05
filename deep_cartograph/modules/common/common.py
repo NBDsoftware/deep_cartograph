@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import importlib.util
 from pathlib import Path, PurePath
-from typing import Any, Dict, List, Union, Tuple
+from typing import Any, Dict, List, Union, Tuple, Optional
 from pydantic import ValidationError
 from pydantic import BaseModel
 
@@ -148,7 +148,7 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, out
 
     return validated_configuration
 
-def merge_configurations(common_config: Dict, specific_config: Union[Dict, None]) -> Dict:
+def merge_configurations(common_config: Dict, specific_config: Optional[Dict]) -> Dict:
         """
         Merge the common configuration with the cv-specific configuration recursively.
 
@@ -172,8 +172,6 @@ def merge_configurations(common_config: Dict, specific_config: Union[Dict, None]
                 else:
                     # otherwise, use the value from the specific configuration
                     merged_config[key] = value
-        else:
-            merged_config = common_config
             
         return merged_config
 

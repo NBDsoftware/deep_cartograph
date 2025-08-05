@@ -1,0 +1,3 @@
+- **command_line**: simple command line examples
+- **miscellaneous**: different inputs and examples. Useful to anyone trying to use deep carto for the first time
+- **notebooks**: notebook examples using the APIs. DISCLAIMER: they are outdated and I need to work on them again :D

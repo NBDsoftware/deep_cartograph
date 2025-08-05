@@ -26,14 +26,14 @@ filter_features:
 train_colvars:
   cvs: ['pca', 'ae', 'tica', 'deep_tica']
   common:
+    lag_time: 1    
     dimension: 2
     input_colvars: 
       start: 0
       stop: null
       stride: 1 
     architecture:
-      hidden_layers: [5, 3]
-      lag_time: 1                        
+      encoder: [5, 3]                    
       pca_lowrank_q: null
     training: 
       general:
