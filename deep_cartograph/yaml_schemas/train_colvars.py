@@ -12,11 +12,11 @@ class NeuralNetwork(BaseModel):
     # Fully connected hidden layers
     layers: List[int] = [64, 32, 16]
     # Activation function
-    activation: Literal['relu','elu','tanh','softplus','shifted_softplus','linear','leaky_relu'] = "leaky_relu"
+    activation: Union[str, List[str]] = "leaky_relu"
     # Whether to use batch normalization
-    batchnorm: bool = False
+    batchnorm: Union[bool, List[bool]] = False
     # Value for dropout (if 0.0, no dropout is applied)
-    dropout: float = 0.0
+    dropout: Union[float, List[float]] = 0.0
     # Whether to use activation functions for the last layer
     last_layer_activation: bool = True
     
