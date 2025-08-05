@@ -5,7 +5,7 @@ import glob
 import logging
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Literal
 from pathlib import Path
 
 import MDAnalysis as mda
@@ -670,6 +670,38 @@ def extract_frames(trajectory_path: str, topology_path: str, traj_frames: list,
         new_top_path    (str): path to the new topology file.
     """
 
+    # TOPOLOGY -------------------------------------------------------------------
+    
+    # Load trajectory
+    try:
+        u = mda.Universe(topology_path, trajectory_path)
+    except Exception as e:
+        logger.error(f"Error loading trajectory {trajectory_path}. {e}")
+        sys.exit(1)
+    
+    # Save new topology to a temporary PDB file including CONECT records
+    tmp_topology_path = os.path.join(Path(new_top_path).parent, "tmp.pdb")
+    
+    # Write temporary PDB topology
+    with mda.Writer(tmp_topology_path, n_atoms=u.atoms.n_atoms, format='PDB') as writer:
+        u.trajectory[top_frame]
+        writer.write(u)
+
+    # Remove CONECT records from the temporary topology
+    with open(tmp_topology_path, 'r') as f:
+        lines = f.readlines()
+
+    with open(new_top_path, 'w') as f:
+        for line in lines:
+            if not line.startswith("CONECT"):
+                f.write(line)
+                
+    # Remove the temporary topology file
+    if os.path.exists(tmp_topology_path):
+        os.remove(tmp_topology_path)
+                
+    # TRAJECTORY ---------------------------------------------------------------
+                
     # Check if any traj_frames were requested
     if len(traj_frames) == 0:
         logger.warning(f"No frames requested for {new_traj_path}.")
@@ -694,35 +726,11 @@ def extract_frames(trajectory_path: str, topology_path: str, traj_frames: list,
         for frame in traj_frames:
             u.trajectory[frame]
             writer.write(u)
-            
-    # Load trajectory
-    try:
-        u = mda.Universe(topology_path, trajectory_path)
-    except Exception as e:
-        logger.error(f"Error loading trajectory {trajectory_path}. {e}")
-        sys.exit(1)
-    
-    # Save new topology to a temporary PDB file including CONECT records
-    tmp_topology_path = os.path.join(Path(new_top_path).parent, "tmp.pdb")
-    
-    # Write temporary PDB topology
-    with mda.Writer(tmp_topology_path, n_atoms=u.atoms.n_atoms, format='PDB') as writer:
-        u.trajectory[top_frame]
-        writer.write(u)
-
-    # Remove CONECT records from the temporary topology
-    with open(tmp_topology_path, 'r') as f:
-        lines = f.readlines()
-
-    with open(new_top_path, 'w') as f:
-        for line in lines:
-            if not line.startswith("CONECT"):
-                f.write(line)
 
     return
 
 def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df: pd.DataFrame, samples_per_frame: float = 1, centroids_df: pd.DataFrame = None,
-                               cluster_label: str = 'cluster', frame_label: str = 'frame', output_folder: str = 'clustered_traj'):
+                               cluster_label: str = 'cluster', frame_label: str = 'frame', output_structures: Literal['centroids', 'all', 'none'] = 'centroids' ,output_folder: str = 'clustered_traj'):
     """
     Extract all frames from the trajectory pertaining to each cluster and save them in new trajectory files (XTC).
 
@@ -737,8 +745,13 @@ def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df
         centroids_df  (DataFrame): DataFrame containing the centroids of each cluster.
         cluster_label       (str): name of the column containing the cluster label.
         frame_label         (str): name of the column containing the frame index.
+        output_structures   (str): mode to save the output. Options: 'centroids', 'all', 'none'.
         output_folder       (str): path to the output folder.
     """
+    
+    if output_structures == 'none':
+        logger.info("No output structures will be saved. If you want to save the structures, set output_structures in clustering_settings to 'centroids' or 'all'.")
+        return
     
     # Check the existence of trajectory and topology files
     if not os.path.exists(trajectory_path):
@@ -812,6 +825,11 @@ def extract_clusters_from_traj(trajectory_path: str, topology_path: str, traj_df
         cluster_frames = [int(sample * samples_per_frame) for sample in cluster_samples]
         topology_frame = int(topology_samples * samples_per_frame)
 
+        # Check the user is asking for the trajectory
+        if output_structures == 'centroids':
+            # If the user is asking for the centroids, we only extract the centroid as the topology frame
+            cluster_frames = []
+            
         # Extract frames
         extract_frames(trajectory_path, topology_path, cluster_frames, cluster_traj_path, topology_frame, cluster_top_path)
 

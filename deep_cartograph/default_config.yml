@@ -154,7 +154,8 @@ filter_features:
 #       marker_size:                      (int) Size of the markers in the Projected Trajectory
 #   clustering:                        Settings for the clustering
 #     run:                              (bool) Whether to run the clustering or not
-#     algorithm:                        (str: kmeans, hdbscan, hierarchical) Clustering algorithm to use
+#     output_structures:                (str) Output mode for the clustering results ('centroids', 'all', 'none')
+#     algorithm:                        (str) Clustering algorithm to use ('kmeans', 'hdbscan', 'hierarchical')
 #     opt_num_clusters:                 (bool) Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)
 #     search_interval:                  (list) Range of number of clusters to search for the optimal number of clusters (only for hierarchical and kmeans)
 #     num_clusters:                     (int) Number of clusters to use (only for hierarchical and kmeans and if opt_num_clusters is false)
@@ -225,7 +226,8 @@ train_colvars:
       use_legend: True
       marker_size: 12
   clustering:                        
-    run: False                        
+    run: False     
+    output_structures: centroids                   
     algorithm: hdbscan               
     opt_num_clusters: True          
     search_interval: [3, 8]          

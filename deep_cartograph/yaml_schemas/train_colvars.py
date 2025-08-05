@@ -173,6 +173,8 @@ class Clustering(BaseModel):
 
     # Whether to run the clustering or not
     run: bool = True
+    # Output mode for the clustering results
+    output_structures: Literal['centroids', 'all', 'none'] = 'centroids'
     # Clustering algorithm to use
     algorithm: Literal["kmeans", "hdbscan", "hierarchical"] = "hierarchical"
     # Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)

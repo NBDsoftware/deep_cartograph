@@ -314,6 +314,7 @@ class TrainColvarsWorkflow:
                                                         centroids_df = centroids_df,
                                                         cluster_label = 'cluster',
                                                         frame_label = 'order', 
+                                                        output_structures = self.clustering_configuration['output_structures'],
                                                         output_folder = os.path.join(traj_output_folder, 'clusters'))
                         elif len(centroids) == 0:
                             logger.warning("No centroids found. Skipping extraction of clusters from the trajectory.")
