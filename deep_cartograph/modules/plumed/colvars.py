@@ -442,10 +442,6 @@ def create_dataframe_from_files(
                 logger.error(f"Please check the colvars files and the topology files used to translate the features.")
                 sys.exit(1)
             
-            print(f"Previous colvars features: {list(df.columns)}")
-            print(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
-            print(f"Feature set: {feature_set}")
-            
             # Check if it has the same features as the accumulated df
             if not feature_set == set(df.columns):
                 logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same features as the previous colvars.")
