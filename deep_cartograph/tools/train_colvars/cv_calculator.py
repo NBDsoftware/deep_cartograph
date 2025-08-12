@@ -338,6 +338,8 @@ class CVCalculator:
                 self.projected_supplementary_data["label"] = self.supplementary_data_labels
             
             self.save_cv()
+            
+            self.sensitivity_analysis()
 
         return self.projected_training_data
         
@@ -455,6 +457,13 @@ class CVCalculator:
         # Erase the temporary reference topology
         os.remove(ref_plumed_topology_path)
 
+    def sensitivity_analysis(self):
+        """
+        Perform a sensitivity analysis of the CV on the training data.
+        Implemented in subclasses.
+        """
+        raise NotImplementedError("Sensitivity analysis not implemented for this CV calculator.")
+    
     # Getters
     def get_projected_sup_data(self) -> Union[pd.DataFrame, None]:
         """
@@ -674,6 +683,63 @@ class LinearCalculator(CVCalculator):
         # Save the max/min values of each dimension - part of the final cv definition
         np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
         np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
+
+    def sensitivity_analysis(self):
+        """  
+        Perform a sensitivity analysis of the CV on the training data.
+        """
+        
+        from deep_cartograph.modules.figures import plot_sensitivity_results
+        
+        # For a linear CV, the sensitivity of each feature is given by the absolute value of its coefficient in the CV weights
+        cv_sensitivities = np.abs(self.cv)
+        
+        # For each dimension of the CV
+        for cv_index in range(cv_sensitivities.shape[1]):
+            
+            # Create directory for sensitivity analysis results
+            sensitivity_output_path = os.path.join(self.output_path, f'sensitivity_analysis_{cv_index+1}')
+            os.makedirs(sensitivity_output_path, exist_ok=True)
+            
+            sensitivities = cv_sensitivities[:, cv_index]
+            logger.info(f'Shape of sensitivities for CV dimension {cv_index}: {sensitivities.shape}')
+
+            # Order the sensitivities from lowest to highest, order the feature labels accordingly
+            indices = np.argsort(sensitivities)
+            sensitivities = sensitivities[indices]
+            feature_labels = np.array(self.feature_labels)[indices]
+        
+            # Create a Dictionary with the results
+            results = {
+                'feature_names': feature_labels,
+                'sensitivity': {
+                    'Dataset' : sensitivities,
+                },
+                'gradients': {
+                    # Not used but expected by plot_sensitivity_results
+                    'Dataset': np.array([[x] for x in sensitivities]) 
+                }
+            }
+            
+            # Debug: print their shape and length
+            logger.info(f'Sensitivities shape: {sensitivities.shape}, length: {len(sensitivities)}')
+            logger.info(f'Feature labels shape: {feature_labels.shape}, length: {len(feature_labels)}')
+            
+            # Print values for the top 10 features
+            logger.info("Top 10 features sensitivities:")
+            for i in range(min(10, len(sensitivities))):
+                logger.info(f"{feature_labels[i]}: {sensitivities[i]}")
+                
+                
+            # Save the sensitivities to a file
+            sensitivity_df = pd.DataFrame({'sensitivity': sensitivities}, index = feature_labels)
+            sensitivity_path = os.path.join(sensitivity_output_path, 'sensitivity_analysis.csv')
+            sensitivity_df.to_csv(sensitivity_path)
+
+            # Plot the top sensitivities
+            plot_sensitivity_results(results, modes=['barh'], output_folder=sensitivity_output_path)
+
+        return
 
 # Subclass for non-linear collective variables calculators
 class NonLinear(CVCalculator):
@@ -1167,6 +1233,31 @@ class NonLinear(CVCalculator):
         projected_training_array = projected_training_tensor.cpu().numpy()
             
         self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
+
+    def sensitivity_analysis(self):
+        """  
+        Perform a sensitivity analysis of the CV on the training data.
+        """
+        from mlcolvar.explain import sensitivity_analysis
+        
+        from deep_cartograph.modules.figures import plot_sensitivity_results
+        
+        # Create directory for sensitivity analysis results
+        sensitivity_output_path = os.path.join(self.output_path, 'sensitivity_analysis')
+        os.makedirs(sensitivity_output_path, exist_ok=True)
+        
+        # Compute the sensitivity analysis
+        results = sensitivity_analysis(self.cv, self.training_input_dtset, metric="mean_abs_val", 
+                                       feature_names=None, per_class=False, plot_mode=None)
+        
+        # Save the sensitivities to a file
+        sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
+        sensitivity_path = os.path.join(sensitivity_output_path, 'sensitivity_analysis.csv')
+        sensitivity_df.to_csv(sensitivity_path)
+        
+        # Plot the sensitivity results
+        modes = ['barh', 'violin']
+        plot_sensitivity_results(results, modes=modes, output_folder=sensitivity_output_path)
 
 # Collective variables calculators
 class PCACalculator(LinearCalculator):
