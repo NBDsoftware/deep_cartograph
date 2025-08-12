@@ -691,15 +691,15 @@ class LinearCalculator(CVCalculator):
         
         from deep_cartograph.modules.figures import plot_sensitivity_results
         
-        # Create directory for sensitivity analysis results
-        sensitivity_output_path = os.path.join(self.output_path, 'sensitivity_analysis')
-        os.makedirs(sensitivity_output_path, exist_ok=True)
-        
         # For a linear CV, the sensitivity of each feature is given by the absolute value of its coefficient in the CV weights
         cv_sensitivities = np.abs(self.cv)
         
         # For each dimension of the CV
         for cv_index in range(cv_sensitivities.shape[1]):
+            
+            # Create directory for sensitivity analysis results
+            sensitivity_output_path = os.path.join(self.output_path, f'sensitivity_analysis_{cv_index+1}')
+            os.makedirs(sensitivity_output_path, exist_ok=True)
             
             sensitivities = cv_sensitivities[:, cv_index]
             logger.info(f'Shape of sensitivities for CV dimension {cv_index}: {sensitivities.shape}')
