@@ -19,6 +19,8 @@ class NeuralNetwork(BaseModel):
     dropout: Union[float, List[float]] = 0.0
     # Whether to use activation functions for the last layer
     last_layer_activation: bool = True
+    # Wether to add dropout to the input layer or not
+    features_dropout: Optional[float] = None
     
 class Architecture(BaseModel):
 
