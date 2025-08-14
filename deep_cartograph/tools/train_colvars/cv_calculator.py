@@ -824,8 +824,9 @@ class NonLinear(CVCalculator):
         else:
             self.decoder_options = self.encoder_options.copy()
 
-        # Remove the last activation function of the decoder 
+        # Remove the last activation function and initial dropout from the decoder options
         self.decoder_options['last_layer_activation'] = False
+        self.decoder_options['features_dropout'] = None
         
         # Normalization of features in the Non-linear models: min_max, mean_std or none
         if self.feats_norm_mode == 'min_max':
