@@ -138,15 +138,20 @@ def train_colvars(
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
-def set_logger(verbose: bool):
+def set_logger(verbose: bool, log_path: str):
     """
-    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
-    If verbose is False, it sets the logging level to INFO.
+    Configures logging for Deep Cartograph. 
+    
+    If `verbose` is `True`, sets the logging level to DEBUG.
+    Otherwise, sets it to INFO.
 
     Inputs
     ------
 
-        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
+    Args:
+        verbose (bool): If `True`, logging level is set to DEBUG. 
+                        If `False`, logging level is set to INFO.
+        log_path (str): Path to the log file where logs will be saved.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -166,19 +171,20 @@ def set_logger(verbose: bool):
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
         raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
-    
     if not os.path.exists(debug_config_path):
         raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
     
-    if verbose:
-        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
-    else:
-        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
+    # Pass the log_path to the fileConfig using the 'defaults' parameter
+    config_path = debug_config_path if verbose else info_config_path
+    logging.config.fileConfig(
+        config_path,
+        defaults={'log_path': log_path},
+        disable_existing_loggers=True
+    )
 
     logger = logging.getLogger("deep_cartograph")
-
     logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-
+    
 def parse_arguments():
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -264,8 +270,15 @@ def main():
 
     args = parse_arguments()
 
+    # Determine output folder, if restart is False, create a unique output folder
+    output_folder = args.output_folder if args.output_folder else 'train_colvars'
+    if not args.restart:
+        output_folder = get_unique_path(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
+    
     # Set logger
-    set_logger(verbose=args.verbose)
+    log_path = os.path.join(output_folder, 'deep_cartograph.log')
+    set_logger(verbose=args.verbose, log_path=log_path)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)
@@ -292,17 +305,8 @@ def main():
     topologies = None
     if args.topology:
         topologies = [args.topology]
-    
-    # Give value to output_folder
-    if args.output_folder is None:
-        output_folder = 'train_colvars'
-    else:
-        output_folder = args.output_folder
-    
-    # If called through command line, create a unique output folder
-    output_folder = get_unique_path(output_folder)
         
-    # Create a TrainColvarsWorkflow object and run the workflow
+    # Run Train Colvars tool
     train_colvars(
         configuration = configuration,
         colvars_paths = args.colvars_path,
@@ -317,9 +321,6 @@ def main():
         cvs = args.cvs,
         samples_per_frame = args.samples_per_frame,
         output_folder = output_folder)
-    
-    # Move log file to output folder
-    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
     
 if __name__ == "__main__":
 

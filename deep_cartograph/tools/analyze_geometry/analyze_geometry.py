@@ -173,33 +173,28 @@ def main():
 
     args = parser.parse_args()
 
-    # Set logger
-    set_logger(verbose=args.verbose)
-    
-    # Give value to output_folder
-    if args.output_folder is None:
-        output_folder = 'analyze_geometry'
-    else:
-        output_folder = args.output_folder
-        
-    # Create unique output directory
-    output_folder = get_unique_path(output_folder)
+    # Determine output folder, if restart is False, create a unique output folder
+    output_folder = args.output_folder if args.output_folder else 'analyze_geometry'
+    if not args.restart:
+        output_folder = get_unique_path(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
+    # Set logger
+    log_path = os.path.join(output_folder, 'deep_cartograph.log')
+    set_logger(verbose=args.verbose, log_path=log_path)
+    
     # Read configuration
     configuration = read_configuration(args.configuration_path)
     
     # Check main input folders
     trajectories, topologies = check_data(args.trajectory_data, args.topology_data)
 
-    # Run tool
+    # Run Analyze Geometry tool
     _ = analyze_geometry(
         configuration = configuration, 
         trajectories = trajectories,
         topologies = topologies,
         output_folder = output_folder)
-
-    # Move log file to output folder
-    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
 
 if __name__ == "__main__":
 
