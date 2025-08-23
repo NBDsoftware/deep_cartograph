@@ -193,7 +193,7 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-colvars', dest='colvars_paths', type=str, required=True,
+        '-colvars', dest='colvars_path', type=str, required=True,
         help="Path to the input colvars file."
     )
     
@@ -276,10 +276,13 @@ def main():
     # Reference data should be list or None - see train_colvars API
     sup_labels = None
     sup_colvars_paths = None
+    sup_topology_paths = None
     if args.sup_colvars_path:
         sup_labels = [Path(args.sup_colvars_path).stem]
         sup_colvars_paths = [args.sup_colvars_path]
-            
+    if args.sup_topology_path:
+        sup_topology_paths = [args.sup_topology_path]
+
     # Trajectories should be list or None - see train_colvars API
     trajectories = None
     if args.trajectory:
@@ -308,7 +311,7 @@ def main():
         reference_topology = args.reference_topology,
         feature_constraints = feature_constraints,
         sup_colvars_paths = sup_colvars_paths,
-        sup_topology_paths = args.sup_topology_paths,
+        sup_topology_paths = sup_topology_paths,
         sup_labels = sup_labels,
         dimension = args.dimension,
         cvs = args.cvs,

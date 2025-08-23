@@ -42,18 +42,22 @@ def get_config():
       common:
         dimension: 2
         lag_time: 1 
+        features_normalization: mean_std
+        architecture:
+          encoder: 
+            layers: [16, 8]
+            activation: [leaky_relu, leaky_relu]
+            dropout: [0, 0]
+          decoder: 
+            layers: [4, 8]
+            activation: [leaky_relu, leaky_relu]
+            dropout: [0, 0]
         num_subspaces: 10
         subspaces_dimension: 5
         input_colvars: 
           start: 0
           stop: null
-          stride: 1 
-        architecture:
-          encoder: 
-            layers: [5, 3]
-            dropout: 0.1  
-            activation: shifted_softplus    
-            last_layer_activation: False               
+          stride: 1                
         training: 
           general:
             max_tries: 10
@@ -71,43 +75,10 @@ def get_config():
           optimizer:
             name: Adam
             kwargs: 
-              lr: 1.0e-02 
+              lr: 1.0e-03
               weight_decay: 0
           save_loss: True
           plot_loss: True
-      ae:           
-        architecture:
-          encoder: 
-            layers: [5, 3]
-            dropout: 0.1
-            activation: shifted_softplus
-            last_layer_activation: False
-        training:
-          general:
-            batch_size: 256
-            max_epochs: 10000
-          early_stopping:
-            patience: 100
-            min_delta: 1.0e-05
-          optimizer:
-            kwargs: 
-              lr: 1.0e-04
-              weight_decay: 0
-      vae:
-        architecture:
-          encoder: 
-            layers: [16, 8]
-            activation: leaky_relu
-            last_layer_activation: False
-          decoder: 
-            layers: [4, 8]
-            activation: leaky_relu
-            last_layer_activation: False
-        training:
-          general: 
-            batch_size: 128
-          early_stopping:
-            patience: 1000
           kl_annealing:
             type: linear
             start_beta: 0
