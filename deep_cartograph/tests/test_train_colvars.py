@@ -12,106 +12,81 @@ data_path = os.path.join(tests_path, "data")
 
 def get_config():
     yaml_content = """
-  cvs: ['pca', 'deep_tica', 'htica', 'tica', 'ae', 'vae']
-  common:
-    dimension: 2
-    lag_time: 1
-    num_subspaces: 10
-    subspaces_dimension: 5
-    input_colvars: 
-      start: 0
-      stop: null
-      stride: 1
-    architecture:
-      encoder: 
-        layers: [5, 3]   
-        dropout: 0.1   
-        activation: shifted_softplus                 
-    training: 
-      general:
-        max_tries: 10
-        seed: 42
-        lengths: [0.8, 0.2]
-        batch_size: 256
-        max_epochs: 1000 
-        shuffle: False
-        random_split: True
-        check_val_every_n_epoch: 1
-        save_check_every_n_epoch: 1
-      early_stopping:
-        patience: 20
-        min_delta: 1.0e-05
-      optimizer:
-        name: Adam
-        kwargs: 
-          lr: 1.0e-02 
-          weight_decay: 0
-      save_loss: True
-      plot_loss: True
-  ae:           
-    architecture:
-      encoder: 
-        layers: [5, 3]
-        dropout: 0.1
-        activation: shifted_softplus
-    training:
-      general:
-        batch_size: 256
-        max_epochs: 10000
-      early_stopping:
-        patience: 100
-        min_delta: 1.0e-05
-      optimizer:
-        kwargs: 
-          lr: 1.0e-04
-          weight_decay: 0
-  vae:
-    architecture:
-      encoder: 
-        layers: [16, 8]
-        activation: leaky_relu
-      decoder: 
-        layers: [4, 8]
-        activation: leaky_relu
-    training:
-      general: 
-        batch_size: 128
-      early_stopping:
-        patience: 1000
-      kl_annealing:
-        type: linear
-        start_beta: 0
-        max_beta: 0.001
-        start_epoch: 1000
-        n_epochs_anneal: 5000
-  figures:
-    fes:
-      compute: True  
-      save: True  
-      temperature: 300
-      bandwidth: 0.025
-      num_bins: 200
-      num_blocks: 1
-      max_fes: 18
-    traj_projection:
-      plot: True
-      num_bins: 100
-      bandwidth: 0.25
-      alpha: 0.6
-      cmap: turbo
-      use_legend: True
-      marker_size: 12
-  clustering:                        
-    run: True                        
-    algorithm: hierarchical               
-    opt_num_clusters: True          
-    search_interval: [5, 15]          
-    num_clusters: 3                  
-    linkage: complete                
-    n_init: 20                       
-    min_cluster_size: 50             
-    min_samples: 5                  
-    cluster_selection_epsilon: 0.5
+    cvs: [ 'pca', 'tica', 'deep_tica', 'htica', 'ae', 'vae'] 
+    common:
+      dimension: 2
+      lag_time: 1 
+      features_normalization: mean_std
+      architecture:
+        encoder: 
+          layers: [16, 8]
+          activation: [leaky_relu, leaky_relu]
+          dropout: [0, 0]
+        decoder: 
+          layers: [4, 8]
+          activation: [leaky_relu, leaky_relu]
+          dropout: [0, 0]
+      num_subspaces: 10
+      subspaces_dimension: 5
+      input_colvars: 
+        start: 0
+        stop: null
+        stride: 1                
+      training: 
+        general:
+          max_tries: 10
+          seed: 42
+          lengths: [0.8, 0.2]
+          batch_size: 256
+          max_epochs: 1000  
+          shuffle: False
+          random_split: True
+          check_val_every_n_epoch: 1
+          save_check_every_n_epoch: 1
+        early_stopping:
+          patience: 20
+          min_delta: 1.0e-05
+        optimizer:
+          name: Adam
+          kwargs: 
+            lr: 1.0e-03
+            weight_decay: 0
+        save_loss: True
+        plot_loss: True
+        kl_annealing:
+          type: linear
+          start_beta: 0
+          max_beta: 0.001
+          start_epoch: 1000
+          n_epochs_anneal: 5000
+    figures:
+      fes:
+        compute: True  
+        save: True  
+        temperature: 300
+        bandwidth: 0.025
+        num_bins: 200
+        num_blocks: 1
+        max_fes: 18
+      traj_projection:
+        plot: True
+        num_bins: 100
+        bandwidth: 0.25
+        alpha: 0.6
+        cmap: turbo
+        use_legend: True
+        marker_size: 12
+    clustering:                        
+      run: True                        
+      algorithm: hierarchical               
+      opt_num_clusters: True          
+      search_interval: [5, 15]          
+      num_clusters: 3                  
+      linkage: complete                
+      n_init: 20                       
+      min_cluster_size: 50             
+      min_samples: 5                  
+      cluster_selection_epsilon: 0.5
     """
     return yaml.safe_load(yaml_content)
 
