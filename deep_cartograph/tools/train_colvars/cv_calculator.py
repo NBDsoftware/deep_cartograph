@@ -268,6 +268,11 @@ class CVCalculator:
             **load_args
         )
         
+        # If the dataframe is empty, raise an error
+        if df.empty:
+            logger.error(f'No data found in the colvars files: {colvars_paths}. Exiting...')
+            sys.exit(1)
+        
         return df
     
     def align_dataframes(self, training_data: pd.DataFrame, supplementary_data: pd.DataFrame):
@@ -296,12 +301,19 @@ class CVCalculator:
                 A version of supplementary_data with columns aligned to training_data's order.
         """
         
+        logger.debug(f"Aligning Training and Supplementary data...")
+    
         # Get column name sets
         cols1 = set(training_data.columns)
         cols2 = set(supplementary_data.columns)
 
         # Find common columns, preserving order of training_data
         common_cols = [col for col in training_data.columns if col in cols2]
+        
+        # If no common columns, raise an error
+        if not common_cols:
+            logger.error("No common columns found between training_data and supplementary_data. Exiting...")
+            sys.exit(1)
 
         # Warn if any columns are discarded
         dropped_from_training_data = cols1 - cols2
