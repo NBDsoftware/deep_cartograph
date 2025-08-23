@@ -16,7 +16,10 @@ DEFAULT_FMT = '%14.10f'
 # ---------------
 #
 # Functions to create PLUMED commands
-def molinfo(topology: str, moltype: str = None) -> str:
+def molinfo(
+    topology: str, 
+    moltype: str = None
+    ) -> str:
     '''
     Function that creates a PLUMED MOLINFO command.
 
@@ -60,7 +63,10 @@ def wholemolecules(indices: List[int]) -> str:
 
     return command
 
-def distance(command_label: str, atoms: Union[List[str], str]) -> str:
+def distance(
+    command_label: str, 
+    atoms: Union[List[str], str]
+    ) -> str:
     '''
     Function that creates a PLUMED DISTANCE command.
 
@@ -98,7 +104,10 @@ def distance(command_label: str, atoms: Union[List[str], str]) -> str:
 
     return distance_command
 
-def torsion(command_label: str, atoms: Union[List[str], str]) -> str:
+def torsion(
+    command_label: str, 
+    atoms: Union[List[str], str]
+    ) -> str:
     '''
     Function that creates a PLUMED TORSION command.
 
@@ -136,7 +145,10 @@ def torsion(command_label: str, atoms: Union[List[str], str]) -> str:
 
     return torsion_command
 
-def sin(command_label: str, atoms: Union[List[str], str]) -> str:
+def sin(
+    command_label: str, 
+    atoms: Union[List[str], str]
+    ) -> str:
     """
     Proxy for the PLUMED ALPHABETA command using a reference angle of -pi/2 radians to convert the cosinus to a sinus.
     
@@ -157,7 +169,10 @@ def sin(command_label: str, atoms: Union[List[str], str]) -> str:
     """
     return alphabeta(command_label, atoms, reference = -round(math.pi/2,4))
 
-def cos(command_label: str, atoms: Union[List[str], str]) -> str:
+def cos(
+    command_label: str, 
+    atoms: Union[List[str], str]
+    ) -> str:
     """
     Proxy for the PLUMED ALPHABETA command using a reference angle of 0 radians.
     
@@ -178,7 +193,11 @@ def cos(command_label: str, atoms: Union[List[str], str]) -> str:
     """
     return alphabeta(command_label, atoms, reference = 0)
 
-def alphabeta(command_label: str, atoms: Union[List[str], str], reference: float) -> str:
+def alphabeta(
+    command_label: str, 
+    atoms: Union[List[str], str], 
+    reference: float
+    ) -> str:
     """
     Function that creates an PLUMED ALPHABETA command. The command returns the cosinus moved up and squished between 0 and 1:
     
@@ -219,7 +238,12 @@ def alphabeta(command_label: str, atoms: Union[List[str], str], reference: float
 
     return alphabeta_command
 
-def read(command_label, file_path, values, ignore_time):
+def read(
+    command_label, 
+    file_path, 
+    values, 
+    ignore_time
+    ) -> str:
     '''
     Function that creates a PLUMED READ command.
 
@@ -249,10 +273,17 @@ def read(command_label, file_path, values, ignore_time):
 
     return read_command
 
-def combine(command_label: str, arguments: List[str], coefficients: Union[np.array, None] = None, parameters:  Union[np.array, None] = None, 
-            powers: Union[np.array, None] = None, periodic: bool = False):
+def combine(
+    command_label: str,
+    arguments: List[str],
+    coefficients: Union[np.array, None] = None,
+    parameters: Union[np.array, None] = None,
+    powers: Union[np.array, None] = None,
+    periodic: bool = False
+    ) -> str:
     '''
-    Function that creates a PLUMED COMBINE command. The output from this command is the linear combination of the input arguments:
+    Function that creates a PLUMED COMBINE command. The output from this command is the 
+    linear combination of the input arguments:
     
         C = Sum_i [ c_i * (x_i - a_i)^p_i ] 
 
@@ -307,7 +338,12 @@ def combine(command_label: str, arguments: List[str], coefficients: Union[np.arr
     
     return combine_command
 
-def print(arguments: List[str], file_path: str, stride: int = 1, fmt: str = "%.4f"):
+def print(
+    arguments: List[str], 
+    file_path: str, 
+    stride: int = 1, 
+    fmt: str = "%.4f"
+    ) -> str:
     '''
     Function that creates a PLUMED PRINT command.
 
@@ -348,7 +384,19 @@ def print(arguments: List[str], file_path: str, stride: int = 1, fmt: str = "%.4
 
     return print_command 
 
-def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, normalization, grid_bins = [500], bandwidths = [0.01], weights_label = None, clear_freq = None):
+def histogram(
+    command_label,
+    arguments,
+    grid_mins,
+    grid_maxs,
+    stride,
+    kernel,
+    normalization,
+    grid_bins = [500],
+    bandwidths = [0.01],
+    weights_label = None,
+    clear_freq = None
+    ) -> str:
     '''
     Function that creates a PLUMED HISTOGRAM command.
 
@@ -447,7 +495,11 @@ def histogram(command_label, arguments, grid_mins, grid_maxs, stride, kernel, no
 
     return histogram_command
 
-def dumpgrid(arguments, file_path, stride = None):
+def dumpgrid(
+    arguments, 
+    file_path, 
+    stride = None
+    ) -> str:
     '''
     Function that creates a PLUMED DUMPGRID command.
 
@@ -488,7 +540,12 @@ def dumpgrid(arguments, file_path, stride = None):
 
     return dumpgrid_command
 
-def convert_to_fes(command_label, arguments, temp, mintozero = True):
+def convert_to_fes(
+    command_label, 
+    arguments, 
+    temp, 
+    mintozero = True
+    ) -> str:
     '''
     Function that creates a PLUMED CONVERT_TO_FES command.
 
@@ -528,7 +585,11 @@ def convert_to_fes(command_label, arguments, temp, mintozero = True):
 
     return convert_to_fes_command 
 
-def reweight_bias(command_label, arguments, temp):
+def reweight_bias(
+    command_label, 
+    arguments, 
+    temp
+    ) -> str:
     '''
     Function that creates a PLUMED REWEIGHT_BIAS command.
 
@@ -563,7 +624,11 @@ def reweight_bias(command_label, arguments, temp):
 
     return reweight_bias_command
 
-def external(command_label, arguments, file):
+def external(
+    command_label, 
+    arguments, 
+    file
+    ) -> str:
     '''
     Function that creates a PLUMED EXTERNAL command.
 
@@ -606,7 +671,7 @@ def opes_metad(
     sigmas: float, 
     barrier: float, 
     compression_threshold: float
-    ):
+    ) -> str:
     """
     Function that creates a PLUMED OPES_METAD command.
 
@@ -659,7 +724,7 @@ def opes_metad_explore(
     sigmas: float, 
     barrier: float, 
     compression_threshold: float
-    ):
+    ) -> str:
     """
     Function that creates a PLUMED OPES_METAD_EXPLORE command.
 
@@ -822,7 +887,10 @@ def metad(
 
     return metad_command
 
-def com(command_label, atoms) -> str:
+def com(
+    command_label, 
+    atoms
+    ) -> str:
     """
     Function that creates a PLUMED COM command.
 
@@ -859,7 +927,10 @@ def com(command_label, atoms) -> str:
 
     return com_command
 
-def center(command_label, atoms) -> str:
+def center(
+    command_label, 
+    atoms
+    ) -> str:
     """
     Function that creates a PLUMED CENTER command.
 
@@ -896,7 +967,11 @@ def center(command_label, atoms) -> str:
 
     return center_command
 
-def pytorch_model(command_label, arguments, model_path) -> str:
+def pytorch_model(
+    command_label, 
+    arguments, 
+    model_path
+    ) -> str:
     """
     Function that creates a PLUMED PYTORCH_MODEL command.
 
