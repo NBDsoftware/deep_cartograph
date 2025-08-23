@@ -279,18 +279,9 @@ class CollectiveVariableAssembler(Assembler):
         self.validate_linear_cv()
         
         # Set up feature normalization
-        features_stats = self.cv_params['features_stats']
         features_norm_mode = self.cv_params['features_norm_mode']
-        if features_norm_mode == 'mean_std':
-            features_offset = features_stats['mean']
-            features_scale = 1/features_stats['std']
-        elif features_norm_mode == 'min_max':
-            features_offset = (features_stats['min'] + features_stats['max'])/2
-            features_scale = 2/(features_stats['max'] - features_stats['min'])
-        elif features_norm_mode == 'none':
-            pass
-        else:
-            raise ValueError(f"Features normalization mode {features_norm_mode} not recognized.")
+        features_mean = self.cv_params['features_norm_mean']
+        features_range = self.cv_params['features_norm_range']
         
         # Normalize the input features
         if features_norm_mode != 'none': 
@@ -298,7 +289,7 @@ class CollectiveVariableAssembler(Assembler):
             normalized_feature_labels = []
             for index, feature in enumerate(self.feature_list):
                 normalized_feature = f"feat_{index}"
-                self.input_content += plumed.command.combine(normalized_feature, [feature], [features_scale[index]], [features_offset[index]])
+                self.input_content += plumed.command.combine(normalized_feature, [feature], [1/features_range[index]], [features_mean[index]])
                 normalized_feature_labels.append(normalized_feature)
         else:
             normalized_feature_labels = self.feature_list
@@ -334,12 +325,14 @@ class CollectiveVariableAssembler(Assembler):
         NOTE: migrate this to a pydantic model
         """
         
-        # Check if all required parameters are present
-        if 'features_stats' not in self.cv_params:
-            raise ValueError("Linear CV requires features statistics.")
-        
         if 'features_norm_mode' not in self.cv_params:
             raise ValueError("Linear CV requires features normalization mode.")
+        
+        if 'features_norm_mean' not in self.cv_params:
+            raise ValueError("Linear CV requires features normalization mean.")
+        
+        if 'features_norm_range' not in self.cv_params:
+            raise ValueError("Linear CV requires features normalization range.")
         
         if 'weights' not in self.cv_params:
             raise ValueError("Linear CV requires weights.")

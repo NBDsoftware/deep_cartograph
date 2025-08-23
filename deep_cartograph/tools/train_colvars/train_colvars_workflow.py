@@ -1,6 +1,7 @@
 # Import necessary modules
 import os
 import sys
+import copy
 import logging
 import numpy as np
 import pandas as pd
@@ -82,7 +83,7 @@ class TrainColvarsWorkflow:
         self._validate_files()
 
         # CV related attributes
-        self.cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
+        self.cvs_list: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
         self.cv_dimension: int = cv_dimension
         self.cv_labels: List[str] = None
         self.cv_type: str = None
@@ -209,20 +210,23 @@ class TrainColvarsWorkflow:
         Run the train_colvars workflow.
         """
         
-        logger.info(f"Collective variables to compute: {self.cvs}")
+        logger.info(f"Collective variables to compute: {self.cvs_list}")
         
         # For each requested collective variable
-        for cv in self.cvs:
+        for cv_name in self.cvs_list:
             
-            if cv != "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
-                logger.warning(f"Missing packages for {cv}. Skipping this CV.")
+            if cv_name != "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
+                logger.warning(f"Missing packages for {cv_name}. Skipping this CV.")
                 continue
             
-            cv_output_folder = os.path.join(self.output_folder, cv)
+            cv_output_folder = os.path.join(self.output_folder, cv_name)
+            
+            # Merge common and CV-specific configurations
+            merged_configuration = merge_configurations(self.configuration['common'], self.configuration.get(cv_name, {}))
             
             # Construct the corresponding CV calculator
             args = {
-                'configuration': merge_configurations(self.configuration['common'], self.configuration.get(cv, {})),
+                'configuration': copy.deepcopy(merged_configuration),
                 'train_colvars_paths': self.train_colvars_paths,
                 'train_topology_paths': self.train_topology_paths,
                 'ref_topology_path': self.ref_topology_path,
@@ -231,7 +235,7 @@ class TrainColvarsWorkflow:
                 'sup_topology_paths': self.sup_topology_paths,
                 'output_path': self.output_folder
             }
-            cv_calculator = cv_calculators_map[cv](**args)
+            cv_calculator = cv_calculators_map[cv_name](**args)
             
             # Run the CV calculator - obtain a dataframe with the projected training data
             projected_train_df = cv_calculator.run(self.cv_dimension)
@@ -393,5 +397,5 @@ class TrainColvarsWorkflow:
                         projected_sup_colvars_df.to_csv(os.path.join(sup_output_folder,'projected_data.csv'), index=False, float_format='%.4f')
                 
             else:
-                logger.warning(f"Projected colvars dataframe is empty for {cv}. Skipping this CV.")
+                logger.warning(f"Projected colvars dataframe is empty for {cv_name}. Skipping this CV.")
                 continue

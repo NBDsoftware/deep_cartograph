@@ -27,7 +27,7 @@ class Architecture(BaseModel):
     # Fully connected hidden layers between the input and latent space
     encoder: NeuralNetwork = NeuralNetwork()
     # Fully connected hidden layers between the latent space and the output
-    decoder: Optional[NeuralNetwork] = None
+    decoder: NeuralNetwork = NeuralNetwork()
 
 class GeneralSettings(BaseModel):
 
@@ -142,7 +142,7 @@ class CommonCollectiveVariable(BaseModel):
     # Lag time for TICA and DeepTICA
     lag_time: int = 1
     # Features normalization
-    features_normalization: Literal['mean_std', 'min_max', 'none'] = 'mean_std'
+    features_normalization: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = 'min_max_range2'
     # Input colvars
     input_colvars: InputColvars = InputColvars()
     # Architecture settings (used only with NN-based Collective Variables)

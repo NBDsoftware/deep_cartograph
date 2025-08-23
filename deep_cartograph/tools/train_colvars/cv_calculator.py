@@ -69,7 +69,7 @@ class CVCalculator:
         self.configuration: Dict = configuration
         self.architecture_config: Dict = configuration['architecture']
         self.training_reading_settings: Dict = configuration['input_colvars']
-        self.feats_norm_mode: Literal['mean_std', 'min_max', 'none'] = configuration['features_normalization']
+        self.feats_norm_mode: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = configuration['features_normalization']
         self.bias: Dict = configuration['bias']
         
         # Colvars paths
@@ -122,6 +122,12 @@ class CVCalculator:
         self.num_features: int = len(self.feature_labels)
         logger.info(f'Number of features: {self.num_features}')
         
+        # Compute training data statistics
+        stats = ['mean', 'std', 'min', 'max']
+        stats_df = self.training_data.agg(stats).T
+        self.features_stats: Dict[str, np.array] = {stat: stats_df[stat].to_numpy() for stat in stats}
+        self.features_norm_mean, self.features_norm_range = self.prepare_normalization()
+
         # Projected supplementary data
         self.projected_supplementary_data : Optional[pd.DataFrame] = None
         
@@ -159,6 +165,63 @@ class CVCalculator:
         """
         
         return self.cv is not None
+        
+    def prepare_normalization(self) -> Tuple[np.array, np.array]:
+
+        """ 
+        Prepare the normalization parameters for the features. Computes the normalization
+        means and ranges based on the feature statistics and the chosen normalization mode.
+        
+        The normalization will be:
+
+                              feature - normalization_mean
+        normalized feature = --------------------------------
+                                    normalization_range
+        
+        Returns
+        -------
+        
+        means : np.array
+            Means for normalization
+        ranges : np.array
+            Ranges for normalization
+        """
+        
+        def sanitize_ranges(range_array: np.ndarray):
+            """
+            Check the ranges are not close to zero and set them to 1 if they are.
+            """
+            for i in range(len(range_array)):
+                if abs(range_array[i]) < 1e-8:
+                    range_array[i] = 1.0
+                    logger.warning(f'Range for feature {i} is close to zero. Setting it to 1.0.')
+            return range_array
+            
+        # Set the mean and range for the normalization
+        # No normalization of input features (not recommended)
+        if self.feats_norm_mode == 'none':
+            means = np.zeros(len(self.features_stats["mean"]))
+            ranges = np.ones(len(self.features_stats["mean"]))
+        # Normalized data will have mean 0 and std 1, non-defined range.
+        elif self.feats_norm_mode == 'mean_std':
+            means = self.features_stats["mean"]
+            ranges = self.features_stats["std"]
+        # Normalized data will have a range of [0, 1]
+        elif self.feats_norm_mode == 'min_max_range1':
+            means = self.features_stats["min"]
+            ranges = self.features_stats["max"] - self.features_stats["min"]
+        # Normalized data will have a range of [-1, 1]
+        elif self.feats_norm_mode == 'min_max_range2':
+            means = (self.features_stats["min"] + self.features_stats["max"]) / 2
+            ranges = (self.features_stats["max"] - self.features_stats["min"]) / 2
+        else:
+            logger.error(f'Normalization mode {self.feats_norm_mode} not recognized. Exiting...')
+            sys.exit(1)
+        
+        # Check the ranges are not close to zero
+        ranges = sanitize_ranges(ranges)
+        
+        return means, ranges
         
     # Readers
     def read_data(self, 
@@ -527,37 +590,32 @@ class LinearCalculator(CVCalculator):
         self.cv: Union[np.array, None] = None 
         self.weights_path: Union[str, None] = None 
         
-        # NOTE: This will be have to be moved to the base class - it is expected in this way by the assembler of the plumed input - non-linear calculators can use this info to build their own objects
-        # Compute training data statistics
-        stats = ['mean', 'std', 'min', 'max']
-        stats_df = self.training_data.agg(stats).T
-        self.features_stats: Dict[str, np.array] = {stat: stats_df[stat].to_numpy() for stat in stats}
-        
         # Normalize the data NOTE: I'm assuming here that after init is called I will just need the normalized data
-        self.training_data: pd.DataFrame = self.normalize_data(self.training_data, self.features_stats, self.feats_norm_mode)
+        self.training_data: pd.DataFrame = self.normalize_data(self.training_data, self.features_norm_mean, self.features_norm_range)
     
+        # If supplementary data is provided, normalize it as well
         if self.supplementary_data is not None:
-            self.supplementary_data = self.normalize_data(self.supplementary_data, self.features_stats, self.feats_norm_mode)
+            self.supplementary_data = self.normalize_data(self.supplementary_data, self.features_norm_mean, self.features_norm_range)
             
     def normalize_data(self, 
-        data: pd.DataFrame, 
-        stats: Dict[str, np.array], 
-        normalization_mode: Literal['mean_std', 'min_max', 'none']
-    ) -> pd.DataFrame:
+                       data: pd.DataFrame,
+                       normalizing_mean: np.array,
+                       normalizing_range: np.array,
+        ) -> pd.DataFrame:
         """
-        Use the stats and the normalization mode to normalize the data
+        Use the normalization mean and range to normalize the data.
         
         Parameters
         ----------
         
         data : pd.DataFrame
             Data to normalize
-            
-        stats : Dict[str, np.array]
-            Dictionary with the statistics to use for normalization
         
-        normalization_mode : str
-            Normalization mode. Can be 'mean_std', 'min_max', 'none'
+        normalizing_mean : np.array
+            Mean values for normalization
+        
+        normalizing_range : np.array
+            Range values for normalization
             
         Returns
         -------
@@ -566,35 +624,8 @@ class LinearCalculator(CVCalculator):
             Normalized data
         """
         
-        def sanitize_ranges(range_array: np.ndarray):
-            """
-            Check the ranges are not close to zero and set them to 1 if they are.
-            """
-            for i in range(len(range_array)):
-                if abs(range_array[i]) < 1e-8:
-                    range_array[i] = 1.0
-                    logger.warning(f'Range for feature {i} is close to zero. Setting it to 1.0.')
-            return range_array
-            
-        # Set the mean and range for the normalization
-        if normalization_mode == 'none':
-            means = np.zeros(len(stats["mean"]))
-            ranges = np.ones(len(stats["mean"]))
-        elif normalization_mode == 'mean_std':
-            means = stats["mean"]
-            ranges = stats["std"]
-        elif normalization_mode == 'min_max':
-            means = (stats["min"] + stats["max"]) / 2
-            ranges = (stats["max"] - stats["min"]) / 2
-        else:
-            logger.error(f'Normalization mode {normalization_mode} not recognized. Exiting...')
-            sys.exit(1)
-        
-        # Check the ranges are not close to zero
-        ranges = sanitize_ranges(ranges)
-        
         # Normalize the data in place
-        for feature, m, r in zip(data.columns, means, ranges):
+        for feature, m, r in zip(data.columns, normalizing_mean, normalizing_range):
             data[feature] = (data[feature] - m) / r
         
         return data
@@ -609,10 +640,10 @@ class LinearCalculator(CVCalculator):
         
         np.savetxt(self.weights_path, self.cv, fmt='%.7g')
         
-        if self.feats_norm_mode == 'mean_std':
+        if 'mean_std' in self.feats_norm_mode:
             np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'], fmt='%.7g')
             np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'], fmt='%.7g')
-        elif self.feats_norm_mode == 'min_max':
+        elif 'min_max' in self.feats_norm_mode:
             np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'], fmt='%.7g')
             np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'], fmt='%.7g')
         
@@ -628,7 +659,8 @@ class LinearCalculator(CVCalculator):
             'cv_name': self.cv_name,
             'cv_dimension': self.cv_dimension,
             'features_norm_mode': self.feats_norm_mode,
-            'features_stats': self.features_stats,
+            'features_norm_mean': self.features_norm_mean,
+            'features_norm_range': self.features_norm_range,
             'cv_stats': self.cv_stats,
             'weights': self.cv
         }
@@ -650,9 +682,15 @@ class LinearCalculator(CVCalculator):
         
         # Project the training data onto the CV space
         self.projected_training_data = self.training_data @ self.cv
-        
+
+        # Max min normalization between -1 and 1
+        normalizing_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
+        normalizing_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
+
         # Normalize the projected training data
-        self.projected_training_data = self.normalize_data(self.projected_training_data, self.cv_stats, 'min_max')
+        self.projected_training_data = self.normalize_data(self.projected_training_data, 
+                                                           normalizing_mean, 
+                                                           normalizing_range)
         
     def project_supplementary_data(self):
         """
@@ -667,8 +705,14 @@ class LinearCalculator(CVCalculator):
             # Project the supplementary data onto the CV space NOTE: check the dimensions make sense and match
             self.projected_supplementary_data = self.supplementary_data @ self.cv
             
+            # Max min normalization between -1 and 1
+            normalizing_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
+            normalizing_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
+            
             # Normalize the projected supplementary data
-            self.projected_supplementary_data = self.normalize_data(self.projected_supplementary_data, self.cv_stats, 'min_max')
+            self.projected_supplementary_data = self.normalize_data(self.projected_supplementary_data, 
+                                                                    normalizing_mean, 
+                                                                    normalizing_range)
             
     def normalize_cv(self):
         
@@ -765,6 +809,8 @@ class NonLinear(CVCalculator):
         
         from mlcolvar.utils.trainer import MetricsCallback
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
+        
+        import torch 
                 
         super().__init__(
             configuration,
@@ -810,32 +856,57 @@ class NonLinear(CVCalculator):
         
         self.patience: int = self.early_stopping_config['patience']
         self.min_delta: float = self.early_stopping_config['min_delta']
-        
+                
         # Neural network settings
         self.encoder_config: Dict = self.architecture_config['encoder']
         self.decoder_config: Optional[Dict] = self.architecture_config['decoder'] 
+        
+        # Set layers from NN config 
         self.encoder_layers: List = self.set_encoder_layers()
         self.decoder_layers: Optional[List] = self.set_decoder_layers()
-        self.encoder_options: Dict = self.encoder_config.copy()
+        
+        # Set options from NN config
+        self.encoder_options: Dict = self.encoder_config
         self.encoder_options.pop('layers', {})
         if self.decoder_config is not None:
-            self.decoder_options = self.decoder_config.copy()
+            self.decoder_options = self.decoder_config
             self.decoder_options.pop('layers', {})
         else:
-            self.decoder_options = self.encoder_options.copy()
+            self.decoder_options = self.encoder_options
 
         # Remove the last activation function and initial dropout from the decoder options
-        self.decoder_options['last_layer_activation'] = False
         self.decoder_options['features_dropout'] = None
         
-        # Normalization of features in the Non-linear models: min_max, mean_std or none
-        if self.feats_norm_mode == 'min_max':
-            self.cv_options: Dict = {'norm_in' : {'mode' : 'min_max'}}
-        elif self.feats_norm_mode == 'mean_std':
-            self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std'}}
-        elif self.feats_norm_mode == 'none':
-            self.cv_options: Dict = {'norm_in' : None}
+        # Add activation function to the last layer of the decoder based on the normalization of the features
+        if isinstance(self.decoder_options['activation'], list):
+            # Normalized using min max with range [0, 1] -> use sigmoid activation
+            if self.feats_norm_mode == 'min_max_range1':
+                self.decoder_options['activation'].append('custom_sigmoid')
+            # Normalized using min max with range [-1, 1] -> use tanh activation
+            elif self.feats_norm_mode == 'min_max_range2':
+                self.decoder_options['activation'].append('tanh')
+            # In other cases (mean_std or none), avoid adding an activation function
+            else:
+                self.decoder_options['activation'].append(None)
+        else:
+            logger.warning('''Decoder activation function is a single value, the same activation will be used for all layers. 
+                           Make sure the chosen activation function matches the normalization of the features when doing regression
+                           or choose last_layer_activation = False.''')
+                
+        # No dropout for the last layer
+        if isinstance(self.decoder_options['dropout'], list):
+            self.decoder_options['dropout'].append(None)
         
+        # Normalization of features in the Non-linear models
+        # No normalization
+        if self.feats_norm_mode == 'none':
+            self.cv_options: Dict = {'norm_in' : None}
+        # Corresponding normalization, see prepare_normalization() in base class
+        else:
+            self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std',
+                                                  'mean': torch.tensor(self.features_norm_mean),
+                                                  'range': torch.tensor(self.features_norm_range)}}
+
         # Optimizer
         self.opt_name: str = self.optimizer_config['name']
         self.optimizer_options: Dict = self.optimizer_config['kwargs']
@@ -1533,6 +1604,16 @@ class AECalculator(NonLinear):
         
         self.check_batch_size()
         
+        # NOTE: In the future we might want to allow for a custom last layer before the latent space
+        # Currently it will be the same as the one for the hidden layers - if not a list
+        # or no activation/dropout is applied to the last layer
+        
+        # Add encoder activation and dropout option for last layer if these are lists
+        if isinstance(self.encoder_options['dropout'], list):
+            self.encoder_options['dropout'].append(None)
+        if isinstance(self.encoder_options['activation'], list):
+            self.encoder_options['activation'].append(None)
+
         # Update options
         cv_options = {
             "encoder": self.encoder_options,
@@ -1630,6 +1711,16 @@ class DeepTICACalculator(NonLinear):
         self.initialize_cv()
         
         self.check_batch_size()
+            
+        # NOTE: In the future we might want to allow for a custom last layer before the latent space
+        # Currently it will be the same as the one for the hidden layers - if not a list
+        # or no activation/dropout is applied to the last layer
+        
+        # Add encoder activation and dropout option for last layer if these are lists
+        if isinstance(self.encoder_options['dropout'], list):
+            self.encoder_options['dropout'].append(None)
+        if isinstance(self.encoder_options['activation'], list):
+            self.encoder_options['activation'].append(None)
             
         # Update options
         cv_options = {
@@ -1753,19 +1844,6 @@ class VAECalculator(NonLinear):
         
         # If the activation functions / dropout are given as a list, add one for the last layer 
         # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
-        
-        # tanh or linear on last layer
-        if isinstance(self.decoder_options['activation'], list):
-            # If the features are normalizes using min-max, we can use tanh activation
-            if self.feats_norm_mode == 'min_max':
-                self.decoder_options['activation'].append('tanh')
-            # Else, use linear activation
-            else:
-                self.decoder_options['activation'].append(None)
-                
-        # No dropout for the last layer
-        if isinstance(self.decoder_options['dropout'], list):
-            self.decoder_options['dropout'].append(None)
             
         # Update options
         cv_options = {
