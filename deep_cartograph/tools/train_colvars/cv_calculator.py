@@ -361,7 +361,7 @@ class CVCalculator:
         
         return feature_filter
     
-    # Main methods
+    # Main CV-related methods
     def run(self, cv_dimension: Union[int, None] = None) -> Union[pd.DataFrame, None]:
         """
         Runs the CV calculator.
