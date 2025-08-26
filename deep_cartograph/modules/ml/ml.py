@@ -1,7 +1,9 @@
 # Import modules
 import logging
+import lightning as L
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import Callback
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Literal
 
 # Set logger
@@ -157,3 +159,36 @@ class KLAAnnealing(Callback):
         cycle_progress = epoch % self.cycle_length
         
         return self.linear_anneal(cycle_progress, self.cycle_length // 2)
+
+
+class LROnPlateauManager(Callback):
+    """
+    Manages the ReduceLROnPlateau scheduler to start monitoring
+    only after a specified epoch.
+    """
+    def __init__(self, start_epoch: int):
+        super().__init__()
+        self.start_epoch = start_epoch
+        print(f"LROnPlateauManager initialized. Will start monitoring validation loss at epoch {self.start_epoch}.")
+
+    def on_validation_epoch_end(self, trainer: L.Trainer, _):
+        if trainer.current_epoch < self.start_epoch:
+            return
+
+        # Get the validation loss from the trainer's metrics
+        validation_loss = trainer.callback_metrics.get('valid_loss')
+        if validation_loss is None:
+            # Add a warning if the metric is not found after the start epoch
+            if trainer.current_epoch == self.start_epoch:
+                print(f"Warning: 'valid_loss' not found in callback_metrics. "
+                      f"Ensure you are logging it via self.log('valid_loss', ...).")
+            return
+
+        lr_schedulers = trainer.lightning_module.lr_schedulers()
+
+        if not isinstance(lr_schedulers, list):
+            lr_schedulers = [lr_schedulers]
+
+        for scheduler in lr_schedulers:
+            if isinstance(scheduler, ReduceLROnPlateau):
+                scheduler.step(validation_loss)

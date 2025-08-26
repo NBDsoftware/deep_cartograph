@@ -851,6 +851,8 @@ class NonLinear(CVCalculator):
         self.general_config: Dict = self.training_config['general']
         self.early_stopping_config: Dict  = self.training_config['early_stopping']
         self.optimizer_config: Dict = self.training_config['optimizer']
+        self.lr_scheduler_config: Optional[Dict] = self.training_config['lr_scheduler_config']
+        self.lr_scheduler: Optional[Dict] = self.training_config['lr_scheduler']
         
         # Training attributes
         self.max_tries: int = self.general_config['max_tries']
@@ -924,7 +926,70 @@ class NonLinear(CVCalculator):
         self.optimizer_options: Dict = self.optimizer_config['kwargs']
         
         self.cv_options["optimizer"] = self.optimizer_options
+        
+        # Construct the lr_scheduler option - scheduler class and its kwargs
+        if self.lr_scheduler is not None:           
+            # Obtain the class from the name
+            lr_scheduler_class = getattr(torch.optim.lr_scheduler, self.lr_scheduler['name'], None)
+            if lr_scheduler_class is None:
+                logger.error(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized. Exiting...')
+                sys.exit(1)
+                
+            self.cv_options["lr_scheduler"] = {
+                "scheduler" : lr_scheduler_class    
+            }   
+            
+            self.cv_options["lr_scheduler"].update(self.lr_scheduler.get('kwargs', {}))
+            
+            # NEW FEATURE
+            # If OneCycleLR is used -> Adjust epochs and steps_per_epoch according to the training configuration and the number of samples
+            # If ReduceLROnPlateau is used -> Adjust patience and cooldown
+            # Check where do we have the info to do the update
+            
+        # Construct the lr_scheduler_config option
+        if self.lr_scheduler_config is not None:
+            self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
     
+    def _adjust_lr_scheduler(self, datamodule):
+        """
+        Adjusts LR scheduler parameters based on the training configuration.
+        This is called right after the datamodule is created.
+        """
+        
+        datamodule.setup(stage='fit')
+        
+        # Proceed only if a scheduler is defined
+        if self.lr_scheduler is None:
+            return
+
+        logger.debug("Adjusting LR Scheduler parameters...") 
+
+        scheduler_name = self.lr_scheduler.get('name', '')
+        
+        if scheduler_name == 'OneCycleLR':
+            
+            # Give reasonable default values if not provided in the configuration
+            self.cv_options["lr_scheduler"]['max_lr'] = self.cv_options["lr_scheduler"].get('max_lr', 1e-3)
+            self.cv_options["lr_scheduler"]['epochs'] = self.cv_options["lr_scheduler"].get('epochs', self.max_epochs)
+            steps_per_epoch = len(datamodule.train_dataloader())
+            self.cv_options["lr_scheduler"]['steps_per_epoch'] = self.cv_options["lr_scheduler"].get('steps_per_epoch', steps_per_epoch)
+            
+            # Adjust the interval from the configuration to 'step'
+            self.cv_options["lr_scheduler_config"]["interval"] = 'step'
+            
+            logger.info(f"OneCycleLR configured with epochs = {self.cv_options['lr_scheduler']['epochs']}, steps_per_epoch = {self.cv_options['lr_scheduler'].get('steps_per_epoch')}")
+            
+        elif scheduler_name == 'ReduceLROnPlateau':
+            
+            # Give reasonable default values if not provided in the configuration
+            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', max(1, self.patience // 4, self.max_epochs // 10))
+            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', max(1, self.patience // 8, self.max_epochs // 20))
+            
+            # Adjust the interval from the configuration to 'epoch'
+            self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
+            
+            logger.info(f"ReduceLROnPlateau configured with patience = {self.cv_options['lr_scheduler']['patience']}, cooldown = {self.cv_options['lr_scheduler']['cooldown']}")
+            
     def check_batch_size(self):
         
        # Get the number of samples in the training set
@@ -1068,7 +1133,9 @@ class NonLinear(CVCalculator):
                     batch_size = self.batch_size,
                     shuffle = self.shuffle, 
                     generator = torch.manual_seed(self.seed + self.tries))
-        
+
+                self._adjust_lr_scheduler(datamodule)
+                
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
@@ -1948,8 +2015,15 @@ class VAECalculator(NonLinear):
             'n_epochs_anneal': self.n_epochs_anneal
         }
         kl_anneal_callback = ml.KLAAnnealing(**kl_annealing_args)
-        
         general_callbacks.append(kl_anneal_callback)
+        
+        # If ReduceLROnPlateau is the scheduler, add our custom manager
+        if self.lr_scheduler and self.lr_scheduler.get('name') == 'ReduceLROnPlateau':
+            # The start epoch should be when the kl annealing finishes
+            start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal
+        
+            lr_plateau_manager = ml.LROnPlateauManager(start_epoch=start_monitoring_epoch)
+            general_callbacks.append(lr_plateau_manager)
         
         return general_callbacks
     
