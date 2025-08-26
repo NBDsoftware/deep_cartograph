@@ -1225,10 +1225,19 @@ class NonLinear(CVCalculator):
     
     def save_loss(self):
         """
-        Saves the loss of the training.
+        Saves the loss of the training and common metrics to all CVs
         """
         from mlcolvar.utils.plot import plot_metrics
         import torch
+        
+        # Create a new dictionary with all tensor metrics moved to the CPU
+        cpu_metrics = {}
+        for key, metric_list in self.metrics.metrics.items():
+            # Check if the list is not empty and its first element is a tensor
+            if metric_list and isinstance(metric_list[0], torch.Tensor):
+                cpu_metrics[key] = [v.cpu().numpy() for v in metric_list] # Convert to numpy array directly
+            else:
+                cpu_metrics[key] = metric_list # Assume it's already CPU-compatible
         
         try:        
             # Move the best_model_score tensor to the CPU
@@ -1239,27 +1248,48 @@ class NonLinear(CVCalculator):
             
             # Save the loss if requested
             if self.training_config['save_loss']:
-                np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
-                np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
-                np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
+                metrics_to_save = ['train_loss', 'valid_loss', 'epoch']
+                for key in metrics_to_save:
+                    if key not in cpu_metrics:
+                        logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
+                        continue
+                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    np.save(filepath, np.array(cpu_metrics[key]))
                 np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
+                    
+            # Plot general metrics to all Non-linear CVs
+            
+
+            # Training and Validation loss
+            Loss_present = ('train_loss' in cpu_metrics) and ('valid_loss' in cpu_metrics)
+            if Loss_present:
+                loss_plot_config = {
+                    'keys': ['train_loss', 'valid_loss'],
+                    'labels': ['Training', 'Validation'],
+                    'colors': ['fessa1', 'fessa5'],
+                    'linestyles': ['-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **loss_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('Training and/or validation loss not found in metrics. Loss plot will not be generated.')
                 
-            # 3. Create a dictionary with CPU-based data for plotting
-            # This ensures the plotting function doesn't receive GPU tensors.
-            metrics_for_plotting = self.metrics.metrics.copy()
-            metrics_for_plotting['train_loss'] = self.metrics.metrics['train_loss']
-            metrics_for_plotting['valid_loss'] = self.metrics.metrics['valid_loss']
-
-            # Plot loss using the CPU-safe metrics dictionary
-            ax = plot_metrics(metrics_for_plotting, 
-                                labels=['Training', 'Validation'], 
-                                keys=['train_loss', 'valid_loss'], 
-                                linestyles=['-','-'], colors=['fessa1','fessa5'], 
-                                yscale='log')
-
-            # Save figure
-            ax.figure.savefig(os.path.join(self.output_path, f'loss.png'), dpi=300, bbox_inches='tight')
-            ax.figure.clf()
+            # Learning rate
+            if 'lr' in cpu_metrics:
+                lr_plot_config = {
+                    'keys': ['lr'],
+                    'labels': ['Learning Rate'],
+                    'colors': ['fessa2'],
+                    'linestyles': ['-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **lr_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'learning_rate.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('Learning rate not found in metrics. Learning rate plot will not be generated.')
 
         except Exception as e:
             import traceback
