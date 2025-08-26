@@ -887,9 +887,6 @@ class NonLinear(CVCalculator):
             self.decoder_options.pop('layers', {})
         else:
             self.decoder_options = self.encoder_options
-
-        # Remove the last activation function and initial dropout from the decoder options
-        self.decoder_options['features_dropout'] = None
         
         # Add activation function to the last layer of the decoder based on the normalization of the features
         if isinstance(self.decoder_options['activation'], list):
