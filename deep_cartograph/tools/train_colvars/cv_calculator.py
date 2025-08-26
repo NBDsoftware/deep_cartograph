@@ -2076,46 +2076,89 @@ class VAECalculator(NonLinear):
         from mlcolvar.utils.plot import plot_metrics
         import torch
         
+        # Create a new dictionary with all tensor metrics moved to the CPU
+        cpu_metrics = {}
+        for key, metric_list in self.metrics.metrics.items():
+            # Check if the list is not empty and its first element is a tensor
+            if metric_list and isinstance(metric_list[0], torch.Tensor):
+                cpu_metrics[key] = [v.cpu().numpy() for v in metric_list] # Convert to numpy array directly
+            else:
+                cpu_metrics[key] = metric_list # Assume it's already CPU-compatible
+
         try:
             # Save the KL and reconstruction losses if requested
             if self.training_config['save_loss']:
-                np.save(os.path.join(self.output_path, 'kl_divergence.npy'), np.array(self.metrics.metrics['train_kl_loss']))
-                np.save(os.path.join(self.output_path, 'valid_kl_divergence.npy'), np.array(self.metrics.metrics['valid_kl_loss']))
-                np.save(os.path.join(self.output_path, 'reconstruction_loss.npy'), np.array(self.metrics.metrics['train_reconstruction_loss']))
-                np.save(os.path.join(self.output_path, 'valid_reconstruction_loss.npy'), np.array(self.metrics.metrics['valid_reconstruction_loss']))
-                np.save(os.path.join(self.output_path, 'beta.npy'), np.array(self.metrics.metrics['beta']))
+                metrics_to_save = ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss', 'beta', 'lr']
+                for key in metrics_to_save:
+                    if key not in cpu_metrics:
+                        logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
+                        continue
+                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    np.save(filepath, np.array(cpu_metrics[key]))
 
-            # Create a dictionary with CPU-based data for plotting
-            # This ensures the plotting function doesn't receive GPU tensors.
-            metrics_for_plotting = self.metrics.metrics.copy()
-            metrics_for_plotting['train_kl_loss'] = self.metrics.metrics['train_kl_loss']
-            metrics_for_plotting['valid_kl_loss'] = self.metrics.metrics['valid_kl_loss']
-            metrics_for_plotting['train_reconstruction_loss'] = self.metrics.metrics['train_reconstruction_loss']
-            metrics_for_plotting['valid_reconstruction_loss'] = self.metrics.metrics['valid_reconstruction_loss']
+            # Plot metrics specific to VAE
             
-            # Plot loss using the CPU-safe metrics dictionary # NOTE: are we assuming that we have one sample per epoch?
-            ax = plot_metrics(metrics_for_plotting, 
-                                labels=['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'], 
-                                keys=['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'], 
-                                linestyles=['-','-','-','-'], colors=['fessa1','fessa5','fessa2','fessa6'], 
-                                yscale='log')
-            # Save figure
-            ax.figure.savefig(os.path.join(self.output_path, f'vae_loss.png'), dpi=300, bbox_inches='tight')
-            ax.figure.clf()
+            # KL divergence loss
+            KL_loss_present = ('train_kl_loss' in cpu_metrics) and ('valid_kl_loss' in cpu_metrics)
+            if KL_loss_present:
+                loss_plot_config = {
+                    'keys': ['train_kl_loss', 'valid_kl_loss'],
+                    'labels': ['Training KL', 'Validation KL'],
+                    'colors': ['fessa1', 'fessa5'],
+                    'linestyles': ['-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **loss_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('KL loss metrics not found. Skipping KL loss plot.')
             
-            metrics_for_plotting['beta'] = self.metrics.metrics['beta']
+            # Reconstruction loss
+            Recon_loss_present = ('train_reconstruction_loss' in cpu_metrics) and ('valid_reconstruction_loss' in cpu_metrics)
+            if Recon_loss_present:
+                recon_plot_config = {
+                    'keys': ['train_reconstruction_loss', 'valid_reconstruction_loss'],
+                    'labels': ['Training Reconstruction', 'Validation Reconstruction'],
+                    'colors': ['fessa2', 'fessa6'],
+                    'linestyles': ['-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **recon_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('Reconstruction loss metrics not found. Skipping reconstruction loss plot.')
+
+            # KL + Reconstruction loss
+            if (KL_loss_present and Recon_loss_present):
+                both_plot_config = {
+                    'keys': ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'],
+                    'labels': ['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'],
+                    'colors': ['fessa1', 'fessa5', 'fessa2', 'fessa6'],
+                    'linestyles': ['-', '-', '-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **both_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('KL and/or Reconstruction loss metrics not found. Skipping combined KL + Reconstruction loss plot.')
             
-            # Plot beta
-            ax = plot_metrics(metrics_for_plotting, 
-                                labels=['Beta'], 
-                                keys=['beta'], 
-                                linestyles=['-'], colors=['fessa3'], 
-                                yscale='linear')
-            
-            # Save figure
-            ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
-            ax.figure.clf()
-            
+            # Beta value
+            beta_present = 'beta' in cpu_metrics
+            if beta_present:
+                beta_plot_config = {
+                    'keys': ['beta'],
+                    'labels': ['Beta'],
+                    'colors': ['fessa3'],
+                    'linestyles': ['-'],
+                    'yscale': 'linear'
+                }
+                ax = plot_metrics(cpu_metrics, **beta_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+               
         except Exception as e:
             import traceback
             logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
