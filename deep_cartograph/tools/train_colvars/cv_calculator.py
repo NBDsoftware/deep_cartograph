@@ -903,10 +903,18 @@ class NonLinear(CVCalculator):
             logger.warning('''Decoder activation function is a single value, the same activation will be used for all layers. 
                            Make sure the chosen activation function matches the normalization of the features when doing regression
                            or choose last_layer_activation = False.''')
-                
-        # No dropout for the last layer
+        
+        # We add a layer to the decoder
+        
+        # No dropout for the last layer of the decoder
         if isinstance(self.decoder_options['dropout'], list):
             self.decoder_options['dropout'].append(None)
+        # No batch norm for the last layer of the decoder 
+        if isinstance(self.decoder_options['batchnorm'], list):
+            self.decoder_options['batchnorm'].append(False)
+        elif self.decoder_options['batchnorm'] is True:
+            logger.warning('''Batch normalization is set to True for all layers of the decoder, 
+                           including the last layer. Make sure this is intended or choose batchnorm as a list.''')
         
         # Normalization of features in the Non-linear models
         # No normalization
