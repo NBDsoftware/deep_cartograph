@@ -272,8 +272,7 @@ def main():
 
     # Determine output folder, if restart is False, create a unique output folder
     output_folder = args.output_folder if args.output_folder else 'train_colvars'
-    if not args.restart:
-        output_folder = get_unique_path(output_folder)
+    output_folder = get_unique_path(output_folder)
     os.makedirs(output_folder, exist_ok=True)
     
     # Set logger
