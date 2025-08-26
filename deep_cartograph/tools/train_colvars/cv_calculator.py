@@ -1074,12 +1074,15 @@ class NonLinear(CVCalculator):
         """
         
         from mlcolvar.utils.trainer import MetricsCallback
-        
+    
         from lightning.pytorch.callbacks.early_stopping import EarlyStopping
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
         
+        general_callbacks = []
+        
         # Define MetricsCallback to store the loss
         self.metrics = MetricsCallback()
+        general_callbacks.append(self.metrics)
 
         # Define EarlyStopping callback to stop training
         self.early_stopping = EarlyStopping(
@@ -1087,6 +1090,7 @@ class NonLinear(CVCalculator):
             min_delta=self.min_delta, 
             patience=self.patience, 
             mode = "min")
+        general_callbacks.append(self.early_stopping)
 
         # Define ModelCheckpoint callback to save the best/last model
         self.checkpoint = ModelCheckpoint(
@@ -1098,9 +1102,10 @@ class NonLinear(CVCalculator):
             filename=None,                             # Default checkpoint file name '{epoch}-{step}'
             mode="min",                                # Best model is the one with the minimum monitored quantity
             every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
-                
-        return [self.metrics, self.early_stopping, self.checkpoint]
-    
+        general_callbacks.append(self.checkpoint)
+
+        return general_callbacks
+
     def train(self) -> bool:
         """
         Trains the non-linear collective variable using the training data.
