@@ -1147,8 +1147,8 @@ class NonLinear(CVCalculator):
                 model = self.create_model()
 
                 # Set optimizer name
-                model._optimizer_name = self.opt_name
-                
+                model.optimizer_name = self.opt_name
+
                 logger.info(f"Model architecture: {model}")
                 
                 logger.debug(f'Initializing metrics and callbacks...')
