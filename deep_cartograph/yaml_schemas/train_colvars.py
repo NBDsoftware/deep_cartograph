@@ -23,7 +23,7 @@ class NeuralNetwork(BaseModel):
     # Whether to use batch normalization
     batchnorm: Union[bool, List[bool]] = False
     # Value for dropout (if 0.0, no dropout is applied)
-    dropout: Union[float, List[float]] = 0.0
+    dropout: Union[Optional[float], List[Optional[float]]] = 0.0
     # Whether to use activation functions for the last layer
     last_layer_activation: bool = True
     
