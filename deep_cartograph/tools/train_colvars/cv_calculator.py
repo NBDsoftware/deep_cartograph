@@ -1965,11 +1965,11 @@ class VAECalculator(NonLinear):
         # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
             
         # Update options
-        cv_options = {
+        nn_options = {
             "encoder": self.encoder_options,
             "decoder": self.decoder_options
         }
-        self.cv_options.update(cv_options)
+        self.cv_options.update(nn_options)
 
     def set_encoder_layers(self) -> List:
         """ 
