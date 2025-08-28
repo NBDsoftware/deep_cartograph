@@ -12,17 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Set constants
 DEFAULT_FMT = '%14.10f'
-
-        
-def to_atomgroup(entity_name: str) -> str:
-    """ 
-    Convert entity name to atom group: @CA_1 -> @CA-1
     
-    Replaces "_" by "-".
-    """        
-    return entity_name.replace("_", "-")
-    
-
 def get_traj_flag(traj_path):
     """
     Get trajectory flag from trajectory path. Depending on the extension of the trajectory,

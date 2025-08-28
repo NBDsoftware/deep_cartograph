@@ -158,9 +158,12 @@ def compute_features(
     if logger.isEnabledFor(logging.DEBUG):
         # Find list of discarded features
         discarded_features = [ref_feature_list[i] for i in range(len(ref_feature_list)) if not mask[i]]
-        logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
-        logger.debug(discarded_features)
-        logger.debug(f"{len(common_features_lists[0])} features were kept")
+        if len(discarded_features) > 0:
+            logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
+            logger.debug(discarded_features)
+            logger.debug(f"{len(common_features_lists[0])} features were kept")
+        else: 
+            logger.debug("No features were discarded. All reference features are present in all topologies.")
         
     # Compute the features for each traj and topology
     colvars_paths = []
