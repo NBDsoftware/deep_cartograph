@@ -46,6 +46,8 @@ def get_config():
         early_stopping:
           patience: 20
           min_delta: 1.0e-05
+        lr_scheduler: null
+        lr_scheduler_config: null
         optimizer:
           name: Adam
           kwargs: 

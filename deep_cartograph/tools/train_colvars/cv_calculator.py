@@ -851,6 +851,8 @@ class NonLinear(CVCalculator):
         self.general_config: Dict = self.training_config['general']
         self.early_stopping_config: Dict  = self.training_config['early_stopping']
         self.optimizer_config: Dict = self.training_config['optimizer']
+        self.lr_scheduler_config: Optional[Dict] = self.training_config['lr_scheduler_config']
+        self.lr_scheduler: Optional[Dict] = self.training_config['lr_scheduler']
         
         # Training attributes
         self.max_tries: int = self.general_config['max_tries']
@@ -885,9 +887,6 @@ class NonLinear(CVCalculator):
             self.decoder_options.pop('layers', {})
         else:
             self.decoder_options = self.encoder_options
-
-        # Remove the last activation function and initial dropout from the decoder options
-        self.decoder_options['features_dropout'] = None
         
         # Add activation function to the last layer of the decoder based on the normalization of the features
         if isinstance(self.decoder_options['activation'], list):
@@ -904,10 +903,18 @@ class NonLinear(CVCalculator):
             logger.warning('''Decoder activation function is a single value, the same activation will be used for all layers. 
                            Make sure the chosen activation function matches the normalization of the features when doing regression
                            or choose last_layer_activation = False.''')
-                
-        # No dropout for the last layer
+        
+        # We add a layer to the decoder
+        
+        # No dropout for the last layer of the decoder
         if isinstance(self.decoder_options['dropout'], list):
             self.decoder_options['dropout'].append(None)
+        # No batch norm for the last layer of the decoder 
+        if isinstance(self.decoder_options['batchnorm'], list):
+            self.decoder_options['batchnorm'].append(False)
+        elif self.decoder_options['batchnorm'] is True:
+            logger.warning('''Batch normalization is set to True for all layers of the decoder, 
+                           including the last layer. Make sure this is intended or choose batchnorm as a list.''')
         
         # Normalization of features in the Non-linear models
         # No normalization
@@ -924,7 +931,70 @@ class NonLinear(CVCalculator):
         self.optimizer_options: Dict = self.optimizer_config['kwargs']
         
         self.cv_options["optimizer"] = self.optimizer_options
+        
+        # Construct the lr_scheduler option - scheduler class and its kwargs
+        if self.lr_scheduler is not None:           
+            # Obtain the class from the name
+            lr_scheduler_class = getattr(torch.optim.lr_scheduler, self.lr_scheduler['name'], None)
+            if lr_scheduler_class is None:
+                logger.error(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized. Exiting...')
+                sys.exit(1)
+                
+            self.cv_options["lr_scheduler"] = {
+                "scheduler" : lr_scheduler_class    
+            }   
+            
+            self.cv_options["lr_scheduler"].update(self.lr_scheduler.get('kwargs', {}))
+            
+            # NEW FEATURE
+            # If OneCycleLR is used -> Adjust epochs and steps_per_epoch according to the training configuration and the number of samples
+            # If ReduceLROnPlateau is used -> Adjust patience and cooldown
+            # Check where do we have the info to do the update
+            
+        # Construct the lr_scheduler_config option
+        if self.lr_scheduler_config is not None:
+            self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
     
+    def _adjust_lr_scheduler(self, datamodule):
+        """
+        Adjusts LR scheduler parameters based on the training configuration.
+        This is called right after the datamodule is created.
+        """
+        
+        datamodule.setup(stage='fit')
+        
+        # Proceed only if a scheduler is defined
+        if self.lr_scheduler is None:
+            return
+
+        logger.debug("Adjusting LR Scheduler parameters...") 
+
+        scheduler_name = self.lr_scheduler.get('name', '')
+        
+        if scheduler_name == 'OneCycleLR':
+            
+            # Give reasonable default values if not provided in the configuration
+            self.cv_options["lr_scheduler"]['max_lr'] = self.cv_options["lr_scheduler"].get('max_lr', 1e-3)
+            self.cv_options["lr_scheduler"]['epochs'] = self.cv_options["lr_scheduler"].get('epochs', self.max_epochs)
+            steps_per_epoch = len(datamodule.train_dataloader())
+            self.cv_options["lr_scheduler"]['steps_per_epoch'] = self.cv_options["lr_scheduler"].get('steps_per_epoch', steps_per_epoch)
+            
+            # Adjust the interval from the configuration to 'step'
+            self.cv_options["lr_scheduler_config"]["interval"] = 'step'
+            
+            logger.info(f"OneCycleLR configured with epochs = {self.cv_options['lr_scheduler']['epochs']}, steps_per_epoch = {self.cv_options['lr_scheduler'].get('steps_per_epoch')}")
+            
+        elif scheduler_name == 'ReduceLROnPlateau':
+            
+            # Give reasonable default values if not provided in the configuration
+            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', min(self.patience // 4, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 5))
+            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', min(self.patience // 8, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 10))
+            
+            # Adjust the interval from the configuration to 'epoch'
+            self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
+            
+            logger.info(f"ReduceLROnPlateau configured with patience = {self.cv_options['lr_scheduler']['patience']}, cooldown = {self.cv_options['lr_scheduler']['cooldown']}")
+            
     def check_batch_size(self):
         
        # Get the number of samples in the training set
@@ -1004,12 +1074,15 @@ class NonLinear(CVCalculator):
         """
         
         from mlcolvar.utils.trainer import MetricsCallback
-        
+    
         from lightning.pytorch.callbacks.early_stopping import EarlyStopping
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
         
+        general_callbacks = []
+        
         # Define MetricsCallback to store the loss
         self.metrics = MetricsCallback()
+        general_callbacks.append(self.metrics)
 
         # Define EarlyStopping callback to stop training
         self.early_stopping = EarlyStopping(
@@ -1017,6 +1090,7 @@ class NonLinear(CVCalculator):
             min_delta=self.min_delta, 
             patience=self.patience, 
             mode = "min")
+        general_callbacks.append(self.early_stopping)
 
         # Define ModelCheckpoint callback to save the best/last model
         self.checkpoint = ModelCheckpoint(
@@ -1028,9 +1102,10 @@ class NonLinear(CVCalculator):
             filename=None,                             # Default checkpoint file name '{epoch}-{step}'
             mode="min",                                # Best model is the one with the minimum monitored quantity
             every_n_epochs=self.save_check_every_n_epoch)   # Number of epochs between checkpoints
-                
-        return [self.metrics, self.early_stopping, self.checkpoint]
-    
+        general_callbacks.append(self.checkpoint)
+
+        return general_callbacks
+
     def train(self) -> bool:
         """
         Trains the non-linear collective variable using the training data.
@@ -1068,15 +1143,17 @@ class NonLinear(CVCalculator):
                     batch_size = self.batch_size,
                     shuffle = self.shuffle, 
                     generator = torch.manual_seed(self.seed + self.tries))
-        
+
+                self._adjust_lr_scheduler(datamodule)
+                
                 logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
                 
                 # Define non-linear model
                 model = self.create_model()
 
                 # Set optimizer name
-                model._optimizer_name = self.opt_name
-                
+                model.optimizer_name = self.opt_name
+
                 logger.info(f"Model architecture: {model}")
                 
                 logger.debug(f'Initializing metrics and callbacks...')
@@ -1148,10 +1225,19 @@ class NonLinear(CVCalculator):
     
     def save_loss(self):
         """
-        Saves the loss of the training.
+        Saves the loss of the training and common metrics to all CVs
         """
         from mlcolvar.utils.plot import plot_metrics
         import torch
+        
+        # Create a new dictionary with all tensor metrics moved to the CPU
+        cpu_metrics = {}
+        for key, metric_list in self.metrics.metrics.items():
+            # Check if the list is not empty and its first element is a tensor
+            if metric_list and isinstance(metric_list[0], torch.Tensor):
+                cpu_metrics[key] = [v.cpu().numpy() for v in metric_list] # Convert to numpy array directly
+            else:
+                cpu_metrics[key] = metric_list # Assume it's already CPU-compatible
         
         try:        
             # Move the best_model_score tensor to the CPU
@@ -1162,27 +1248,48 @@ class NonLinear(CVCalculator):
             
             # Save the loss if requested
             if self.training_config['save_loss']:
-                np.save(os.path.join(self.output_path, 'train_loss.npy'), np.array(self.metrics.metrics['train_loss']))
-                np.save(os.path.join(self.output_path, 'valid_loss.npy'), np.array(self.metrics.metrics['valid_loss']))
-                np.save(os.path.join(self.output_path, 'epochs.npy'), np.array(self.metrics.metrics['epoch']))
+                metrics_to_save = ['train_loss', 'valid_loss', 'epoch']
+                for key in metrics_to_save:
+                    if key not in cpu_metrics:
+                        logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
+                        continue
+                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    np.save(filepath, np.array(cpu_metrics[key]))
                 np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
+                    
+            # Plot general metrics to all Non-linear CVs
+            
+
+            # Training and Validation loss
+            Loss_present = ('train_loss' in cpu_metrics) and ('valid_loss' in cpu_metrics)
+            if Loss_present:
+                loss_plot_config = {
+                    'keys': ['train_loss', 'valid_loss'],
+                    'labels': ['Training', 'Validation'],
+                    'colors': ['fessa1', 'fessa5'],
+                    'linestyles': ['-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **loss_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('Training and/or validation loss not found in metrics. Loss plot will not be generated.')
                 
-            # 3. Create a dictionary with CPU-based data for plotting
-            # This ensures the plotting function doesn't receive GPU tensors.
-            metrics_for_plotting = self.metrics.metrics.copy()
-            metrics_for_plotting['train_loss'] = self.metrics.metrics['train_loss']
-            metrics_for_plotting['valid_loss'] = self.metrics.metrics['valid_loss']
-
-            # Plot loss using the CPU-safe metrics dictionary
-            ax = plot_metrics(metrics_for_plotting, 
-                                labels=['Training', 'Validation'], 
-                                keys=['train_loss', 'valid_loss'], 
-                                linestyles=['-','-'], colors=['fessa1','fessa5'], 
-                                yscale='log')
-
-            # Save figure
-            ax.figure.savefig(os.path.join(self.output_path, f'loss.png'), dpi=300, bbox_inches='tight')
-            ax.figure.clf()
+            # Learning rate
+            if 'lr' in cpu_metrics:
+                lr_plot_config = {
+                    'keys': ['lr'],
+                    'labels': ['Learning Rate'],
+                    'colors': ['fessa2'],
+                    'linestyles': ['-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **lr_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'learning_rate.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('Learning rate not found in metrics. Learning rate plot will not be generated.')
 
         except Exception as e:
             import traceback
@@ -1858,11 +1965,11 @@ class VAECalculator(NonLinear):
         # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
             
         # Update options
-        cv_options = {
+        nn_options = {
             "encoder": self.encoder_options,
             "decoder": self.decoder_options
         }
-        self.cv_options.update(cv_options)
+        self.cv_options.update(nn_options)
 
     def set_encoder_layers(self) -> List:
         """ 
@@ -1948,8 +2055,15 @@ class VAECalculator(NonLinear):
             'n_epochs_anneal': self.n_epochs_anneal
         }
         kl_anneal_callback = ml.KLAAnnealing(**kl_annealing_args)
-        
         general_callbacks.append(kl_anneal_callback)
+        
+        # If ReduceLROnPlateau is the scheduler, add our custom manager
+        if self.lr_scheduler and self.lr_scheduler.get('name') == 'ReduceLROnPlateau':
+            # The start epoch should be when the kl annealing finishes + 1/4 of the remaining epochs
+            start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal + (self.max_epochs - self.start_epoch - self.n_epochs_anneal)//4
+        
+            lr_plateau_manager = ml.LROnPlateauManager(start_epoch=start_monitoring_epoch)
+            general_callbacks.append(lr_plateau_manager)
         
         return general_callbacks
     
@@ -1962,46 +2076,89 @@ class VAECalculator(NonLinear):
         from mlcolvar.utils.plot import plot_metrics
         import torch
         
+        # Create a new dictionary with all tensor metrics moved to the CPU
+        cpu_metrics = {}
+        for key, metric_list in self.metrics.metrics.items():
+            # Check if the list is not empty and its first element is a tensor
+            if metric_list and isinstance(metric_list[0], torch.Tensor):
+                cpu_metrics[key] = [v.cpu().numpy() for v in metric_list] # Convert to numpy array directly
+            else:
+                cpu_metrics[key] = metric_list # Assume it's already CPU-compatible
+
         try:
             # Save the KL and reconstruction losses if requested
             if self.training_config['save_loss']:
-                np.save(os.path.join(self.output_path, 'kl_divergence.npy'), np.array(self.metrics.metrics['train_kl_loss']))
-                np.save(os.path.join(self.output_path, 'valid_kl_divergence.npy'), np.array(self.metrics.metrics['valid_kl_loss']))
-                np.save(os.path.join(self.output_path, 'reconstruction_loss.npy'), np.array(self.metrics.metrics['train_reconstruction_loss']))
-                np.save(os.path.join(self.output_path, 'valid_reconstruction_loss.npy'), np.array(self.metrics.metrics['valid_reconstruction_loss']))
-                np.save(os.path.join(self.output_path, 'beta.npy'), np.array(self.metrics.metrics['beta']))
+                metrics_to_save = ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss', 'beta', 'lr']
+                for key in metrics_to_save:
+                    if key not in cpu_metrics:
+                        logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
+                        continue
+                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    np.save(filepath, np.array(cpu_metrics[key]))
 
-            # Create a dictionary with CPU-based data for plotting
-            # This ensures the plotting function doesn't receive GPU tensors.
-            metrics_for_plotting = self.metrics.metrics.copy()
-            metrics_for_plotting['train_kl_loss'] = self.metrics.metrics['train_kl_loss']
-            metrics_for_plotting['valid_kl_loss'] = self.metrics.metrics['valid_kl_loss']
-            metrics_for_plotting['train_reconstruction_loss'] = self.metrics.metrics['train_reconstruction_loss']
-            metrics_for_plotting['valid_reconstruction_loss'] = self.metrics.metrics['valid_reconstruction_loss']
+            # Plot metrics specific to VAE
             
-            # Plot loss using the CPU-safe metrics dictionary # NOTE: are we assuming that we have one sample per epoch?
-            ax = plot_metrics(metrics_for_plotting, 
-                                labels=['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'], 
-                                keys=['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'], 
-                                linestyles=['-','-','-','-'], colors=['fessa1','fessa5','fessa2','fessa6'], 
-                                yscale='log')
-            # Save figure
-            ax.figure.savefig(os.path.join(self.output_path, f'vae_loss.png'), dpi=300, bbox_inches='tight')
-            ax.figure.clf()
+            # KL divergence loss
+            KL_loss_present = ('train_kl_loss' in cpu_metrics) and ('valid_kl_loss' in cpu_metrics)
+            if KL_loss_present:
+                loss_plot_config = {
+                    'keys': ['train_kl_loss', 'valid_kl_loss'],
+                    'labels': ['Training KL', 'Validation KL'],
+                    'colors': ['fessa1', 'fessa5'],
+                    'linestyles': ['-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **loss_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('KL loss metrics not found. Skipping KL loss plot.')
             
-            metrics_for_plotting['beta'] = self.metrics.metrics['beta']
+            # Reconstruction loss
+            Recon_loss_present = ('train_reconstruction_loss' in cpu_metrics) and ('valid_reconstruction_loss' in cpu_metrics)
+            if Recon_loss_present:
+                recon_plot_config = {
+                    'keys': ['train_reconstruction_loss', 'valid_reconstruction_loss'],
+                    'labels': ['Training Reconstruction', 'Validation Reconstruction'],
+                    'colors': ['fessa2', 'fessa6'],
+                    'linestyles': ['-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **recon_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('Reconstruction loss metrics not found. Skipping reconstruction loss plot.')
+
+            # KL + Reconstruction loss
+            if (KL_loss_present and Recon_loss_present):
+                both_plot_config = {
+                    'keys': ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'],
+                    'labels': ['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'],
+                    'colors': ['fessa1', 'fessa5', 'fessa2', 'fessa6'],
+                    'linestyles': ['-', '-', '-', '-'],
+                    'yscale': 'log'
+                }
+                ax = plot_metrics(cpu_metrics, **both_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+            else:
+                logger.warning('KL and/or Reconstruction loss metrics not found. Skipping combined KL + Reconstruction loss plot.')
             
-            # Plot beta
-            ax = plot_metrics(metrics_for_plotting, 
-                                labels=['Beta'], 
-                                keys=['beta'], 
-                                linestyles=['-'], colors=['fessa3'], 
-                                yscale='linear')
-            
-            # Save figure
-            ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
-            ax.figure.clf()
-            
+            # Beta value
+            beta_present = 'beta' in cpu_metrics
+            if beta_present:
+                beta_plot_config = {
+                    'keys': ['beta'],
+                    'labels': ['Beta'],
+                    'colors': ['fessa3'],
+                    'linestyles': ['-'],
+                    'yscale': 'linear'
+                }
+                ax = plot_metrics(cpu_metrics, **beta_plot_config)
+                ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
+                ax.figure.clf()
+               
         except Exception as e:
             import traceback
             logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')

@@ -6,8 +6,15 @@ class Optimizer(BaseModel):
     # Name of the optimizer (see torch.optim Algorithms)
     name: str = "Adam"
     # Keyword arguments for the optimizer (depends on the optimizer used, see torch.optim Algorithms)
-    kwargs: dict = {'lr': 1.0e-03, 'weight_decay': 0.0}
+    kwargs: dict = {'lr': 1.0e-04, 'weight_decay': 0.0}
 
+class RLScheduler(BaseModel):
+    
+    # Name of the learning rate scheduler (see torch.optim.lr_scheduler)
+    name: str = "OneCycleLR"
+    # Keyword arguments for the learning rate scheduler (depends on the scheduler used, see torch.optim.lr_scheduler)
+    kwargs: dict = {}
+    
 class NeuralNetwork(BaseModel):
     # Fully connected hidden layers
     layers: List[int] = [64, 32, 16]
@@ -16,11 +23,9 @@ class NeuralNetwork(BaseModel):
     # Whether to use batch normalization
     batchnorm: Union[bool, List[bool]] = False
     # Value for dropout (if 0.0, no dropout is applied)
-    dropout: Union[float, List[float]] = 0.0
+    dropout: Union[Optional[float], List[Optional[float]]] = 0.0
     # Whether to use activation functions for the last layer
     last_layer_activation: bool = True
-    # Wether to add dropout to the input layer or not
-    features_dropout: Optional[float] = None
     
 class Architecture(BaseModel):
 
@@ -68,7 +73,7 @@ class EarlyStopping(BaseModel):
 
 class KLAnnealing(BaseModel):
     # Type of KL annealing ('linear' or 'cyclical')
-    type: Literal['linear', 'cyclical'] = 'cyclical'
+    type: Literal['linear', 'sigmoid', 'cyclical'] = 'cyclical'
     # Sart value for beta (KL divergence weight)
     start_beta: float = 0.0
     # Maximum value of the KL divergence weight (beta)
@@ -88,6 +93,10 @@ class Trainings(BaseModel):
     early_stopping: EarlyStopping = EarlyStopping()
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
+    # Learning rate scheduler settings
+    lr_scheduler: Optional[RLScheduler] = RLScheduler()
+    # Learning rate scheduler configuration 
+    lr_scheduler_config: Optional[dict] = {'interval': 'epoch', 'monitor': 'valid_loss', 'frequency': 1}
     # KL Annealing settings (used only with VAE)
     kl_annealing: KLAnnealing = KLAnnealing()
     # Wether to save the training and validation losses after training

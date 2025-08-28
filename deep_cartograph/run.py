@@ -193,6 +193,7 @@ def deep_cartograph(
 
     # Step 3: Train colvars
     # ---------------------
+    train_output_folder = get_unique_path(os.path.join(output_folder, 'train_colvars'))
     args = {
         'configuration': configuration['train_colvars'],
         'colvars_paths': traj_colvars_paths,
@@ -206,7 +207,7 @@ def deep_cartograph(
         'dimension': dimension,
         'cvs': cvs,
         'samples_per_frame': 1/configuration['compute_features']['plumed_settings']['traj_stride'],
-        'output_folder': os.path.join(output_folder, 'train_colvars')
+        'output_folder': train_output_folder
     }
     train_colvars(**args)
             
