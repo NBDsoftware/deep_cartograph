@@ -73,7 +73,7 @@ class EarlyStopping(BaseModel):
 
 class KLAnnealing(BaseModel):
     # Type of KL annealing ('linear' or 'cyclical')
-    type: Literal['linear', 'cyclical'] = 'cyclical'
+    type: Literal['linear', 'sigmoid', 'cyclical'] = 'cyclical'
     # Sart value for beta (KL divergence weight)
     start_beta: float = 0.0
     # Maximum value of the KL divergence weight (beta)
