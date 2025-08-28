@@ -52,6 +52,9 @@ class Assembler:
         # List of features to be tracked
         self.feature_list: List[str] = feature_list
         
+        # Asses the need for Fit to template (if there are coordinates in the feature list)
+        self.fit_to_template: bool = any(feat.startswith("coord") for feat in feature_list)
+        
         # List of variables to be printed in a COLVAR file
         self.print_args: List[str] = []
         
@@ -75,6 +78,10 @@ class Assembler:
         # Write WHOLEMOLECULES command - to correct for periodic boundary conditions
         self.input_content += plumed.command.wholemolecules(whole_mol_indices)
         
+        # If needed, write FIT TO TEMPLATE command - to align the structure to a reference
+        if self.fit_to_template:
+            self.input_content += plumed.command.fit_to_template(os.path.abspath(self.topology_path))
+            
         # Leave blank line
         self.input_content += "\n"
         
@@ -88,7 +95,7 @@ class Assembler:
         for feature in self.feature_list:
             self.input_content += self.get_feature_command(feature)
      
-    def get_feature_command(self, feature: str) -> str:
+    def get_feature_command(self, feature_label: str) -> str:
         """
         Get the PLUMED command to compute a feature from its definition.
         
@@ -97,16 +104,12 @@ class Assembler:
         The rest of the entities define the atoms that should be used to compute the feature and 
         the number of them will depend on the specific feature.
 
-            entity1  - entity2 - entity3
-
-            feat_name -  atom1  -  atom2   
+        Ex: dist-@CA_584-@CA_549 -> feat_name -  atom1  -  atom2   
             
-            Ex: dist-@CA_584-@CA_549
-
         Parameters
         ----------
         
-            feature (str):
+            feature_label (str):
                 Name (i.e. definition) of the feature to compute.
         
         Returns
@@ -117,7 +120,7 @@ class Assembler:
         """   
         
         # Divide the feature definition into entities
-        entities = feature.split("-")
+        entities = feature_label.split("-")
         
         # Get the feature name
         feat_name = entities[0]
@@ -127,47 +130,67 @@ class Assembler:
             
             # Distance
             if len(entities) != 3:
-                logger.error(f"Malformed distance feature label: {feature}")
+                logger.error(f"Malformed distance feature label: {feature_label}")
                 sys.exit(1)
                 
             for i in range(1,3):
                 if entities[i].startswith("center_"):
                     pass
                 else:
-                    entities[i] = plumed.utils.to_atomgroup(entities[i])
+                    entities[i] = entities[i].replace("_", "-")
             
-            return plumed.command.distance(feature, entities[1:])
+            return plumed.command.distance(feature_label, entities[1:])
+        
+        elif feat_name == "coord":
+            
+            # Coordinates of an atom
+            if len(entities) != 2:
+                logger.error(f"Malformed coord feature label: {feature_label}")
+                sys.exit(1)
+            
+            # Find the atom and axis
+            if "." not in entities[1]:
+                logger.error(f"Malformed coord feature label (missing axis): {feature_label}")
+                sys.exit(1)
+            
+            # Find atom and command label from feature label
+            atom, axis = entities[1].split(".")
+            command_label = 'coord' + '-' + atom
+            
+            # Include the command for the coordinates only once per atom
+            command = plumed.command.position(command_label, atom.replace("_", "-")) if axis == "x" else ""
+            return command
             
         elif feat_name == "sin":
             
             # Sinus of a dihedral angle
             if len(entities) != 5 and len(entities) != 2:
-                logger.error(f"Malformed sin feature label: {feature}")
+                logger.error(f"Malformed sin feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.sin(feature, [plumed.utils.to_atomgroup(entity) for entity in entities[1:]])
+            return plumed.command.sin(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
         
         elif feat_name == "cos":
             
             # Cosinus of a dihedral angle
             if len(entities) != 5 and len(entities) != 2:
-                logger.error(f"Malformed cos feature label: {feature}")
+                logger.error(f"Malformed cos feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.cos(feature, [plumed.utils.to_atomgroup(entity) for entity in entities[1:]])
+            return plumed.command.cos(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
         
         elif feat_name == "tor":
             
             # Dihedral angle
             if len(entities) != 5 and len(entities) != 2:
-                logger.error(f"Malformed tor feature label: {feature}")
+                logger.error(f"Malformed tor feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.torsion(feature, [plumed.utils.to_atomgroup(entity) for entity in entities[1:]])
-    
+            return plumed.command.torsion(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
+        
         else:
             
-            logger.error(f"Feature {feature} not recognized.")
+            logger.error(f"Feature {feature_label} not recognized.")
             sys.exit(1)
 
     def add_center_commands(self):
@@ -207,7 +230,7 @@ class Assembler:
         self.input_content += "\n"
         
         self.input_content += plumed.command.print(self.print_args, colvars_path, stride)
-
+        
     def write(self):
         """
         Write the PLUMED input file. This method is not used by the Assembler classes but the Builder classes.

@@ -21,44 +21,8 @@ logger = logging.getLogger(__name__)
 # Constants for the module
 covalent_bond_threshold = 2.0
 
-# Working with structures
-def get_indices(topology: str, selection: Union[str, None] = None) -> list:
-    '''
-    Function that returns the indices of the atoms in the selection. The indices 
-    returned are starting at 1 (as in plumed or in most MD engines) and are of type int.
 
-    MDAnalysis indices start at 0, hence the +1.
-
-    Input
-    -----
-        topology (str):  path to the topology file.
-        selection (str): selection of atoms.
-
-    Output
-    ------
-        indices (list): list of indices of atoms in the selection.
-    '''
-
-    # Load topology
-    u = mda.Universe(topology)
-
-    # Select atoms
-    if selection is None:
-        atoms = u.select_atoms('all')
-    else:
-        atoms = u.select_atoms(selection)
-
-    # Get indices
-    indices = atoms.indices
-
-    # Convert to list
-    indices = list(indices)
-
-    # Convert to ints
-    indices = [int(index)+1 for index in indices]
-
-    return indices
-
+# To find labels from topologies and MDAnalysis selections
 def find_distances(topology_path: str, selection1: str, selection2: str, stride1: int, stride2: int, skip_neighbors: bool, skip_bonded_atoms: bool) -> List[str]:
     '''
     The function finds all the pairwise distances between two selections in the topology, skipping bonded atoms or atoms pertaining to neighboring residues if requested.
@@ -194,17 +158,17 @@ def find_dihedrals(topology_path: str, selection: str, search_mode: str) -> List
     if search_mode == "virtual":
     
         # Find virtual dihedrals
-        dihedral_labels = get_virtual_dihedral(topology_path, selection)
+        dihedral_labels = find_virtual_dihedral(topology_path, selection)
 
     elif search_mode == "protein_backbone":
 
         # Find protein backbone dihedrals
-        dihedral_labels = get_protein_back_dihedrals(topology_path, selection)
+        dihedral_labels = find_protein_back_dihedrals(topology_path, selection)
     
     elif search_mode == "real":
 
         # Find real dihedrals
-        dihedral_labels = get_all_real_dihedrals(topology_path, selection)
+        dihedral_labels = find_all_real_dihedrals(topology_path, selection)
 
     else:
 
@@ -212,7 +176,54 @@ def find_dihedrals(topology_path: str, selection: str, search_mode: str) -> List
 
     return dihedral_labels
 
-def get_virtual_dihedral(topology_path: str, selection: str) -> List[str]:
+def find_coordinates(topology_path: str, selection: str, stride: int) -> List[str]:
+    '''
+    This function finds all the coordinates of atoms in a selection in the topology.
+    
+    It returns a list of strings defining those coordinates: 
+    
+    @atomName_atomResid
+
+    Input
+    -----
+
+        topology_path : path to the topology file.
+        selection     : selection of atoms.
+        stride        : stride for the selection.
+
+    Output
+    ------
+
+        all_labels : list of labels.
+    '''
+
+    # Load topology
+    u = mda.Universe(topology_path)
+
+    # Select atoms
+    atoms = u.select_atoms(selection)
+
+    # Keep only one every stride atoms
+    atoms = atoms[::stride]
+
+    # Check the selection is not empty
+    if len(atoms) == 0:
+        raise ValueError(f"Selection: '{selection}' for topology {topology_path} is empty, please review the selection string.")
+
+    all_labels = []
+
+    # Iterate over all selected atoms
+    for atom in atoms:
+
+        # Create entity
+        entity = f"@{atom.name}_{atom.resid}"
+
+        # Add atomic definition of the coordinate
+        all_labels.append(entity)
+
+    return all_labels
+
+def find_virtual_dihedral(topology_path: str, selection: str) -> List[str]:
     '''
     Takes as input a path to a topology file and a selection and returns all the virtual dihedrals 
     between heavy atoms in that selection.
@@ -261,7 +272,7 @@ def get_virtual_dihedral(topology_path: str, selection: str) -> List[str]:
 
     return dihedral_labels
 
-def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
+def find_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     '''
     Takes as input a topology path and a selection and returns all the backbone dihedrals in the selection.
 
@@ -326,7 +337,7 @@ def get_protein_back_dihedrals(topology_path: str, selection: str) -> List[str]:
     
     return dihedral_labels
 
-def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
+def find_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
     '''
     Takes as input a topology path and a selection and returns all the real dihedral angles between heavy atoms in the selection.
 
@@ -463,35 +474,8 @@ def get_all_real_dihedrals(topology_path: str, selection: str) -> List[str]:
 
     return dihedral_labels    
 
-def get_number_atoms(topology: str, selection: str = None) -> int:
-    """
-    Function that returns the number of atoms in the selection. 
-    If no selection is given, it returns the total number of atoms in the topology.
 
-    Input
-    -----
-        topology (str): path to the topology file.
-        selection (str): selection of atoms.
-    
-    Output
-    ------
-        num_atoms (int): number of atoms in the selection.
-    """
-    
-    # Load topology
-    u = mda.Universe(topology)
-
-    # Select atoms
-    if selection is None:
-        atoms = u.select_atoms('all')
-    else:
-        atoms = u.select_atoms(selection)
-
-    # Get number of atoms
-    num_atoms = len(atoms)
-
-    return num_atoms
-
+# Wrapper to get labels from a features definition dictionary
 def get_dihedral_labels(topology_path: str, dihedrals_definition: Dict) -> List[str]:
     '''
     This function finds the rotatable dihedrals involving heavy atoms in a selection of a PDB structure
@@ -560,11 +544,44 @@ def get_distance_labels(topology_path: str, distances_definition: Dict) -> List[
 
     return distance_labels
 
+def get_coordinate_labels(topology_path: str, coordinate_definition: Dict) -> List[str]:
+    '''
+    This function returns the list of coordinate labels for a group of coordinates defined in a dictionary.
+
+    Input
+    -----
+
+        topology_path       : path to the topology file.
+        coordinate_definition : dictionary containing the definition of the group of coordinates.
+    
+    Output
+    ------
+
+        coordinate_labels (list): list of coordinate labels.
+    '''
+    axis = ['x', 'y', 'z']
+    
+    # Read coordinate group definition
+    selection = coordinate_definition.get('selection', 'all')
+    stride = coordinate_definition.get('stride', 1)
+
+    atom_labels = find_coordinates(topology_path, selection, stride)
+    
+    # Define command labels
+    coordinate_labels = []
+    for label in atom_labels:
+        for ax in axis:
+            coordinate_labels.append(f"coord-{label}.{ax}")
+
+    return coordinate_labels
+
+
+# Wrapper to get the full list of features from a features configuration dictionary
 def get_features_list(features_configuration: Dict, topology_path: str) -> List:
     """
     Get a list of feature labels from a features_configuration dictionary and a topology file.
-    
-    The labels can be used both as a name for the feature and as a definition of the feature. I.e. there is a 
+
+    The labels can be used both as a name for the feature and as a definition of the feature. I.e. there is a
     unique label for each feature.
     
     Each PLUMED feature should have a unique label, such that there is a bijective mapping between the
@@ -584,6 +601,32 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
     
     logger.debug(f"Searching for features in {Path(topology_path).name}...")
     
+    #############
+    # POSITIONS #
+    #############
+    
+    # Check for coordinate groups
+    if features_configuration.get('coordinate_groups'):
+        
+        # Find list of groups
+        coordinate_group_names = features_configuration['coordinate_groups'].keys()
+
+        # Iterate over groups
+        for group_name in coordinate_group_names:
+            
+            print("Position groups are not currently supported.")
+            
+            group_definition = features_configuration['coordinate_groups'][group_name]
+            
+            # Find labels for all coordinates in the group
+            coordinate_labels = get_coordinate_labels(topology_path, group_definition)
+            
+            # Log number of coordinates found
+            logger.debug(f"Found {len(coordinate_labels)} features for {group_name}")
+            
+            # Add labels to the list
+            features_labels.extend(coordinate_labels)
+
     #############
     # DISTANCES #
     #############
@@ -663,9 +706,13 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
             # Add labels to the list
             features_labels.extend(center_labels)
     
+    # Check if any features were found
+    if len(features_labels) == 0:
+        raise ValueError("No features found, please check the features section of the configuration file and the topology.")
+    
     return features_labels
     
-
+    
 # Working with trajectories
 def extract_frames(trajectory_path: str, topology_path: str, traj_frames: list, 
                    new_traj_path: str, top_frame: int, new_top_path: str):
@@ -873,6 +920,73 @@ def get_num_frames(trajectory_path: str, topology_path: str) -> int:
     
     return num_frames
 
+def get_number_atoms(topology: str, selection: str = None) -> int:
+    """
+    Function that returns the number of atoms in the selection. 
+    If no selection is given, it returns the total number of atoms in the topology.
+
+    Input
+    -----
+        topology (str): path to the topology file.
+        selection (str): selection of atoms.
+    
+    Output
+    ------
+        num_atoms (int): number of atoms in the selection.
+    """
+    
+    # Load topology
+    u = mda.Universe(topology)
+
+    # Select atoms
+    if selection is None:
+        atoms = u.select_atoms('all')
+    else:
+        atoms = u.select_atoms(selection)
+
+    # Get number of atoms
+    num_atoms = len(atoms)
+
+    return num_atoms
+
+def get_indices(topology: str, selection: Union[str, None] = None) -> list:
+    '''
+    Function that returns the indices of the atoms in the selection. The indices 
+    returned are starting at 1 (as in plumed or in most MD engines) and are of type int.
+
+    MDAnalysis indices start at 0, hence the +1.
+
+    Input
+    -----
+        topology (str):  path to the topology file.
+        selection (str): selection of atoms.
+
+    Output
+    ------
+        indices (list): list of indices of atoms in the selection.
+    '''
+
+    # Load topology
+    u = mda.Universe(topology)
+
+    # Select atoms
+    if selection is None:
+        atoms = u.select_atoms('all')
+    else:
+        atoms = u.select_atoms(selection)
+
+    # Get indices
+    indices = atoms.indices
+
+    # Convert to list
+    indices = list(indices)
+
+    # Convert to ints
+    indices = [int(index)+1 for index in indices]
+
+    return indices
+
+
 # I/O functions
 def find_supported_traj(parent_path, filename = None):
     """
@@ -969,6 +1083,58 @@ def create_pdb(structure_path, file_name):
 
     return
 
+def create_plumed_rmsd_template(
+    topology_path: str, 
+    output_path: str, 
+    align_selection: str = 'backbone', 
+    rmsd_selection: str = 'backbone'
+    ):
+    """
+    Create a PLUMED input file to calculate the RMSD of with respect to a reference structure.
+
+    Input
+    -----
+        topology_path  (str): path to the original topology file.
+        output_path    (str): path to the new pdb template used by PLUMED.
+        align_selection (str): selection of atoms to align to before calculating the RMSD.
+        rmsd_selection  (str): selection of atoms to calculate the RMSD.
+    """
+
+    # Load topology
+    u = mda.Universe(topology_path)
+
+    # Select atoms for alignment
+    align_atoms = u.select_atoms(align_selection)
+
+    # Select atoms for RMSD calculation
+    rmsd_atoms = u.select_atoms(rmsd_selection)
+
+    # Check selections are not empty
+    if len(align_atoms) == 0:
+        raise ValueError(f"Selection: '{align_selection}' for topology {topology_path} is empty, please review the selection string.")
+
+    if len(rmsd_atoms) == 0:
+        raise ValueError(f"Selection: '{rmsd_selection}' for topology {topology_path} is empty, please review the selection string.")
+
+    # Create a new PDB file in which 
+    # Alignment atoms have a 1.00 occupancy
+    # RMSD atoms have a 1.00 B-factor
+    # Other atoms have 0.00 occupancy and B-factor
+    with mda.Writer(output_path, n_atoms=u.atoms.n_atoms, format='PDB') as writer:
+        for atom in u.atoms:
+            if atom in align_atoms:
+                atom.occupancy = 1.00
+            else:
+                atom.occupancy = 0.00
+
+            if atom in rmsd_atoms:
+                atom.bfactor = 1.00
+            else:
+                atom.bfactor = 0.00
+
+        writer.write(u)
+
+    return
 
 # Analysis
 def RMSD(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
@@ -1044,6 +1210,7 @@ def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selec
         rmsf_per_residue.append(np.mean(rmsf_per_atom[rmsf_atoms.resnums == residue]))
     
     return rmsf_per_residue, residues
+
 
 # Other
 def to_entity_name(mda_selection: str) -> str:

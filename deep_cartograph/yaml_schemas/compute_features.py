@@ -1,6 +1,12 @@
 from pydantic import BaseModel
 from typing import Dict, List, Literal, Union
 
+class CoordinateGroup(BaseModel):
+    # Selection of atoms to be included in this group (MDAnalysis selection syntax)
+    selection: str = "not name H*"
+    # Stride for the selection. Include only every stride-th atom in the selection
+    stride: int = 1
+    
 class DistanceGroup(BaseModel):
 
     # Selection of atoms to be included in the first selection of this group (MDAnalysis selection syntax)
@@ -34,11 +40,15 @@ class DistanceToCenterGroup(BaseModel):
 
 class Features(BaseModel):
     
-    # Groups of distance features. Dictionary with the group name as key and the group schema as value
+    # Dictionaries with the group name as key and the group definition as value
+    
+    # Groups of coordinate features. 
+    coordinate_groups: Dict[str, CoordinateGroup] = {}
+    # Groups of distance features. 
     distance_groups: Dict[str, DistanceGroup] = {}
-    # Groups of dihedral features. Dictionary with the group name as key and the group schema as value
+    # Groups of dihedral features.
     dihedral_groups: Dict[str, DihedralGroup] = {}
-    # Groups of distances to a geometric center. Dictionary with the group name as key and the group schema as value
+    # Groups of distances to a geometric center.
     distance_to_center_groups: Dict[str, DistanceToCenterGroup] = {}
 
 class PlumedSettings(BaseModel):
