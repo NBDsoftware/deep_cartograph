@@ -987,8 +987,8 @@ class NonLinear(CVCalculator):
         elif scheduler_name == 'ReduceLROnPlateau':
             
             # Give reasonable default values if not provided in the configuration
-            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', max(1, self.patience // 4, self.max_epochs // 10))
-            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', max(1, self.patience // 8, self.max_epochs // 20))
+            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', min(self.patience // 4, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 5))
+            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', min(self.patience // 8, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 10))
             
             # Adjust the interval from the configuration to 'epoch'
             self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
@@ -2059,8 +2059,8 @@ class VAECalculator(NonLinear):
         
         # If ReduceLROnPlateau is the scheduler, add our custom manager
         if self.lr_scheduler and self.lr_scheduler.get('name') == 'ReduceLROnPlateau':
-            # The start epoch should be when the kl annealing finishes
-            start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal
+            # The start epoch should be when the kl annealing finishes + 1/4 of the remaining epochs
+            start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal + (self.max_epochs - self.start_epoch - self.n_epochs_anneal)//4
         
             lr_plateau_manager = ml.LROnPlateauManager(start_epoch=start_monitoring_epoch)
             general_callbacks.append(lr_plateau_manager)
