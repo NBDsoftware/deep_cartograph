@@ -964,11 +964,12 @@ class NonLinear(CVCalculator):
         This is called right after the datamodule is created.
         """
         
-        datamodule.setup(stage='fit')
-        
         # Proceed only if a scheduler is defined
         if self.lr_scheduler is None:
             return
+
+        # Split the data to get the number of samples in the training set
+        datamodule.setup(stage='fit')
 
         logger.debug("Adjusting LR Scheduler parameters...") 
 
