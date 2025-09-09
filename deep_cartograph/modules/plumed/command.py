@@ -1,10 +1,8 @@
 # Import modules
-import os
 import sys
 import math
 import logging
 import numpy as np
-from pathlib import Path
 
 from typing import List, Union
 
@@ -66,7 +64,7 @@ def wholemolecules(indices: List[int]) -> str:
     return command
 
 def fit_to_template(
-    reference: str
+    template_path: str
     ) -> str:
     '''
     Function that creates a PLUMED FIT TO TEMPLATE command.
@@ -74,18 +72,13 @@ def fit_to_template(
     Inputs
     ------
 
-        reference   (str):  path to the reference structure
+        template_path   (str):  path to the reference structure
 
     Returns
     -------
 
         fit_to_template_command (str):  PLUMED FIT TO TEMPLATE command
     '''
-    from deep_cartograph.modules.md import create_plumed_rmsd_template
-    
-    # Create a template file in the same directory as the reference topology
-    template_path = os.path.join(Path(reference).parent, "fit_template.pdb")
-    create_plumed_rmsd_template(reference, template_path)
     
     command = f"FIT_TO_TEMPLATE STRIDE=1 REFERENCE={template_path} TYPE=OPTIMAL\n"
 

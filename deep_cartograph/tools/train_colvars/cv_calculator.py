@@ -512,7 +512,8 @@ class CVCalculator:
             'feature_list': features_list,
             'traj_stride': 1,
             'cv_type': self.get_cv_type(),
-            'cv_params': self.get_cv_parameters()
+            'cv_params': self.get_cv_parameters(),
+            'ref_topology_path': self.ref_topology_path
         }
         
         # Build the plumed input file to track the CV
@@ -953,9 +954,9 @@ class NonLinear(CVCalculator):
             # If ReduceLROnPlateau is used -> Adjust patience and cooldown
             # Check where do we have the info to do the update
             
-        # Construct the lr_scheduler_config option
-        if self.lr_scheduler_config is not None:
-            self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
+            # Construct the lr_scheduler_config option
+            if self.lr_scheduler_config is not None:
+                self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
     
     def _adjust_lr_scheduler(self, datamodule):
         """
@@ -963,11 +964,12 @@ class NonLinear(CVCalculator):
         This is called right after the datamodule is created.
         """
         
-        datamodule.setup(stage='fit')
-        
         # Proceed only if a scheduler is defined
         if self.lr_scheduler is None:
             return
+
+        # Split the data to get the number of samples in the training set
+        datamodule.setup(stage='fit')
 
         logger.debug("Adjusting LR Scheduler parameters...") 
 
