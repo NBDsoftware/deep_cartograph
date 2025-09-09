@@ -512,7 +512,8 @@ class CVCalculator:
             'feature_list': features_list,
             'traj_stride': 1,
             'cv_type': self.get_cv_type(),
-            'cv_params': self.get_cv_parameters()
+            'cv_params': self.get_cv_parameters(),
+            'ref_topology_path': self.ref_topology_path
         }
         
         # Build the plumed input file to track the CV
