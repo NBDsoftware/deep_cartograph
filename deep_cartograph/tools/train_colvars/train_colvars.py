@@ -9,7 +9,6 @@ from typing import Dict, List, Literal, Union, Optional
 
 from deep_cartograph.tools.train_colvars.train_colvars_workflow import TrainColvarsWorkflow
 from deep_cartograph.modules.common import (
-    create_output_folder,
     get_unique_path, 
     read_configuration, 
     read_feature_constraints
@@ -109,7 +108,7 @@ def train_colvars(
     start_time = time.time()
     
     # Create output directory
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
@@ -270,7 +269,7 @@ def main():
 
     args = parse_arguments()
 
-    # Determine output folder, if restart is False, create a unique output folder
+    # Create new output folder
     output_folder = args.output_folder if args.output_folder else 'train_colvars'
     output_folder = get_unique_path(output_folder)
     os.makedirs(output_folder, exist_ok=True)

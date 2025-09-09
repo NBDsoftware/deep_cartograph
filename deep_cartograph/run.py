@@ -16,7 +16,6 @@ from deep_cartograph.tools import (
 )
 from deep_cartograph.modules.common import (
     check_data,
-    create_output_folder,
     get_unique_path,
     validate_configuration,
     read_feature_constraints,
@@ -114,7 +113,7 @@ def deep_cartograph(
         output_folder = get_unique_path(output_folder)
             
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, DeepCartograph, output_folder)

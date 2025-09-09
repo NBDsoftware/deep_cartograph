@@ -10,11 +10,9 @@ from typing import Dict, List, Union, Optional
 from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
 from deep_cartograph.tools.filter_features.filtering import Filter
 from deep_cartograph.modules.common import (
-    create_output_folder, 
     validate_configuration, 
     save_list,
     get_unique_path, 
-    create_output_folder, 
     read_configuration
 )
 
@@ -96,7 +94,7 @@ def filter_features(
         return output_features_path
 
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, FilterFeaturesSchema, output_folder)

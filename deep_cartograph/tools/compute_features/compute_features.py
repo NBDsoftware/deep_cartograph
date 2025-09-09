@@ -14,7 +14,6 @@ import deep_cartograph.modules.md as md
 from deep_cartograph.modules.common import ( 
     get_unique_path, 
     read_configuration,
-    create_output_folder, 
     validate_configuration, 
     files_exist
 )
@@ -72,7 +71,7 @@ def compute_features(
     start_time = time.time()
 
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
@@ -125,8 +124,8 @@ def compute_features(
         
         # Create output folder
         traj_output_folder = os.path.join(output_folder, traj_name)
-        create_output_folder(traj_output_folder)
-        
+        os.makedirs(traj_output_folder, exist_ok=True)
+
         # Create new topology file
         plumed_topology = os.path.join(traj_output_folder, 'plumed_topology.pdb')
         md.create_pdb(topology, plumed_topology)

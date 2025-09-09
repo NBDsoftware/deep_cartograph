@@ -7,7 +7,7 @@ from scipy.sparse import block_diag
 from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
 
-from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
+from deep_cartograph.modules.common import closest_power_of_two
 import deep_cartograph.modules.md as md
 
 # Set logger
@@ -155,10 +155,10 @@ class CVCalculator:
         
         # Create output folder for this CV
         self.output_path = os.path.join(self.output_path, self.cv_name)
-        create_output_folder(self.output_path)
-        
-        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
-        
+        os.makedirs(self.output_path, exist_ok=True)
+
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
+
     def cv_ready(self) -> bool:
         """
         Checks if the CV is ready to be used.
