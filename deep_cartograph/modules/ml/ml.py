@@ -1,14 +1,53 @@
 # Import modules
+import os
 import logging
 import lightning as L
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import Callback
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Literal
+import torch
 
 # Set logger
 logger = logging.getLogger(__name__)
 
+class PostAnnealingCheckpoint(Callback):
+    """
+    Custom callback to save the best model based on validation loss,
+    but only after the beta-annealing phase is complete.
+    """
+    def __init__(self, monitor: str, dirpath: str, annealing_end_epoch: int):
+        super().__init__()
+        self.monitor = monitor
+        self.dirpath = dirpath
+        self.annealing_end_epoch = annealing_end_epoch
+        self.best_score = torch.inf
+        self.best_model_path = ""
+
+        # Ensure the directory exists
+        os.makedirs(self.dirpath, exist_ok=True)
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        # Only start monitoring after the annealing phase
+        if trainer.current_epoch < self.annealing_end_epoch:
+            return
+
+        # Get the metric to monitor
+        current_score = trainer.callback_metrics.get(self.monitor)
+        if current_score is None:
+            return
+
+        # Compare and save the best model checkpoint
+        if current_score < self.best_score:
+            self.best_score = current_score
+            filename = f"best-post-anneal-epoch={trainer.current_epoch}.ckpt"
+            # Erase previous best model if exists
+            if os.path.exists(self.best_model_path):
+                os.remove(self.best_model_path)
+            self.best_model_path = os.path.join(self.dirpath, filename)
+            trainer.save_checkpoint(self.best_model_path)
+            logger.debug(f"\nSaved new best post-annealing model with {self.monitor}={current_score:.4f} at epoch {trainer.current_epoch}")
+            
 class KLAAnnealing(Callback):
     """
     Callback to anneal the KL divergence weight (beta).

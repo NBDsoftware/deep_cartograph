@@ -823,6 +823,7 @@ class NonLinear(CVCalculator):
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
         
         import torch 
+        import lightning
                 
         super().__init__(
             configuration,
@@ -853,6 +854,7 @@ class NonLinear(CVCalculator):
         self.optimizer_config: Dict = self.training_config['optimizer']
         self.lr_scheduler_config: Optional[Dict] = self.training_config['lr_scheduler_config']
         self.lr_scheduler: Optional[Dict] = self.training_config['lr_scheduler']
+        self.model_to_save: Literal['best', 'last'] = self.training_config['model_to_save']
         
         # Training attributes
         self.max_tries: int = self.general_config['max_tries']
@@ -865,7 +867,7 @@ class NonLinear(CVCalculator):
         self.check_val_every_n_epoch: int = self.general_config['check_val_every_n_epoch']
         self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
         
-        self.best_model_score: Union[float, None] = None
+        self.cv_score: Union[float, None] = None
         self.tries: int = 0
         
         self.patience: int = self.early_stopping_config['patience']
@@ -1109,103 +1111,130 @@ class NonLinear(CVCalculator):
     def train(self) -> bool:
         """
         Trains the non-linear collective variable using the training data.
-        
-        Returns
-        -------
-        
-        successfully_trained : bool
-            True if the training was successful, False otherwise.
         """
-        
         import torch
         import lightning
-        
         from mlcolvar.data import DictModule
-    
+
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
-        
-        # Training was successful
-        successfully_trained = False
-        
-        # Train until model finds a good solution
-        while not successfully_trained and self.tries < self.max_tries:
-            try: 
 
-                self.tries += 1
-
-                logger.debug(f'Splitting the dataset...')
-
-                # Build datamodule, split the dataset into training and validation
+        training_succeeded = False
+        while not training_succeeded and (self.tries < self.max_tries):
+            self.tries += 1
+            try:
+                # Setup datamodule and model for the current try
                 datamodule = DictModule(
-                    random_split = self.random_split,
-                    dataset = self.training_input_dtset,
-                    lengths = self.training_validation_lengths,
-                    batch_size = self.batch_size,
-                    shuffle = self.shuffle, 
-                    generator = torch.manual_seed(self.seed + self.tries))
-
+                    random_split=self.random_split,
+                    dataset=self.training_input_dtset,
+                    lengths=self.training_validation_lengths,
+                    batch_size=self.batch_size,
+                    shuffle=self.shuffle,
+                    generator=torch.manual_seed(self.seed + self.tries)
+                )
                 self._adjust_lr_scheduler(datamodule)
-                
-                logger.debug(f'Initializing {cv_names_map[self.cv_name]} object...')
-                
-                # Define non-linear model
                 model = self.create_model()
-
-                # Set optimizer name
                 model.optimizer_name = self.opt_name
-
                 logger.info(f"Model architecture: {model}")
-                
-                logger.debug(f'Initializing metrics and callbacks...')
-                
-                logger.debug(f'Initializing Trainer...')
 
-                # Define trainer
-                trainer = lightning.Trainer(          
+                # Setup and run trainer
+                trainer = lightning.Trainer(
                     callbacks=self.get_callbacks(),
-                    max_epochs=self.max_epochs, 
-                    logger=False, 
+                    max_epochs=self.max_epochs,
+                    logger=False,
                     enable_checkpointing=True,
-                    enable_progress_bar = False, 
-                    check_val_every_n_epoch=self.check_val_every_n_epoch)
-
-                logger.debug(f'Training...')
-
+                    enable_progress_bar=False,
+                    check_val_every_n_epoch=self.check_val_every_n_epoch
+                )
+                logger.debug(f'Starting training try {self.tries}/{self.max_tries}...')
                 trainer.fit(model, datamodule)
+                logger.debug(f'Training try {self.tries} completed.')
 
-                # Get validation and training loss
-                validation_loss = self.metrics.metrics['valid_loss']
-
-                # Check the evolution of the loss
-                successfully_trained = self.loss_decreased(validation_loss)
-                if not successfully_trained:
-                    logger.warning(f'{cv_names_map[self.cv_name]} has not found a good solution. Re-starting training...')
+                # Check if loss has decreased to consider the training a success
+                if self.loss_decreased(self.metrics.metrics['valid_loss']):
+                    training_succeeded = self._finalize_training()
+                else:
+                    logger.warning(f'Try {self.tries} failed: validation loss did not decrease. Retrying...')
 
             except Exception as e:
-                logger.error(f'{cv_names_map[self.cv_name]} training failed. Error message: {e}')
-                logger.info(f'Retrying {cv_names_map[self.cv_name]} training...')
-        
-        # Check if the checkpoint exists
-        if successfully_trained:
-            
-            if self.cv_name == 'vae':
-                # Save last model - regularized model is preferred over the best model
-                model_path = os.path.join(self.output_path, 'last.ckpt')
-            else:
-                # Save lowest loss model
-                model_path = self.checkpoint.best_model_path
+                logger.error(f'Training try {self.tries} failed with an exception: {e}')
+                if self.tries < self.max_tries:
+                    logger.info('Retrying...')
 
-            if os.path.exists(model_path):
-                self.cv = self.nonlinear_cv_map[self.cv_name].load_from_checkpoint(model_path)
-                self.best_model_score = self.checkpoint.best_model_score
-                logger.info(f'Lowest score during training: {self.best_model_score}')
+        if not training_succeeded:
+            logger.error(f'{cv_names_map[self.cv_name]} did not converge after {self.max_tries} tries.')
+
+        return training_succeeded
+
+    def _finalize_training(self) -> bool:
+        """
+        Handles post-training tasks: model selection, loading, and logging scores.
+        """
+        # 1. Gather all available model info first
+        
+        # Last model info
+        last_score = self.metrics.metrics['valid_loss'][-1] if self.metrics.metrics.get('valid_loss') else None
+        last_model_path = self.checkpoint.last_model_path
+
+        # Best overall model info
+        best_score = self.checkpoint.best_model_score
+        best_model_path = self.checkpoint.best_model_path
+
+        # Best post-annealing model info (only for VAEs)
+        best_post_anneal_score = None
+        best_post_anneal_path = None
+        if self.cv_name == 'vae' and hasattr(self, 'post_annealing_checkpoint'):
+            best_post_anneal_score = self.post_annealing_checkpoint.best_score
+            best_post_anneal_path = self.post_annealing_checkpoint.best_model_path
+
+        # 2. Select the model to load
+        model_path_to_load = None
+        model_description = "N/A"
+        
+        # If the user requested the best model
+        if self.model_to_save == 'best':
+            if self.cv_name == 'vae':
+                if best_post_anneal_path and os.path.exists(best_post_anneal_path):
+                    model_path_to_load = best_post_anneal_path
+                    model_description = "best post-annealing"
+                else:
+                    logger.warning("Best post-annealing model not found, falling back to last model.")
+            elif best_model_path and os.path.exists(best_model_path):
+                model_path_to_load = best_model_path
+                model_description = "best overall"
             else:
-                logger.error(f'The model checkpoint {model_path} does not exist.')
-        else:
-            logger.error(f'{cv_names_map[self.cv_name]} has not converged after {self.max_tries} tries.')
-    
-        return successfully_trained
+                logger.warning("Best overall model not found, falling back to last model.")
+        
+        # If nothing selected yet, load the last model
+        if model_path_to_load is None and last_model_path and os.path.exists(last_model_path):
+            model_path_to_load = last_model_path
+            model_description = "last"
             
+        # 3. Load the selected model and log results
+        if model_path_to_load:
+            # The score of the model we are actually loading
+            # (This is an example, you might want to store self.cv_score differently)
+            if model_description == "best post-annealing":
+                self.cv_score = best_post_anneal_score
+            elif model_description == "best overall":
+                self.cv_score = best_score
+            else: # "last"
+                self.cv_score = last_score
+                
+            self.cv = self.nonlinear_cv_map[self.cv_name].load_from_checkpoint(model_path_to_load)
+            
+            logger.info(f"Successfully loaded the '{model_description}' model from: {model_path_to_load}")
+            if best_score is not None:
+                logger.info(f"  -> Best Overall Score:      {best_score:.5f}")
+            if best_post_anneal_score is not None:
+                logger.info(f"  -> Best Post-Annealing Score: {best_post_anneal_score:.5f}")
+            if last_score is not None:
+                logger.info(f"  -> Last Model Score:          {last_score:.5f}")
+                
+            return True
+        else:
+            logger.error("Training finished, but no valid model checkpoint was found.")
+            return False
+        
     def loss_decreased(self, loss: List):
         """
         Check if the loss has decreased by the end of the training.
@@ -1242,8 +1271,8 @@ class NonLinear(CVCalculator):
         try:        
             # Move the best_model_score tensor to the CPU
             # Check if it's a tensor before calling .cpu()
-            best_model_score_cpu = self.best_model_score
-            if isinstance(self.best_model_score, torch.Tensor):
+            best_model_score_cpu = self.cv_score
+            if isinstance(self.cv_score, torch.Tensor):
                 best_model_score_cpu = best_model_score_cpu.cpu().detach()
             
             # Save the loss if requested
@@ -1259,7 +1288,6 @@ class NonLinear(CVCalculator):
                     
             # Plot general metrics to all Non-linear CVs
             
-
             # Training and Validation loss
             Loss_present = ('train_loss' in cpu_metrics) and ('valid_loss' in cpu_metrics)
             if Loss_present:
@@ -1889,7 +1917,7 @@ class DeepTICACalculator(NonLinear):
         super().save_cv()
             
         # Find the epoch where the best model was found
-        best_index = self.metrics.metrics['valid_loss'].index(self.best_model_score)
+        best_index = self.metrics.metrics['valid_loss'].index(self.cv_score)
         best_epoch = self.metrics.metrics['epoch'][best_index]
         logger.info(f'Took {best_epoch} epochs')
 
@@ -2065,6 +2093,16 @@ class VAECalculator(NonLinear):
             lr_plateau_manager = ml.LROnPlateauManager(start_epoch=start_monitoring_epoch)
             general_callbacks.append(lr_plateau_manager)
         
+        # If there is a KL annealing stage
+        if self.n_epochs_anneal > 0:
+            # Add a callback to start saving the best model after the KL annealing 
+            self.post_annealing_checkpoint = ml.PostAnnealingCheckpoint(
+                monitor="valid_loss",
+                dirpath=self.output_path,
+                annealing_end_epoch=self.start_epoch + self.n_epochs_anneal,
+            )
+            general_callbacks.append(self.post_annealing_checkpoint)
+            
         return general_callbacks
     
     def save_loss(self): 
