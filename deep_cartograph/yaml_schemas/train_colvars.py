@@ -103,6 +103,8 @@ class Trainings(BaseModel):
     save_loss: bool = True
     # Wether to plot the loss after training
     plot_loss: bool = True
+    # Model to save
+    model_to_save: Literal['best', 'last'] = 'last'
 
 class BiasArgs(BaseModel):
     
