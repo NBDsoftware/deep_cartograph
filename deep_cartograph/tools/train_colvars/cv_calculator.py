@@ -954,9 +954,9 @@ class NonLinear(CVCalculator):
             # If ReduceLROnPlateau is used -> Adjust patience and cooldown
             # Check where do we have the info to do the update
             
-        # Construct the lr_scheduler_config option
-        if self.lr_scheduler_config is not None:
-            self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
+            # Construct the lr_scheduler_config option
+            if self.lr_scheduler_config is not None:
+                self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
     
     def _adjust_lr_scheduler(self, datamodule):
         """
