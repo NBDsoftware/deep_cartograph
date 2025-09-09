@@ -216,7 +216,7 @@ class TrainColvarsWorkflow:
         for cv_name in self.cvs_list:
             
             if cv_name != "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
-                logger.warning(f"Missing packages for {cv_name}. Skipping this CV.")
+                logger.warning(f"Missing packages for {cv_name}. Skipping this CV. If you want to use it, please install mlcolvar, torch and lightning.")
                 continue
             
             cv_output_folder = os.path.join(self.output_folder, cv_name)
