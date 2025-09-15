@@ -12,7 +12,8 @@ from deep_cartograph.tools import (
     analyze_geometry,
     compute_features,
     filter_features,
-    train_colvars
+    train_colvars,
+    traj_cluster
 )
 from deep_cartograph.modules.common import (
     check_data,
