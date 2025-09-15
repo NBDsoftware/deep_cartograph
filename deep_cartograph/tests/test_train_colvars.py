@@ -1,6 +1,7 @@
 from deep_cartograph.tools.train_colvars import train_colvars
 import importlib.resources as resources
 from deep_cartograph import tests
+from pathlib import Path
 import pandas as pd
 import shutil
 import yaml
@@ -76,19 +77,7 @@ def get_config():
         bandwidth: 0.25
         alpha: 0.6
         cmap: turbo
-        use_legend: True
         marker_size: 12
-    clustering:                        
-      run: True                        
-      algorithm: hierarchical               
-      opt_num_clusters: True          
-      search_interval: [5, 15]          
-      num_clusters: 3                  
-      linkage: complete                
-      n_init: 20                       
-      min_cluster_size: 50             
-      min_samples: 5                  
-      cluster_selection_epsilon: 0.5
     """
     return yaml.safe_load(yaml_content)
 
@@ -123,11 +112,12 @@ def test_train_colvars():
     # Call API
     train_colvars(
         configuration = get_config(),
-        colvars_paths = [colvars_path],
-        feature_constraints = filtered_features,  
-        output_folder = output_path,
-        trajectories = [trajectory_path],
-        topologies = [topology_path])
+        train_colvars_paths = [colvars_path],
+        train_topologies = [topology_path],
+        trajectory_names = [Path(trajectory_path).stem],
+        feature_constraints = filtered_features,
+        output_folder = output_path
+        )
     
     test_passed = True
     for cv in get_config()['cvs']:
@@ -152,7 +142,13 @@ def test_train_colvars():
         
         # Check if the computed and reference dataframes are equal
         test_passed = projected_trajectory_df.equals(reference_projected_trajectory_df) and test_passed
-    
+
+        if not test_passed:
+            print(f"Test for {cv} failed.")
+            break
+        else:
+            print(f"Test for {cv} passed.")
+            
     assert test_passed
     
     # If the test passed, clean the output folder
