@@ -121,6 +121,7 @@ def deep_cartograph(
     
     # Check main input folders
     trajectories, topologies = check_data(trajectory_data, topology_data)
+    trajectory_names = [Path(traj).stem for traj in trajectories]
     
     # Set reference topology
     if not reference_topology:
@@ -156,23 +157,20 @@ def deep_cartograph(
     # Compute features for supplementary data
     if supplementary_traj_data:
         supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
+        sup_trajectory_names = [Path(traj).stem for traj in supplementary_trajs]
         args = {
             'configuration': configuration['compute_features'], 
             'trajectories': supplementary_trajs, 
             'topologies': supplementary_tops, 
             'reference_topology': reference_topology,
+            'traj_stride': 1,  # Use all frames for supplementary data - typically smaller datasets
             'output_folder': os.path.join(output_folder, 'compute_ref_features')
         }
         supplementary_colvars_paths = compute_features(**args)
-        
-        # If there are less than 10 supplementary trajectories, use their names as labels
-        supplementary_labels = None
-        if len(supplementary_trajs) < 10: 
-            supplementary_labels = [Path(val_trajectory).stem for val_trajectory in supplementary_trajs]
     else:
         supplementary_trajs, supplementary_tops = None, None
+        sup_trajectory_names = None
         supplementary_colvars_paths = None
-        supplementary_labels = None
 
     ## Step 2: Filter features
     # ------------------------
@@ -193,24 +191,43 @@ def deep_cartograph(
 
     # Step 3: Train colvars
     # ---------------------
-    train_output_folder = get_unique_path(os.path.join(output_folder, 'train_colvars'))
     args = {
         'configuration': configuration['train_colvars'],
-        'colvars_paths': traj_colvars_paths,
-        'trajectories': trajectories,
-        'topologies': topologies,
+        'train_colvars_paths': traj_colvars_paths,
+        'train_topologies': topologies,
+        'trajectory_names': trajectory_names,
         'reference_topology': reference_topology,
         'feature_constraints': filtered_features,
         'sup_colvars_paths': supplementary_colvars_paths,
         'sup_topology_paths': supplementary_tops,
-        'sup_labels': supplementary_labels,
+        'sup_trajectory_names': sup_trajectory_names,
         'dimension': dimension,
         'cvs': cvs,
-        'samples_per_frame': 1/configuration['compute_features']['plumed_settings']['traj_stride'],
-        'output_folder': train_output_folder
+        'frames_per_sample': configuration['compute_features']['plumed_settings']['traj_stride'],
+        'output_folder': os.path.join(output_folder, 'train_colvars')
     }
-    train_colvars(**args)
-            
+    cv_trajectories, cv_sup_trajectories = train_colvars(**args)
+    
+    # STEP 4: Trajectory clustering
+    # -----------------------------
+    
+    for cv in cv_trajectories.keys():
+        
+        logger.info(f"Clustering trajectories in CV space: {cv}")
+        
+        args = {
+            'configuration': configuration['traj_cluster'],
+            'cv_traj_paths': cv_trajectories[cv],
+            'trajectories': trajectories,
+            'topologies': topologies,
+            'sup_cv_traj_paths': cv_sup_trajectories.get(cv, None),
+            'sup_trajectories': supplementary_trajs,
+            'sup_topologies': supplementary_tops,
+            'frames_per_sample': configuration['compute_features']['plumed_settings']['traj_stride'],
+            'output_folder': os.path.join(output_folder, 'traj_cluster', cv)
+        }
+        traj_cluster(**args)
+    
     # End timer
     elapsed_time = time.time() - start_time
 

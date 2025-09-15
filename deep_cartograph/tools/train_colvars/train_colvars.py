@@ -20,26 +20,29 @@ from deep_cartograph.modules.common import (
 
 def train_colvars(
     configuration: Dict,
-    colvars_paths: Union[str, List[str]],
-    trajectories: Optional[List[str]] = None,
-    topologies: Optional[List[str]] = None,
+    train_colvars_paths: Union[str, List[str]],
+    train_topologies: Optional[List[str]] = None,
+    trajectory_names: Optional[List[str]] = None,
     reference_topology: Optional[str] = None,
     feature_constraints: Optional[Union[List[str], str]] = None,
     sup_colvars_paths: Optional[List[str]] = None,
     sup_topology_paths: Optional[List[str]] = None,
-    sup_labels: Optional[List[str]] = None,
+    sup_trajectory_names: Optional[List[str]] = None,
     dimension: Optional[int] = None,
     cvs: Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]] = None,
-    samples_per_frame: Optional[float] = 1,
+    frames_per_sample: Optional[int] = 1,
     output_folder: str = 'train_colvars'
-) -> None:
+) -> Dict[str, List[str]]:
     """
-    Trains collective variables using the mlcolvar library and computes a Free Energy Surface (FES) 
-    along the CVs from the trajectory data. 
+    Trains collective variables (CVs), computes a Free Energy Surface (FES) 
+    along the CVs from the training data, computes a sensitivity analysis of
+    each CV with respect to the input features and projects supplementary data
+    (e.g. experimental structures) onto the FES.
 
     Supported collective variables (CVs):
         - pca (Principal Component Analysis)
         - ae (Autoencoder)
+        - vae (Variational Autoencoder)
         - tica (Time Independent Component Analysis)
         - htica (Hierarchical Time Independent Component Analysis)
         - deep_tica (Deep Time Independent Component Analysis)
@@ -49,15 +52,16 @@ def train_colvars(
     configuration : Dict
         Configuration dictionary (see `default_config.yml` for more information).
 
-    colvars_paths : str or List[str]
+    train_colvars_paths : str or List[str]
         Path or list of paths to colvars files containing the input data (samples of features).
 
-    trajectories : Optional[List[str]], default=None
-        Path to the trajectory files corresponding to the colvars files (same order as colvars_paths).
-
-    topologies : Optional[List[str]], default=None
+    train_topologies : Optional[List[str]], default=None
         Path to the topology files corresponding to the trajectory files (same order as trajectories).
 
+    trajectory_names : Optional[List[str]], default=None
+        List of names of the trajectories corresponding to the colvars files.  
+        If `None`, the colvars files are identified by their file names.
+        
     reference_topology : Optional[str], default=None
         Path to the reference topology file. If `None`, the first topology file is used as reference.
 
@@ -72,9 +76,9 @@ def train_colvars(
     sup_topology_paths : Optional[List[str]], default=None
         List of paths to topology files corresponding to the supplementary colvars files.
         
-    sup_labels : Optional[List[str]], default=None
-        List of labels to identify the supplementary data.  
-        If `None`, the supplementary data is identified as 'supplementary data i'.
+    sup_trajectory_names : Optional[List[str]], default=None
+        List of names of the trajectories corresponding to the supplementary colvars files.  
+        If `None`, the supplementary colvars files are identified by their file names.
 
     dimension : Optional[int], default=None
         Dimension of the CVs to train or compute. If `None`, the value in the configuration is used.
@@ -82,9 +86,8 @@ def train_colvars(
     cvs : Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]], default=None
         List of collective variables to train or compute. If `None`, the ones in the configuration are used.
 
-    samples_per_frame : Optional[float], default=1
-        Number of samples in the colvars file for each frame in the trajectory file.  
-        Calculated with: `samples_per_frame = (trajectory saving frequency) / (colvars saving frequency)`.
+    frames_per_sample : Optional[int], default=1
+        Frames in the trajectory for each sample in the colvars file.  
 
     output_folder : str, default='train_colvars'
         Path to the output folder where the output files will be saved.  
@@ -92,8 +95,10 @@ def train_colvars(
 
     Returns
     -------
-    None
-        This function does not return a value. It saves output files to the specified folder.
+
+    Dict[str, List[str]]
+        A dictionary where keys are the names of the collective variables and values are lists of paths
+        to the corresponding cv trajectory files.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -110,32 +115,54 @@ def train_colvars(
     # Create output directory
     os.makedirs(output_folder, exist_ok=True)
 
-    if isinstance(colvars_paths, str):
-        colvars_paths = [colvars_paths]
+    if isinstance(train_colvars_paths, str):
+        train_colvars_paths = [train_colvars_paths]
     
     # Create a TrainColvarsWorkflow object 
     workflow = TrainColvarsWorkflow(
         configuration=configuration,
-        train_colvars_paths=colvars_paths,
-        train_trajectory_paths=trajectories,
-        train_topology_paths=topologies,
+        train_colvars_paths=train_colvars_paths,
+        train_topology_paths=train_topologies,
+        trajectory_names=trajectory_names,
         ref_topology_path=reference_topology,
         feature_constraints=feature_constraints,
         sup_colvars_paths=sup_colvars_paths,
         sup_topology_paths=sup_topology_paths,
-        sup_labels=sup_labels,
+        sup_trajectory_names=sup_trajectory_names,
         cv_dimension=dimension,
         cvs=cvs,
-        samples_per_frame=samples_per_frame,
+        frames_per_sample=frames_per_sample,
         output_folder=output_folder
     )
-        
-    # Run the workflow
-    workflow.run()
     
+    # Get the list of cvs to be trained/computed
+    cvs_list = workflow.get_cvs_list()
+    
+    # Check if the cvs have already been computed
+    all_cvs_computed = True
+    for cv in cvs_list:
+        all_cvs_computed = all_cvs_computed and workflow.check_cv_trajectories(cv)
+    
+    # Get the paths to the cv trajectories for each cv
+    cv_trajs = {}
+    cv_sup_trajs = {}
+    for cv in cvs_list:
+        cv_trajs[cv], cv_sup_trajs[cv] = workflow.get_cv_trajectories(cv)
+        
+    if all_cvs_computed:
+        logger.info("All collective variables have already been computed. Skipping collective variable computation.")
+        logger.info("""If you want to recompute them, please delete the train_colvars folder inside 
+                    the output folder or remove the -restart flag to create a new output folder.""")
+        return cv_trajs, cv_sup_trajs
+
+    # Run the workflow
+    workflow.run()          # NOTE -> include the check for existing output inside the .run() method?
+
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
+
+    return cv_trajs, cv_sup_trajs
 
 def set_logger(verbose: bool, log_path: str):
     """
@@ -198,16 +225,15 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-colvars', dest='colvars_path', type=str, required=True,
-        help="Path to the input colvars file."
+        '-colvars', dest='train_colvars_path', type=str, required=True,
+        help="Path to the input colvars file used for training the collective variables."
     )
     
     # Optional arguments
     parser.add_argument(
-        '-trajectory', dest='trajectory', type=str, required=False,
-        help=("Path to trajectory file corresponding to the colvars file." 
-              "The feature samples in the colvars file must correspond to frames of this trajectory." 
-              "Used to create structure clusters."
+        '-trajectory', dest='trajectory_name', type=str, required=False,
+        help=("Name of the trajectory corresponding to the colvars file." 
+              "Used to identify the origin of the samples in the colvars file."
         )
     )
     parser.add_argument(
@@ -219,10 +245,8 @@ def parse_arguments():
         help="Path to reference topology file. If None, the first topology file is used as reference."
     )
     parser.add_argument(
-        '-samples_per_frame', dest='samples_per_frame', type=float, required=False,
-        help=("Samples in the colvars file for each frame in the trajectory file." 
-              "Calculated with: samples_per_frame = (trajectory saving frequency)/(colvars saving frequency)."
-        )
+        '-frames_per_sample', dest='frames_per_sample', type=int, required=False,
+        help="Frames in the trajectory for each sample in the colvars file."
     )
     parser.add_argument(
         '-sup_colvars', dest='sup_colvars_path', type=str, required=False,
@@ -233,6 +257,12 @@ def parse_arguments():
     parser.add_argument(
         '-sup_topology', dest='sup_topology_path', type=str, required=False,
         help="Path to topology file of the supplementary colvars file."
+    )
+    parser.add_argument(
+        '-sup_trajectory_name', dest='sup_trajectory_name', type=str, required=False,
+        help=("Name of the trajectory corresponding to the supplementary colvars file." 
+              "Used to identify the origin of the samples in the supplementary colvars file."
+            )   
     )
     parser.add_argument(
         '-features_path', type=str, required=False,
@@ -285,39 +315,42 @@ def main():
     feature_constraints = read_feature_constraints(args.features_path, args.features_regex)
 
     # Reference data should be list or None - see train_colvars API
-    sup_labels = None
     sup_colvars_paths = None
     sup_topology_paths = None
     if args.sup_colvars_path:
-        sup_labels = [Path(args.sup_colvars_path).stem]
         sup_colvars_paths = [args.sup_colvars_path]
     if args.sup_topology_path:
         sup_topology_paths = [args.sup_topology_path]
 
-    # Trajectories should be list or None - see train_colvars API
-    trajectories = None
+    # Trajectory names should be list or None - see train_colvars API
+    trajectory_names = None
     if args.trajectory:
-        trajectories = [args.trajectory]
-        
+        trajectory_names = [args.trajectory_name]
+
     # Topologies should be list or None - see train_colvars API
-    topologies = None
+    train_topologies = None
     if args.topology:
-        topologies = [args.topology]
-        
+        train_topologies = [args.topology]
+    
+    # Trajectory names should be list or None - see train_colvars API
+    sup_trajectory_name = None
+    if args.sup_trajectory_name:
+        sup_trajectory_name = [args.sup_trajectory_name]
+
     # Run Train Colvars tool
     train_colvars(
         configuration = configuration,
-        colvars_paths = args.colvars_path,
-        trajectories = trajectories,
-        topologies = topologies,
+        train_colvars_paths = args.colvars_path,
+        train_topologies = train_topologies,
+        trajectory_names = trajectory_names,
         reference_topology = args.reference_topology,
         feature_constraints = feature_constraints,
         sup_colvars_paths = sup_colvars_paths,
         sup_topology_paths = sup_topology_paths,
-        sup_labels = sup_labels,
+        sup_trajectory_names = sup_trajectory_name,
         dimension = args.dimension,
         cvs = args.cvs,
-        samples_per_frame = args.samples_per_frame,
+        frames_per_sample = args.frames_per_sample,
         output_folder = output_folder)
     
 if __name__ == "__main__":

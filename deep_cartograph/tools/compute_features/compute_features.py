@@ -27,6 +27,7 @@ def compute_features(
     trajectories: Union[List[str], str],
     topologies: Union[List[str], str],
     reference_topology: Optional[str] = None,
+    traj_stride: Optional[int] = None,   
     output_folder: str = "compute_features",
 ) -> List[str]:
     """
@@ -50,6 +51,11 @@ def compute_features(
             Used to extract features from user selections.
             Defaults to the first topology in `topologies`.
             Accepted format: `.pdb`.
+            
+        traj_stride (int, optional):
+            Stride for reading the trajectory. Default: 1 (read all frames).
+            Note: This parameter is also specified in the configuration file.
+            If both are provided, the function argument takes precedence.
         
         output_folder (str, optional): 
             Path to the output folder where computed features will be stored.
@@ -69,6 +75,17 @@ def compute_features(
 
     # Start timer
     start_time = time.time()
+    
+    # If the output exists already, skip the step
+    skip_step = True
+    colvars_paths = [os.path.join(os.path.join(output_folder, Path(traj).stem), 'colvars.dat') for traj in trajectories]
+    for colvars_path in colvars_paths:
+        if not os.path.exists(colvars_path):
+            skip_step = False
+            break
+    if skip_step:
+        logger.info(f"Colvars files already exist in {output_folder}. Skipping feature computation.")
+        return colvars_paths
 
     # Create output folder if it does not exist
     os.makedirs(output_folder, exist_ok=True)
@@ -100,6 +117,10 @@ def compute_features(
     elif not os.path.exists(reference_topology):
         logger.error(f"Reference topology file missing. Exiting...")
         sys.exit(1)
+        
+    # Enforce trajectory stride from function argument
+    if traj_stride:
+        configuration['plumed_settings']['traj_stride'] = traj_stride
         
     # Create a reference plumed topology file
     ref_plumed_topology = os.path.join(output_folder, 'ref_topology.pdb')
@@ -301,6 +322,10 @@ def parse_arguments():
     
     # Optional arguments
     parser.add_argument(
+        '-traj_stride', dest='traj_stride', type=int, required=False,
+        help="Stride for reading the trajectory. Default: 1 (read all frames)."
+    )
+    parser.add_argument(
         '-output', dest='output_folder', type=str, required=False,
         help="Path to the output folder."
     )
@@ -338,6 +363,7 @@ def main():
         trajectory = args.trajectory,
         topology = args.topology,
         colvars_path = args.colvars_path,
+        traj_stride = args.traj_stride,
         output_folder = output_folder)
 
 if __name__ == "__main__":
