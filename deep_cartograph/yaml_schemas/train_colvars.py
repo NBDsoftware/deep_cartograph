@@ -194,8 +194,6 @@ class TrajProjection(BaseModel):
     alpha: float = 0.8
     # Colormap for the Projected Clustered Trajectory
     cmap: str = "turbo"
-    # Use a legend in the Projected Clustered Trajectory plot
-    use_legend: bool = True
     # Size of the markers in the Projected Clustered Trajectory
     marker_size: int = 5
 
