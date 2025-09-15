@@ -54,6 +54,10 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
     # Validate configuration
     configuration = validate_configuration(configuration, AnalyzeGeometrySchema, output_folder)
     
+    if not configuration['run']:
+        logger.info("Skipping Analyze Geometry step.")
+        return output_folder
+    
     # Get time step per frame in ns
     dt_per_frame = float(configuration['dt_per_frame'])* 1e-3 
 
