@@ -69,7 +69,6 @@ train_colvars:
       bandwidth: 0.25
       alpha: 0.6
       cmap: turbo
-      use_legend: True
       marker_size: 12
   clustering:                        
     run: True                        
