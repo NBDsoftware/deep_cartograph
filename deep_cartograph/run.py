@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import shutil
 import argparse
 import logging.config
 from pathlib import Path
