@@ -31,7 +31,7 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
             (Optional) Path to the output folder
     """
 
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_data
+    from deep_cartograph.modules.common import validate_configuration, save_data
     from deep_cartograph.modules.figures import plot_data
     from deep_cartograph.modules.md import RMSD, RMSF
     
@@ -49,10 +49,14 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
     start_time = time.time()
 
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, AnalyzeGeometrySchema, output_folder)
+    
+    if not configuration['run']:
+        logger.info("Skipping Analyze Geometry step.")
+        return output_folder
     
     # Get time step per frame in ns
     dt_per_frame = float(configuration['dt_per_frame'])* 1e-3 

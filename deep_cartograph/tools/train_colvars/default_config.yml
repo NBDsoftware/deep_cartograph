@@ -97,11 +97,8 @@ htica:
 #     max_fes:                          (float) Maximum value for the Free Energy Surface (above which the value is set to NaN)
 #   traj_projection:                Settings for the Projected Trajectory
 #     plot:                             (bool) Plot the Projected Trajectory
-#     num_bins:                         (int) Number of bins for the Kernel Density Estimation of the Projected Trajectory
-#     bandwidth:                        (float) Bandwidth for the Kernel Density Estimation of the Projected Trajectory
 #     alpha:                            (float) Transparency of the points in the Projected Trajectory
 #     cmap:                             (str) Colormap for the Projected Trajectory
-#     use_legend:                        (bool) Use a legend in the Projected Clustered Trajectory plot
 #     marker_size:                      (int) Size of the markers in the Projected Trajectory
 
 figures:
@@ -115,41 +112,6 @@ figures:
     max_fes: 40
   traj_projection:
     plot: True
-    num_bins: 100
-    bandwidth: 0.25
     alpha: 0.6
     cmap: turbo
-    use_legend: True
     marker_size: 12
-
-# clustering:                        Settings for the clustering
-#   run:                              (bool) Whether to run the clustering or not
-#   algorithm:                        (str: kmeans, hdbscan, hierarchical) Clustering algorithm to use
-#   opt_num_clusters:                 (bool) Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)
-#   search_interval:                  (list) Range of number of clusters to search for the optimal number of clusters (only for hierarchical and kmeans)
-#   num_clusters:                     (int) Number of clusters to use (only for hierarchical and kmeans and if opt_num_clusters is false)
-#   linkage:                          (str) Linkage criterion to use ('ward', 'single', 'average', 'complete') (only for hierarchical)
-#   n_init:                           (int) Number of times the k-means algorithm is run with different centroid seeds (only for kmeans)
-#   min_cluster_size:                 (int) Minimum number of samples in a group for that group to be considered a cluster; groupings smaller than this size will be left as noise (only for hdbscan)
-#   max_cluster_size:                 (int) Maximum number of samples in a group for that group to be considered a cluster; If null, there is no limit (only for hdbscan)
-#   min_samples:                      (int) Number of samples in a neighborhood for a point to be considered as a core point (only for hdbscan)
-#   cluster_selection_epsilon:        (float) A distance threshold. Clusters below this value will be merged (only for hdbscan)
-#   cluster_selection_method:         (str) Method to select the number of clusters ('eom', 'leaf') (only for hdbscan)
-
-#   Note that:
-#     min_cluster_size should be set to the smallest size grouping that you wish to consider a cluster.
-#     the larger the value of min_samples you provide, the more conservative the clustering (more points will be declared as noise) and clusters will be restricted to progressively more dense areas
-
-clustering:                       
-  run: True                        
-  algorithm: hdbscan               
-  opt_num_clusters: True           
-  search_interval: [3, 8]         
-  num_clusters: 3                  
-  linkage: complete                
-  n_init: 20                    
-  min_cluster_size: 5               # Increase if some of the clusters are too small
-  max_cluster_size: null          
-  min_samples: 3                    # Increase to obtain more conservative clustering restricted to more dense areas
-  cluster_selection_epsilon: 0      # Increase to merge more clusters
-  cluster_selection_method: eom     # Choose 'leaf' to obtain many small homogeneous clusters

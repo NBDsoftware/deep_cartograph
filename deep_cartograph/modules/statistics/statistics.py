@@ -325,44 +325,49 @@ def hierarchical_clustering(feature_matrix: np.array, cutoff: float, num_cluster
 
     return clustered_points, centroids
 
-def find_centroids(features_df: pd.DataFrame, centroids: np.array, feature_labels: list) -> pd.DataFrame:
+def find_centroids(data: pd.DataFrame, centroids: np.array, clustering_features: list) -> pd.DataFrame:
     """
-    Function that finds the closest sample to each centroid.
+    Function that finds the closest sample to each centroid and adds a column named 'centroid' 
+    marking the samples that are centroids.
 
     Inputs  
     ------
 
-        features_df      (DataFrame): data containing the features of the samples
+        data             (DataFrame): data containing the features of the samples and possibly other columns
         centroids      (numpy array): array with the estimated centroids for each cluster
-        feature_labels        (list): list of features to use from the dataframe
+        clustering_features   (list): list of column names in data that correspond to the features used for clustering
     
     Outputs
     -------
-
-        centroids_df (DataFrame): DataFrame containing the closest sample to the centroid of each cluster
+    
+        data (DataFrame): input dataframe with an additional column named 'centroid' marking the samples that are centroids
     """
 
-    # Make sure the dimension of the centroids is the same as the dimension of the used features
-    if len(centroids[0]) != len(feature_labels):
-        logger.error("  The dimension of the centroids is not the same as the dimension of the used features.\n")
-        logger.error(f"  Centroids dimension: {len(centroids[0])}, features dimension: {len(feature_labels)}\n")
+    # Make sure there are centroids
+    if len(centroids) == 0:
+        logger.warning("No centroids found")
+        return pd.DataFrame()
+    
+    # Make sure the centroids have the same dimension as the clustering features
+    if len(centroids[0]) != len(clustering_features):
+        logger.error("  The dimension of the centroids is not the same as the dimension of the used features for clustering.\n")
+        logger.error(f"  Centroids dimension: {len(centroids[0])}, clustering features dimension: {len(clustering_features)}\n")
         sys.exit(1)
 
-    # Create an empty DataFrame with the same structure features_df
-    centroids_df = features_df.iloc[0:0].copy()
+    # Add a centroid column to the dataframe marking the samples that are centroids
+    data['centroid'] = False
 
     # Find the closest sample to each centroid
-    for i, centroid in enumerate(centroids):
+    for centroid in centroids:
 
-        # Find closest sample to centroid 
-        distances = np.linalg.norm(features_df.loc[:,feature_labels].values - centroid, axis=1)
+        # Find closest sample to centroid
+        distances = np.linalg.norm(data.loc[:, clustering_features].values - centroid, axis=1)
         closest_sample_index = np.argmin(distances)
 
-        # Concatenate the closest sample to centroids dataframe
-        closest_sample = features_df.iloc[[closest_sample_index]]
-        centroids_df = pd.concat([centroids_df, closest_sample], ignore_index=True)
+        # Mark the closest sample as a centroid
+        data.at[closest_sample_index, 'centroid'] = True
 
-    return centroids_df
+    return data
 
 # Entropy
 def shannon_entropy(features_df: pd.DataFrame) -> List[float]:

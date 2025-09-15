@@ -36,3 +36,5 @@ class AnalyzeGeometrySchema(BaseModel):
     analysis: AnalysisList = AnalysisList()
     
     dt_per_frame: float = 1.0
+    
+    run: bool = True

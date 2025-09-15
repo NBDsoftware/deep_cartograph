@@ -42,23 +42,6 @@ def package_is_installed(*package_name: str) -> bool:
             return False
     return True
 
-def create_output_folder(output_path: str) -> None:
-    """
-    Creates the output path if it does not exist.
-
-    Parameters
-    ----------
-
-    output_path : str
-        Path of the output folder
-    """
-
-    # Create parent output directory if it does not exist
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-    
-    return
-
 def files_exist(*file_path):
     '''
     Returns true if all files exist.

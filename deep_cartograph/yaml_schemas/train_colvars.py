@@ -194,8 +194,6 @@ class TrajProjection(BaseModel):
     alpha: float = 0.8
     # Colormap for the Projected Clustered Trajectory
     cmap: str = "turbo"
-    # Use a legend in the Projected Clustered Trajectory plot
-    use_legend: bool = True
     # Size of the markers in the Projected Clustered Trajectory
     marker_size: int = 5
 
@@ -206,39 +204,6 @@ class Figures(BaseModel):
     # Settings for the projection of the trajectory onto the CV space
     traj_projection: TrajProjection = TrajProjection()
 
-class Clustering(BaseModel):
-
-    # Note that:
-    #  min_cluster_size should be set to the smallest size grouping that you wish to consider a cluster.
-    #  the larger the value of min_samples you provide, the more conservative the clustering (more points will be declared as noise) and clusters will be restricted to progressively more dense areas
-
-    # Whether to run the clustering or not
-    run: bool = True
-    # Output mode for the clustering results
-    output_structures: Literal['centroids', 'all', 'none'] = 'centroids'
-    # Clustering algorithm to use
-    algorithm: Literal["kmeans", "hdbscan", "hierarchical"] = "hierarchical"
-    # Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)
-    opt_num_clusters: bool = True
-    # Range of number of clusters to search for the optimal number of clusters (only for hierarchical and kmeans)
-    search_interval: List[int] = [3, 10]
-    # Number of clusters to use (only for hierarchical and kmeans and if opt_num_clusters is false)
-    num_clusters: int = 10
-    # Linkage criterion to use ('ward', 'single', 'average', 'complete') (only for hierarchical)
-    linkage: str = "complete"
-    # Number of times the k-means algorithm is run with different centroid seeds (only for kmeans)
-    n_init: int = 20
-    # Minimum number of samples in a group for that group to be considered a cluster; groupings smaller than this size will be left as noise (only for hdbscan)
-    min_cluster_size: int = 5
-    # A limit to the size of clusters returned by the "eom" cluster selection algorithm, no limit if None (only for hdbscan)
-    max_cluster_size: Union[int, None] = None
-    # Number of samples in a neighborhood for a point to be considered as a core point (only for hdbscan)
-    min_samples: int = 3
-    # A distance threshold. Clusters below this value will be merged (only for hdbscan)
-    cluster_selection_epsilon: float = 0
-    # The method used to select clusters from the condensed tree."eom" selects the most persistent cluster while “leaf” provides the most fine grained and homogeneous ones
-    cluster_selection_method: Literal["eom", "leaf"] = "eom"
-    
 class TrainColvarsSchema(BaseModel):
     
     # List of Collective Variables to train/calculate
@@ -247,8 +212,6 @@ class TrainColvarsSchema(BaseModel):
     common: CommonCollectiveVariable = CommonCollectiveVariable()
     # Settings for additional figures
     figures: Figures = Figures()
-    # Settings for the clustering
-    clustering: Clustering = Clustering()
 
     # Add Configuration class for this model
     class Config:

@@ -7,7 +7,7 @@ from scipy.sparse import block_diag
 from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
 
-from deep_cartograph.modules.common import closest_power_of_two, create_output_folder
+from deep_cartograph.modules.common import closest_power_of_two
 import deep_cartograph.modules.md as md
 
 # Set logger
@@ -91,7 +91,7 @@ class CVCalculator:
             'ref_topology_path': self.ref_topology_path,
             'load_args': self.training_reading_settings}
         self.training_data: pd.DataFrame = self.read_data(**reading_args)
-        self.training_data_labels: np.array = self.training_data.pop("label").to_numpy()
+        self.training_data_labels: np.array = self.training_data.pop('traj_label').to_numpy()
 
         # Projected training data NOTE: make sure they have the labels from the training_data
         self.projected_training_data: Optional[pd.DataFrame] = None
@@ -109,7 +109,7 @@ class CVCalculator:
                 'load_args': self.training_reading_settings
             }
             self.supplementary_data: pd.DataFrame = self.read_data(**reading_args)
-            self.supplementary_data_labels: np.array = self.supplementary_data.pop("label").to_numpy()
+            self.supplementary_data_labels: np.array = self.supplementary_data.pop('traj_label').to_numpy()
     
             # Make sure we use the same features between training and supplementary data
             self.training_data, self.supplementary_data = self.align_dataframes(self.training_data, self.supplementary_data)
@@ -155,10 +155,10 @@ class CVCalculator:
         
         # Create output folder for this CV
         self.output_path = os.path.join(self.output_path, self.cv_name)
-        create_output_folder(self.output_path)
-        
-        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...') 
-        
+        os.makedirs(self.output_path, exist_ok=True)
+
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
+
     def cv_ready(self) -> bool:
         """
         Checks if the CV is ready to be used.
@@ -401,7 +401,7 @@ class CVCalculator:
             self.projected_training_data.columns = self.cv_labels
             
             # Return file labels to the projected training data
-            self.projected_training_data["label"] = self.training_data_labels
+            self.projected_training_data['traj_label'] = self.training_data_labels
             
             # NOTE: If the CV is normalized, this data might fall outside the expected range - check when plotting
             self.project_supplementary_data() 
@@ -410,7 +410,7 @@ class CVCalculator:
                 # Set the cv labels to the projected supplementary data
                 self.projected_supplementary_data.columns = self.cv_labels
                 # Return file labels to the projected supplementary data
-                self.projected_supplementary_data["label"] = self.supplementary_data_labels
+                self.projected_supplementary_data['traj_label'] = self.supplementary_data_labels
             
             self.save_cv()
             
@@ -759,7 +759,7 @@ class LinearCalculator(CVCalculator):
             os.makedirs(sensitivity_output_path, exist_ok=True)
             
             sensitivities = cv_sensitivities[:, cv_index]
-            logger.info(f'Shape of sensitivities for CV dimension {cv_index}: {sensitivities.shape}')
+            logger.debug(f'Shape of sensitivities for CV dimension {cv_index}: {sensitivities.shape}')
 
             # Order the sensitivities from lowest to highest, order the feature labels accordingly
             indices = np.argsort(sensitivities)
@@ -777,17 +777,7 @@ class LinearCalculator(CVCalculator):
                     'Dataset': np.array([[x] for x in sensitivities]) 
                 }
             }
-            
-            # Debug: print their shape and length
-            logger.info(f'Sensitivities shape: {sensitivities.shape}, length: {len(sensitivities)}')
-            logger.info(f'Feature labels shape: {feature_labels.shape}, length: {len(feature_labels)}')
-            
-            # Print values for the top 10 features
-            logger.info("Top 10 features sensitivities:")
-            for i in range(min(10, len(sensitivities))):
-                logger.info(f"{feature_labels[i]}: {sensitivities[i]}")
-                
-                
+               
             # Save the sensitivities to a file
             sensitivity_df = pd.DataFrame({'sensitivity': sensitivities}, index = feature_labels)
             sensitivity_path = os.path.join(sensitivity_output_path, 'sensitivity_analysis.csv')

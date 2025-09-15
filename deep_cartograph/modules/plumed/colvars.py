@@ -423,7 +423,7 @@ def create_dataframe_from_files(
         
         # add file label to the dataframe
         if create_labels:
-            tmp_df["label"] = file_index
+            tmp_df["traj_label"] = file_index
             
         # Check this dataframe has the same features and in the same order as the previous ones
         if not df.empty:

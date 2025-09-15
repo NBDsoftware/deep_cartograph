@@ -102,19 +102,7 @@ def get_config():
           bandwidth: 0.25
           alpha: 0.6
           cmap: turbo
-          use_legend: True
           marker_size: 12
-      clustering:                        
-        run: True                        
-        algorithm: hierarchical               
-        opt_num_clusters: True          
-        search_interval: [5, 15]          
-        num_clusters: 3                  
-        linkage: complete                
-        n_init: 20                       
-        min_cluster_size: 50             
-        min_samples: 5                  
-        cluster_selection_epsilon: 0.5
     """
     return yaml.safe_load(yaml_content)
 
@@ -127,7 +115,8 @@ def test_deep_cartograph():
     input_path = os.path.join(data_path, "input")
     trajectory_folder = os.path.join(input_path, "trajectory")
     topology_folder = os.path.join(input_path, "topology")
-    reference_path = os.path.join(data_path, "reference", "train_colvars")
+    train_reference_path = os.path.join(data_path, "reference", "train_colvars")
+    cluster_reference_path = os.path.join(data_path, "reference", "traj_cluster")
     
     # Output files
     output_path = os.path.join(tests_path, "output_deep_cartograph")
@@ -137,8 +126,10 @@ def test_deep_cartograph():
         raise FileNotFoundError(f"Trajectory folder not found: {trajectory_folder}")
     if not os.path.exists(topology_folder):
         raise FileNotFoundError(f"Topology folder not found: {topology_folder}")
-    if not os.path.exists(reference_path):
-        raise FileNotFoundError(f"Reference folder not found: {reference_path}")
+    if not os.path.exists(train_reference_path):
+        raise FileNotFoundError(f"Reference folder not found: {train_reference_path}")
+    if not os.path.exists(cluster_reference_path):
+        raise FileNotFoundError(f"Reference folder not found: {cluster_reference_path}")
             
     # Remove output folder if it exists
     if os.path.exists(output_path):
@@ -152,33 +143,66 @@ def test_deep_cartograph():
                     supplementary_top_data=topology_folder,
                     output_folder=output_path)
     
-    # Find path to train_colvars step
+    # Find path to train_colvars and traj_cluster folders
     train_colvars_path = os.path.join(output_path, "train_colvars")
-    
+    traj_cluster_path = os.path.join(output_path, "traj_cluster")
+
     # For each CV, check if the computed and reference colvars files are equal
     test_passed = True
     for cv in get_config()['train_colvars']['cvs']:
       
       # Find paths to csv files
-      reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
-      computed_projection_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
-      computed_ref_data_path = os.path.join(train_colvars_path, cv, "sup_CA_example", "projected_data.csv")
+      ref_cv_traj_path = os.path.join(train_reference_path, f"{cv}_projected_trajectory.csv")
+      ref_cv_cluster_path = os.path.join(cluster_reference_path, f"{cv}_projected_trajectory.csv")
+      cv_traj_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
+      sup_cv_traj_path = os.path.join(train_colvars_path, cv, "sup_CA_example", "projected_trajectory.csv")
+      cv_cluster_path = os.path.join(traj_cluster_path, cv, "CA_example", "projected_trajectory.csv")
       
-      # Read csv files
-      reference_df = pd.read_csv(reference_projection_path)
-      computed_df = pd.read_csv(computed_projection_path)
-      ref_data_df = pd.read_csv(computed_ref_data_path)
-      
-      # Compare them
-      test_passed = test_passed and computed_df.equals(reference_df)
-      for col in ref_data_df.columns:
-        test_passed = test_passed and ref_data_df[col].equals(reference_df[col])
+      # Check if files exist
+      if not os.path.isfile(ref_cv_traj_path):
+          raise FileNotFoundError(f"Reference file not found: {ref_cv_traj_path}")
+      if not os.path.isfile(ref_cv_cluster_path):
+          raise FileNotFoundError(f"Reference file not found: {ref_cv_cluster_path}")
+      if not os.path.isfile(cv_traj_path):
+          raise FileNotFoundError(f"Computed cv traj file not found: {cv_traj_path}")
+      if not os.path.isfile(sup_cv_traj_path):
+          raise FileNotFoundError(f"Computed cv sup traj file not found: {sup_cv_traj_path}")
+      if not os.path.isfile(cv_cluster_path):
+          raise FileNotFoundError(f"Computed cv cluster file not found: {cv_cluster_path}")
         
-      print(f"{cv} test passed: {computed_df.equals(reference_df)}")
+      # Read csv files
+      ref_cv_traj_df = pd.read_csv(ref_cv_traj_path)
+      ref_cv_cluster_df = pd.read_csv(ref_cv_cluster_path)
+      cv_traj_df = pd.read_csv(cv_traj_path)
+      sup_cv_traj_df = pd.read_csv(sup_cv_traj_path)
+      cv_cluster_df = pd.read_csv(cv_cluster_path)
+
+      # Check if main cv traj is equal to reference
+      test_passed = test_passed and cv_traj_df.equals(ref_cv_traj_df)
+      if test_passed == False:
+        print(f"Error: main trajectory for {cv} not equal to reference!")
+        break
+      
+      # Check if cluster cv traj is equal to reference
+      test_passed = test_passed and cv_cluster_df.equals(ref_cv_cluster_df)
+      if test_passed == False:
+        print(f"Error: clustered trajectory for {cv} not equal to reference!")
+        break
+      
+      # Check if supplementary cv traj is equal to reference - supplementary is also the main data here, should be the same
+      for col in sup_cv_traj_df.columns:
+        test_passed = test_passed and sup_cv_traj_df[col].equals(ref_cv_traj_df[col])
+      
+      if test_passed == False:
+        print(f"Error: supplementary trajectory for {cv} not equal to reference!")
+        break
+      
+      print(f"Test for {cv} passed!")
 
     assert test_passed
     
-    # For each linear cv - NOTE: we should add the non-linear ones when we have a working PLUMED with pytorch installation
+    # For each linear cv - NOTE: we should add the non-linear ones when 
+    # we have a working PLUMED with pytorch installation in the development env
     linear_cvs = ['pca', 'tica', 'htica']
     for cv in linear_cvs:
       
@@ -205,12 +229,12 @@ def test_deep_cartograph():
       plumed_projection_df = read_colvars(colvars_path)
       
       # Find reference file
-      reference_projection_path = os.path.join(reference_path, f"{cv}_projected_trajectory.csv")
-      reference_df = pd.read_csv(reference_projection_path)
+      ref_cv_traj_path = os.path.join(train_reference_path, f"{cv}_projected_trajectory.csv")
+      ref_cv_traj_df = pd.read_csv(ref_cv_traj_path)
       
       # Extract projection from dfs
       plumed_projection = plumed_projection_df.iloc[:, 1:3]
-      reference_projection = reference_df.iloc[:, :2]
+      reference_projection = ref_cv_traj_df.iloc[:, :2]
       
       # Put the same column names
       plumed_projection.columns = reference_projection.columns
@@ -218,7 +242,7 @@ def test_deep_cartograph():
       # Take the difference
       difference_df = plumed_projection - reference_projection
           
-      # Check the values are below threshold
+      # Check the differences are below threshold
       threshold = 1.0e-2
       test_passed = test_passed and (difference_df.abs() < threshold).all().all()
       
