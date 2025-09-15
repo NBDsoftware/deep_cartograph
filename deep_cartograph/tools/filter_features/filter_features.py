@@ -88,7 +88,7 @@ def filter_features(
     # Set output file path
     output_features_path = os.path.join(output_folder, 'filtered_features.txt')
     
-    # If the file exists already, skip the filtering
+    # If the output exists already, skip the step
     if os.path.exists(output_features_path):
         logger.info(f"Filtered features file already exists: {output_features_path}. Skipping filtering.")
         return output_features_path
