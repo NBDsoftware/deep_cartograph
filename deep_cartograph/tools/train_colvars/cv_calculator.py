@@ -74,7 +74,6 @@ class CVCalculator:
         
         # Colvars paths
         self.train_colvars_paths: List[str] = train_colvars_paths
-        self.sup_colvars_paths: Optional[List[str]] = sup_colvars_paths
         
         # Topologies
         self.topologies: Optional[List[str]] = train_topology_paths     # NOTE: Should these be attributes?
@@ -824,7 +823,6 @@ class NonLinear(CVCalculator):
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
         
         import torch 
-        import lightning
                 
         super().__init__(
             configuration,
