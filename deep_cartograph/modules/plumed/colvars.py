@@ -319,7 +319,11 @@ def create_dataframe_from_files(
     **kwargs,
 ) -> pd.DataFrame:
     """
-    Create a list of dataframes from a list of colvars files.
+    Create a dataframes from a list of colvars files. Each file is loaded and filtered according to the given arguments.
+    If topology_paths and reference_topology are given, translate the feature names of each colvars file to the reference topology.
+    If not given, assume the feature names are the same in all colvars files.
+    If create_labels is True, a new column 'label' is added to the dataframe with the label of the file.
+    If create_labels is False, the label is not added.
     
     Inputs
     ------

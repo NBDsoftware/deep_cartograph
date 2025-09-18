@@ -44,6 +44,29 @@ class TrainColvarsWorkflow:
             1. Use train_colvars_paths files to compute the collective variables.
             2. Plotting the FES of each colvars file in the CV space. 
             3. Plotting the trajectory onto the CV space colored by frame number.
+            
+        The output folder is organized as follows:
+        
+        train_colvars/
+            cv_name_1/                          # e.g. pca/
+                traj_data/                      # data related to the input trajectories 
+                    trajectory_1/               # trajectory folder
+                        fes/                    # FES plots and arrays                           
+                            component_1/
+                            component_1_2/
+                        plumed_inputs/
+                            unbiased_md.zip
+                            opes.zip
+                            metad.zip
+                            ...
+                        projected_trajectory.csv
+                        trajectory.png       
+                
+                sensitivity_analysis/           # sensitivity analysis results        
+                training/                       # Training data and model scores
+                    checkpoints/
+                model.zip                       # Trained model
+
         """
         
         # Set output folder
@@ -204,17 +227,18 @@ class TrainColvarsWorkflow:
         Returns the list of trajectories and supplementary trajectories along the given cv.
         """
         cv_output_folder = os.path.join(self.output_folder, cv_name)
+        traj_data_folder = os.path.join(cv_output_folder, 'traj_data')
         
         traj_paths = []
         for traj_index in range(len(self.train_colvars_paths)):
-            traj_output_folder = os.path.join(cv_output_folder, self.trajectory_names[traj_index])
+            traj_output_folder = os.path.join(traj_data_folder, self.trajectory_names[traj_index])
             csv_path = os.path.join(traj_output_folder,'projected_trajectory.csv')
             traj_paths.append(csv_path)
         
         if self.sup_colvars_paths:
             sup_traj_paths = []
             for traj_index in range(len(self.sup_colvars_paths)):
-                sup_output_folder = os.path.join(cv_output_folder, f"sup_{self.sup_trajectory_names[traj_index]}")
+                sup_output_folder = os.path.join(traj_data_folder, f"sup_{self.sup_trajectory_names[traj_index]}")
                 csv_path = os.path.join(sup_output_folder,'projected_trajectory.csv')
                 sup_traj_paths.append(csv_path)
         else:
@@ -284,12 +308,14 @@ class TrainColvarsWorkflow:
                     logger.info(f"Corresponding topology file: {topology}")
                     
                     # Output folder for the current trajectory
-                    traj_output_folder = os.path.join(cv_output_folder, traj_name)
+                    traj_output_folder = os.path.join(cv_output_folder, 'traj_data', traj_name)
                     os.makedirs(traj_output_folder, exist_ok=True)
                     
                     # Create plumed inputs for this CV and topology
-                    cv_calculator.write_plumed_input(topology, traj_output_folder)
-                    
+                    plumed_inputs_folder = os.path.join(traj_output_folder, 'plumed_inputs')
+                    os.makedirs(plumed_inputs_folder, exist_ok=True)
+                    cv_calculator.write_plumed_input(topology, plumed_inputs_folder)
+
                     # Get the projected data for this colvars file
                     projected_train_df_i = projected_train_df[projected_train_df['traj_label'] == traj_index]
                     projected_train_df_i.drop('traj_label', axis=1, inplace=True)
@@ -300,12 +326,10 @@ class TrainColvarsWorkflow:
                         sup_data = [projected_sup_df[projected_sup_df['traj_label'] == index] for index in range(len(self.sup_colvars_paths))]
                         sup_data = [df.drop('traj_label', axis=1).to_numpy() for df in sup_data]
                     
-                    # Debug
-                    logger.info(f"Sup data shapes: {[d.shape for d in sup_data]}") if sup_data else None
-                    
+                    fes_output_folder = os.path.join(traj_output_folder, 'fes')
                     self.create_fes_plots(
                         data_df = projected_train_df_i,
-                        output_folder = traj_output_folder,
+                        output_folder = fes_output_folder,
                         sup_data = sup_data
                     )
                     
@@ -344,12 +368,14 @@ class TrainColvarsWorkflow:
                         logger.info(f"Corresponding topology file: {sup_topology}")
                     
                         # Output folder for this topology
-                        sup_output_folder = os.path.join(cv_output_folder, sup_name)
+                        sup_output_folder = os.path.join(cv_output_folder, 'traj_data', sup_name)
                         os.makedirs(sup_output_folder, exist_ok=True)
                         
                         # Create plumed inputs for this CV and topology
-                        cv_calculator.write_plumed_input(sup_topology, sup_output_folder)
-                
+                        plumed_inputs_folder = os.path.join(sup_output_folder, 'plumed_inputs')
+                        os.makedirs(plumed_inputs_folder, exist_ok=True)
+                        cv_calculator.write_plumed_input(sup_topology, plumed_inputs_folder)
+
                         logger.debug(f'Saving supplementary data from {sup_colvars} to {sup_output_folder}')
                         
                         # Extract the projected data for this colvars file
@@ -358,11 +384,12 @@ class TrainColvarsWorkflow:
                         
                         try:
                             # Plot FES of the supplementary data in the CV space
+                            fes_output_folder = os.path.join(sup_output_folder, 'fes')
                             figures.plot_fes(
                                 data = projected_sup_colvars_df.to_numpy(),
                                 cv_labels = cv_calculator.get_labels(),
                                 settings = self.figures_configuration['fes'],
-                                output_path = sup_output_folder)
+                                output_path = fes_output_folder)
                         except Exception as e:
                             logger.warning(f"Could not plot FES for supplementary data from {sup_colvars}. Error: {e}")
                         

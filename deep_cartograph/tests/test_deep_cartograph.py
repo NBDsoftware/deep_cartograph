@@ -154,10 +154,10 @@ def test_deep_cartograph():
       # Find paths to csv files
       ref_cv_traj_path = os.path.join(train_reference_path, f"{cv}_projected_trajectory.csv")
       ref_cv_cluster_path = os.path.join(cluster_reference_path, f"{cv}_projected_trajectory.csv")
-      cv_traj_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
-      sup_cv_traj_path = os.path.join(train_colvars_path, cv, "sup_CA_example", "projected_trajectory.csv")
+      cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "CA_example", "projected_trajectory.csv")
+      sup_cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "sup_CA_example", "projected_trajectory.csv")
       cv_cluster_path = os.path.join(traj_cluster_path, cv, "CA_example", "projected_trajectory.csv")
-      
+
       # Check if files exist
       if not os.path.isfile(ref_cv_traj_path):
           raise FileNotFoundError(f"Reference file not found: {ref_cv_traj_path}")
@@ -206,10 +206,10 @@ def test_deep_cartograph():
     linear_cvs = ['pca', 'tica', 'htica']
     for cv in linear_cvs:
       
-      traj_output_path = os.path.join(train_colvars_path, cv, "CA_example")
+      traj_output_path = os.path.join(train_colvars_path, cv, "traj_data", "CA_example")
       
       # Find path to plumed input file that tracks the cv
-      plumed_input_path = os.path.join(traj_output_path, f"plumed_input_{cv}.dat")
+      plumed_input_path = os.path.join(traj_output_path, "plumed_inputs", f"plumed_input_{cv}.dat")
       
       # Check if the plumed input file exists
       if not os.path.isfile(plumed_input_path):

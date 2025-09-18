@@ -137,6 +137,7 @@ class CVCalculator:
         self.cv_name: str = None
         self.cv_range: List[Tuple[float, float]] = [] 
 
+        # Parent output path
         self.output_path: str = output_path
     
     def initialize_cv(self):
@@ -146,7 +147,7 @@ class CVCalculator:
         These are tasks that are common to all CV calculators
         but have to be done after the specific CV calculator constructor has been called.
         
-            - Creates the output folder for the CV using the cv_name
+            - Creates the output folders for this CV
             - Logs the start of the calculation using the cv_name
         """
         # Get the total number of samples
@@ -156,6 +157,16 @@ class CVCalculator:
         # Create output folder for this CV
         self.output_path = os.path.join(self.output_path, self.cv_name)
         os.makedirs(self.output_path, exist_ok=True)
+        
+        # Create output folders to traj_data, sensitivity_analysis, training and model
+        self.traj_output_path = os.path.join(self.output_path, 'traj_data')
+        os.makedirs(self.traj_output_path, exist_ok=True)
+        self.sensitivity_output_path = os.path.join(self.output_path, 'sensitivity_analysis')
+        os.makedirs(self.sensitivity_output_path, exist_ok=True)
+        self.training_output_path = os.path.join(self.output_path, 'training')
+        os.makedirs(self.training_output_path, exist_ok=True)
+        self.model_output_path = os.path.join(self.output_path, 'model')    
+        os.makedirs(self.model_output_path, exist_ok=True)
 
         logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
 
@@ -649,17 +660,16 @@ class LinearCalculator(CVCalculator):
         """
         
         # Path to output weights
-        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.txt')
-        
-        np.savetxt(self.weights_path, self.cv, fmt='%.7g')
+        self.weights_path = os.path.join(self.model_output_path, f'{self.cv_name}_weights.npy')
+        np.save(self.weights_path, self.cv)
         
         if 'mean_std' in self.feats_norm_mode:
-            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'], fmt='%.7g')
-            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'], fmt='%.7g')
+            np.save(os.path.join(self.model_output_path, 'features_mean.npy'), self.features_stats['mean'])
+            np.save(os.path.join(self.model_output_path, 'features_std.npy'), self.features_stats['std'])
         elif 'min_max' in self.feats_norm_mode:
-            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'], fmt='%.7g')
-            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'], fmt='%.7g')
-        
+            np.save(os.path.join(self.model_output_path, 'features_max.npy'), self.features_stats['max'])
+            np.save(os.path.join(self.model_output_path, 'features_min.npy'), self.features_stats['min'])
+
         logger.info(f'Collective variable weights saved to {self.weights_path}')
 
     def get_cv_parameters(self):
@@ -738,8 +748,8 @@ class LinearCalculator(CVCalculator):
         self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         
         # Save the max/min values of each dimension - part of the final cv definition
-        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
-        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
+        np.save(os.path.join(self.model_output_path, 'cv_max.npy'), self.cv_stats['max'])
+        np.save(os.path.join(self.model_output_path, 'cv_min.npy'), self.cv_stats['min'])
 
     def sensitivity_analysis(self):
         """  
@@ -755,7 +765,7 @@ class LinearCalculator(CVCalculator):
         for cv_index in range(cv_sensitivities.shape[1]):
             
             # Create directory for sensitivity analysis results
-            sensitivity_output_path = os.path.join(self.output_path, f'sensitivity_analysis_{cv_index+1}')
+            sensitivity_output_path = os.path.join(self.sensitivity_output_path, f'sensitivity_analysis_{cv_index+1}')
             os.makedirs(sensitivity_output_path, exist_ok=True)
             
             sensitivities = cv_sensitivities[:, cv_index]
@@ -1087,8 +1097,9 @@ class NonLinear(CVCalculator):
         general_callbacks.append(self.early_stopping)
 
         # Define ModelCheckpoint callback to save the best/last model
+        checkpoints_path = os.path.join(self.training_output_path, 'checkpoints')
         self.checkpoint = ModelCheckpoint(
-            dirpath=self.output_path,                  # Directory to save the checkpoints  
+            dirpath=checkpoints_path,                  # Directory to save the checkpoints  
             monitor="valid_loss",                      # Quantity to monitor
             save_last=True,                            # Save the last checkpoint - useful for VAE
             save_top_k=1,                              # Number of best models to save according to the quantity monitored
@@ -1274,9 +1285,9 @@ class NonLinear(CVCalculator):
                     if key not in cpu_metrics:
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
-                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    filepath = os.path.join(self.training_output_path, f'{key}.npy')
                     np.save(filepath, np.array(cpu_metrics[key]))
-                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
+                np.savetxt(os.path.join(self.training_output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                     
             # Plot general metrics to all Non-linear CVs
             
@@ -1291,7 +1302,7 @@ class NonLinear(CVCalculator):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_path, f'loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Training and/or validation loss not found in metrics. Loss plot will not be generated.')
@@ -1306,7 +1317,7 @@ class NonLinear(CVCalculator):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **lr_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'learning_rate.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_path, f'learning_rate.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Learning rate not found in metrics. Learning rate plot will not be generated.')
@@ -1359,7 +1370,7 @@ class NonLinear(CVCalculator):
         """
 
         # Path to output model
-        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_model.pt')
+        self.weights_path = os.path.join(self.model_output_path, f'{self.cv_name}_model.pt')
 
         if self.cv is None:
             logger.error('No collective variable model to save.')
@@ -1453,22 +1464,18 @@ class NonLinear(CVCalculator):
         
         from deep_cartograph.modules.figures import plot_sensitivity_results
         
-        # Create directory for sensitivity analysis results
-        sensitivity_output_path = os.path.join(self.output_path, 'sensitivity_analysis')
-        os.makedirs(sensitivity_output_path, exist_ok=True)
-        
         # Compute the sensitivity analysis
         results = sensitivity_analysis(self.cv, self.training_input_dtset, metric="mean_abs_val", 
                                        feature_names=None, per_class=False, plot_mode=None)
         
         # Save the sensitivities to a file
         sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
-        sensitivity_path = os.path.join(sensitivity_output_path, 'sensitivity_analysis.csv')
+        sensitivity_path = os.path.join(self.sensitivity_output_path, 'sensitivity_analysis.csv')
         sensitivity_df.to_csv(sensitivity_path)
         
         # Plot the sensitivity results
         modes = ['barh', 'violin']
-        plot_sensitivity_results(results, modes=modes, output_folder=sensitivity_output_path)
+        plot_sensitivity_results(results, modes=modes, output_folder=self.sensitivity_output_path)
 
 # Collective variables calculators
 class PCACalculator(LinearCalculator):
@@ -1918,7 +1925,7 @@ class DeepTICACalculator(NonLinear):
         for i in range(self.cv_dimension):
             logger.info(f'Eigenvalue {i+1}: {best_eigvals[i]}')
             
-        np.savetxt(os.path.join(self.output_path, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
+        np.savetxt(os.path.join(self.model_output_path, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
         
         # Plot eigenvalues
         ax = plot_metrics(self.metrics.metrics,
@@ -1928,7 +1935,7 @@ class DeepTICACalculator(NonLinear):
                             yscale=None)
 
         # Save figure
-        ax.figure.savefig(os.path.join(self.output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
+        ax.figure.savefig(os.path.join(self.training_output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
 
 class VAECalculator(NonLinear):
@@ -2088,9 +2095,10 @@ class VAECalculator(NonLinear):
         # If there is a KL annealing stage
         if self.n_epochs_anneal > 0:
             # Add a callback to start saving the best model after the KL annealing 
+            checkpoints_path = os.path.join(self.training_output_path, "checkpoints")
             self.post_annealing_checkpoint = ml.PostAnnealingCheckpoint(
                 monitor="valid_loss",
-                dirpath=self.output_path,
+                dirpath=checkpoints_path,
                 annealing_end_epoch=self.start_epoch + self.n_epochs_anneal,
             )
             general_callbacks.append(self.post_annealing_checkpoint)
@@ -2123,7 +2131,7 @@ class VAECalculator(NonLinear):
                     if key not in cpu_metrics:
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
-                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    filepath = os.path.join(self.training_output_path, f'{key}.npy')
                     np.save(filepath, np.array(cpu_metrics[key]))
 
             # Plot metrics specific to VAE
@@ -2139,7 +2147,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('KL loss metrics not found. Skipping KL loss plot.')
@@ -2155,7 +2163,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **recon_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Reconstruction loss metrics not found. Skipping reconstruction loss plot.')
@@ -2170,7 +2178,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **both_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('KL and/or Reconstruction loss metrics not found. Skipping combined KL + Reconstruction loss plot.')
@@ -2186,7 +2194,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'linear'
                 }
                 ax = plot_metrics(cpu_metrics, **beta_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
                
         except Exception as e:

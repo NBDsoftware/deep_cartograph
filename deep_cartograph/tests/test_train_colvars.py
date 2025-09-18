@@ -125,7 +125,7 @@ def test_train_colvars():
         print(f"Testing {cv}...")
         
         # Path to projected trajectory
-        projected_trajectory_path = os.path.join(output_path, cv, "CA_example", "projected_trajectory.csv")
+        projected_trajectory_path = os.path.join(output_path, cv, "traj_data", "CA_example", "projected_trajectory.csv")
         
         # Path to the reference projected trajectory
         reference_projected_trajectory_path = os.path.join(data_path, "reference", "train_colvars", f"{cv}_projected_trajectory.csv")
