@@ -39,13 +39,15 @@ def package_is_installed(*package_name: str) -> bool:
             return False
     return True
 
-def files_exist(*file_path):
+def files_exist(*file_path, verbose: bool = True) -> bool:
     '''
     Returns true if all files exist.
     Inputs
     ------
 
         file_path  (str): variable number of paths to files including filename
+        
+        verbose   (bool): if True, it logs an error message for each file that doesn't exist
     
     Output
     ------
@@ -61,7 +63,8 @@ def files_exist(*file_path):
         all_exist = all_exist and this_file_exist
         
         if not this_file_exist:
-            logger.error(f"File not found {path}")
+            if verbose:
+                logger.error(f"File not found {path}")
             
     return all_exist
 
