@@ -518,9 +518,23 @@ class LinearCalculator(CVCalculator):
         Saves the collective variable linear weights to a text file.
         """
         
+        # Check the cv weights have been computed
+        if self.cv is None:
+            logger.error('CV has not been computed. Cannot save CV.')
+            sys.exit(1)
+            
         # Path to output weights
         self.weights_path = os.path.join(self.model_output_path, f'{self.cv_name}_weights.npy')
         np.save(self.weights_path, self.cv)
+        
+        # Check the cv stats have been computed
+        if self.cv_stats.get('max') is None or self.cv_stats.get('min') is None:
+            logger.error('CV stats have not been computed. Cannot save CV.')
+            sys.exit(1)
+            
+        # Save the max/min values of each dimension - part of the final cv definition
+        np.save(os.path.join(self.model_output_path, 'cv_max.npy'), self.cv_stats['max'])
+        np.save(os.path.join(self.model_output_path, 'cv_min.npy'), self.cv_stats['min'])
         
         if 'mean_std' in self.feats_norm_mode:
             np.save(os.path.join(self.model_output_path, 'features_mean.npy'), self.features_stats['mean'])
@@ -596,10 +610,6 @@ class LinearCalculator(CVCalculator):
         stats_df = projected_training_data.agg(stats).T 
         self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         
-        # Save the max/min values of each dimension - part of the final cv definition
-        np.save(os.path.join(self.model_output_path, 'cv_max.npy'), self.cv_stats['max'])
-        np.save(os.path.join(self.model_output_path, 'cv_min.npy'), self.cv_stats['min'])
-
     def sensitivity_analysis(self):
         """  
         Perform a sensitivity analysis of the CV on the training data.
