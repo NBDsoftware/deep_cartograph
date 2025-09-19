@@ -720,7 +720,8 @@ class NonLinear(CVCalculator):
         self.max_epochs: int = self.general_config['max_epochs']
         self.check_val_every_n_epoch: int = self.general_config['check_val_every_n_epoch']
         self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
-        
+        self.training_metrics_paths: List[str] = []
+
         self.cv_score: Union[float, None] = None
         self.tries: int = 0
         
@@ -1108,9 +1109,9 @@ class NonLinear(CVCalculator):
 
         return True
     
-    def save_loss(self):
+    def plot_training_metrics(self):
         """
-        Saves the loss of the training and common metrics to all CVs
+        Plots and saves training metrics common to all Non-linear CVs.
         """
         from mlcolvar.utils.plot import plot_metrics
         import torch
@@ -1139,6 +1140,7 @@ class NonLinear(CVCalculator):
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
                     filepath = os.path.join(self.training_output_path, f'{key}.npy')
+                    self.training_metrics_paths.append(filepath)
                     np.save(filepath, np.array(cpu_metrics[key]))
                 np.savetxt(os.path.join(self.training_output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                     
@@ -1212,7 +1214,7 @@ class NonLinear(CVCalculator):
         if successfully_trained:
         
             # Save the loss 
-            self.save_loss()
+            self.plot_training_metrics()
 
             # After training, put model in evaluation mode - needed for cv normalization and data projection
             self.cv.eval()
@@ -1638,6 +1640,19 @@ class AECalculator(NonLinear):
             options=self.cv_options)
          
         return model
+
+    def plot_training_metrics(self): 
+        """ 
+        Plots and saves training metrics specific to Deep TICA.
+        """      
+        super().plot_training_metrics()
+        
+        from deep_cartograph.modules.common import zip_files, remove_files
+    
+        metrics_zip_file = os.path.join(self.training_output_path, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
         
 class DeepTICACalculator(NonLinear):
     """
@@ -1723,6 +1738,19 @@ class DeepTICACalculator(NonLinear):
         
         return model
     
+    def plot_training_metrics(self): 
+        """ 
+        Plots and saves training metrics specific to Deep TICA.
+        """      
+        super().plot_training_metrics()
+        
+        from deep_cartograph.modules.common import zip_files, remove_files
+    
+        metrics_zip_file = os.path.join(self.training_output_path, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
+        
     def save_cv(self):
         """
         Save the eigenvectors and eigenvalues of the best model.
@@ -1917,12 +1945,13 @@ class VAECalculator(NonLinear):
             
         return general_callbacks
     
-    def save_loss(self): 
+    def plot_training_metrics(self): 
         """ 
-        Saves the loss of the training. Adds saving of VAE-specific metrics such as KL divergence.
+        Plots and saves training metrics specific to VAE.
         """      
-        super().save_loss()
+        super().plot_training_metrics()
         
+        from deep_cartograph.modules.common import zip_files, remove_files
         from mlcolvar.utils.plot import plot_metrics
         import torch
         
@@ -1944,6 +1973,7 @@ class VAECalculator(NonLinear):
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
                     filepath = os.path.join(self.training_output_path, f'{key}.npy')
+                    self.training_metrics_paths.append(filepath)
                     np.save(filepath, np.array(cpu_metrics[key]))
 
             # Plot metrics specific to VAE
@@ -2012,7 +2042,12 @@ class VAECalculator(NonLinear):
         except Exception as e:
             import traceback
             logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
-            
+
+        metrics_zip_file = os.path.join(self.training_output_path, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
+
 # Mappings
 cv_calculators_map = {
     'pca': PCACalculator,
