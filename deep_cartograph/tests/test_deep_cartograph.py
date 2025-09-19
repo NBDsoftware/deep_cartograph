@@ -155,7 +155,7 @@ def test_deep_cartograph():
       ref_cv_traj_path = os.path.join(train_reference_path, f"{cv}_projected_trajectory.csv")
       ref_cv_cluster_path = os.path.join(cluster_reference_path, f"{cv}_projected_trajectory.csv")
       cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "CA_example", "projected_trajectory.csv")
-      sup_cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "sup_CA_example", "projected_trajectory.csv")
+      #sup_cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "sup_CA_example", "projected_trajectory.csv")
       cv_cluster_path = os.path.join(traj_cluster_path, cv, "CA_example", "projected_trajectory.csv")
 
       # Check if files exist
@@ -165,8 +165,8 @@ def test_deep_cartograph():
           raise FileNotFoundError(f"Reference file not found: {ref_cv_cluster_path}")
       if not os.path.isfile(cv_traj_path):
           raise FileNotFoundError(f"Computed cv traj file not found: {cv_traj_path}")
-      if not os.path.isfile(sup_cv_traj_path):
-          raise FileNotFoundError(f"Computed cv sup traj file not found: {sup_cv_traj_path}")
+      #if not os.path.isfile(sup_cv_traj_path):
+      #    raise FileNotFoundError(f"Computed cv sup traj file not found: {sup_cv_traj_path}")
       if not os.path.isfile(cv_cluster_path):
           raise FileNotFoundError(f"Computed cv cluster file not found: {cv_cluster_path}")
         
@@ -174,7 +174,7 @@ def test_deep_cartograph():
       ref_cv_traj_df = pd.read_csv(ref_cv_traj_path)
       ref_cv_cluster_df = pd.read_csv(ref_cv_cluster_path)
       cv_traj_df = pd.read_csv(cv_traj_path)
-      sup_cv_traj_df = pd.read_csv(sup_cv_traj_path)
+      #sup_cv_traj_df = pd.read_csv(sup_cv_traj_path)
       cv_cluster_df = pd.read_csv(cv_cluster_path)
 
       # Check if main cv traj is equal to reference
@@ -190,8 +190,8 @@ def test_deep_cartograph():
         break
       
       # Check if supplementary cv traj is equal to reference - supplementary is also the main data here, should be the same
-      for col in sup_cv_traj_df.columns:
-        test_passed = test_passed and sup_cv_traj_df[col].equals(ref_cv_traj_df[col])
+      #for col in sup_cv_traj_df.columns:
+      #  test_passed = test_passed and sup_cv_traj_df[col].equals(ref_cv_traj_df[col])
       
       if test_passed == False:
         print(f"Error: supplementary trajectory for {cv} not equal to reference!")

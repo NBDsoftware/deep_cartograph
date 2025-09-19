@@ -14,10 +14,6 @@ from pydantic import BaseModel
 # Set logger
 logger = logging.getLogger(__name__)
 
-# Constants
-default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
-
-
 # General utils
 def package_is_installed(*package_name: str) -> bool:
     """
@@ -160,19 +156,15 @@ def merge_configurations(common_config: Dict, specific_config: Optional[Dict]) -
 
 
 # Features utils
-def read_feature_constraints(features_path: Union[str, None], features_regex: Union[str, None] = None) -> Union[List[str], str]:
+def read_features_list(features_path: Optional[str]) -> Union[List[str], str]:
     """
-    Read the feature constraints from the configuration file. Either a list of features or a regex.
-    If both are given, the list of features is used.
+    Read the feature list to use
 
     Parameters
     ----------
 
     features_path : str
         Path to the file with the list of features
-
-    features_regex : str
-        Regular expression to select the features
     
     Returns
     -------
@@ -192,15 +184,7 @@ def read_feature_constraints(features_path: Union[str, None], features_regex: Un
         
         return feature_constraints
     
-    if features_regex is not None:
-        # Regex is given, use it to select the features
-        logger.info(f' Using regex to select features: {features_regex}')
-        return features_regex
-    
-    # No features path or regex is given, use default filter
-    logger.info(' Using all features except time, *labels, *walker and *bias columns')
-    return default_regex
-
+    return None
 
 
 # Input validation

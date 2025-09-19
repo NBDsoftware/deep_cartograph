@@ -21,10 +21,10 @@ class ComputeFeaturesBuilder(Assembler):
     """           
     def __init__(self, input_path: str, 
                  topology_path: str, 
-                 feature_list: List[str], 
+                 features_list: List[str], 
                  traj_stride: int,
                  ref_topology_path: Optional[str] = None):
-        return super().__init__(input_path, topology_path, feature_list, traj_stride, ref_topology_path)
+        return super().__init__(input_path, topology_path, features_list, traj_stride, ref_topology_path)
     
     def build(self, colvars_path: str):
         """ 
@@ -33,8 +33,8 @@ class ComputeFeaturesBuilder(Assembler):
         super().build()
         
         # Add features to print arguments
-        self.print_args = self.feature_list
-        
+        self.print_args = self.features_list
+
         # Add the print command
         self.add_print_command(colvars_path, self.traj_stride)
         
@@ -47,12 +47,12 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
     """
     def __init__(self, input_path: str, 
                  topology_path: str, 
-                 feature_list: List[str], 
+                 features_list: List[str], 
                  traj_stride: int, 
                  cv_type: str, 
                  cv_params: Dict,
                  ref_topology_path: Optional[str] = None):
-        return super().__init__(input_path, topology_path, feature_list, 
+        return super().__init__(input_path, topology_path, features_list, 
                                 traj_stride, cv_type, cv_params, ref_topology_path)
     
     def build(self, colvars_path: str):
@@ -80,10 +80,10 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
      Builder to create an input file to enhance sampling during an MD simulation or trajectory.
     """
     
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], 
+    def __init__(self, input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
                  sampling_params: Dict, ref_topology_path: Optional[str] = None):
-        return super().__init__(input_path, topology_path, feature_list, traj_stride, 
+        return super().__init__(input_path, topology_path, features_list, traj_stride, 
                                 cv_type, cv_params, sampling_method, sampling_params,
                                 ref_topology_path)
     

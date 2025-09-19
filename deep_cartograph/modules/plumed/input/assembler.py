@@ -23,7 +23,7 @@ class Assembler:
     """
     def __init__(self, input_path: str, 
                  topology_path: str, 
-                 feature_list: List[str], 
+                 features_list: List[str], 
                  traj_stride: int,
                  ref_topology_path: Optional[str] = None
         ):
@@ -39,7 +39,7 @@ class Assembler:
             topology_path (str):
                 Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
                 
-            feature_list (list):
+            features_list (list):
                 List of features to be tracked.
             
             traj_stride (int):
@@ -61,10 +61,10 @@ class Assembler:
         self.ref_topology_path: str = ref_topology_path if ref_topology_path else topology_path
 
         # List of features to be tracked
-        self.feature_list: List[str] = feature_list
+        self.features_list: List[str] = features_list
         
         # Asses the need for Fit to template (if there are coordinates in the feature list)
-        self.fit_to_template: bool = any(feat.startswith("coord") for feat in feature_list)
+        self.fit_to_template: bool = any(feat.startswith("coord") for feat in features_list)
         
         # List of variables to be printed in a COLVAR file
         self.print_args: List[str] = []
@@ -111,7 +111,7 @@ class Assembler:
         self.add_center_commands()
         
         # Write feature commands
-        for feature in self.feature_list:
+        for feature in self.features_list:
             self.input_content += self.get_feature_command(feature)
      
     def get_feature_command(self, feature_label: str) -> str:
@@ -220,7 +220,7 @@ class Assembler:
         written_centers = []
         
         # Iterate over features
-        for feature in self.feature_list:
+        for feature in self.features_list:
             
             # Split into entities
             entities = feature.split("-")
@@ -270,7 +270,7 @@ class CollectiveVariableAssembler(Assembler):
         topology_path (str):
             Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
             
-        feature_list (list):
+        features_list (list):
             List of features to be tracked. Make sure the features are defined for this topoogy.
         
         traj_stride (int):
@@ -283,9 +283,9 @@ class CollectiveVariableAssembler(Assembler):
             Parameters for the collective variable. The parameters depend on the CV type.
 
     """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, 
+    def __init__(self, input_path: str, topology_path: str, features_list: List[str], traj_stride: int, 
                  cv_type: str, cv_params: Dict, ref_topology_path: Optional[str] = None):
-        super().__init__(input_path, topology_path, feature_list, traj_stride, ref_topology_path)
+        super().__init__(input_path, topology_path, features_list, traj_stride, ref_topology_path)
         self.cv_type: Literal["linear", "non-linear"] = cv_type
         self.cv_params: Dict = cv_params
         self.cv_labels: List[str] = []
@@ -327,12 +327,12 @@ class CollectiveVariableAssembler(Assembler):
         if features_norm_mode != 'none': 
             self.input_content += "\n# Normalized features\n"
             normalized_feature_labels = []
-            for index, feature in enumerate(self.feature_list):
+            for index, feature in enumerate(self.features_list):
                 normalized_feature = f"feat_{index}"
                 self.input_content += plumed.command.combine(normalized_feature, [feature], [1/features_range[index]], [features_mean[index]])
                 normalized_feature_labels.append(normalized_feature)
         else:
-            normalized_feature_labels = self.feature_list
+            normalized_feature_labels = self.features_list
         
         # Compute the CV
         self.input_content += "\n# Collective variable\n"
@@ -387,8 +387,8 @@ class CollectiveVariableAssembler(Assembler):
             self.cv_params['cv_name'] = 'cv'
         
         # Check if the weights have the right shape
-        if self.cv_params['weights'].shape[0] != len(self.feature_list):
-            raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.feature_list)}")
+        if self.cv_params['weights'].shape[0] != len(self.features_list):
+            raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.features_list)}")
 
         # Check that the CV dimension matches the number of components in the weights
         if self.cv_params['cv_dimension'] != self.cv_params['weights'].shape[1]:
@@ -405,7 +405,7 @@ class CollectiveVariableAssembler(Assembler):
     
         # Compute the CV
         self.input_content += "\n# Collective variable\n"
-        self.input_content += plumed.command.pytorch_model(self.cv_params['cv_name'], self.feature_list, os.path.abspath(self.cv_params['weights_path']))
+        self.input_content += plumed.command.pytorch_model(self.cv_params['cv_name'], self.features_list, os.path.abspath(self.cv_params['weights_path']))
             
         # Set the final CV labels
         self.cv_labels = [f"{self.cv_params['cv_name']}.node-{i}" for i in range(self.cv_params['cv_dimension'])]
@@ -430,10 +430,10 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
     Assembler class to add enhanced sampling to a PLUMED input file.
     """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], 
+    def __init__(self, input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
                  sampling_params: Dict, ref_topology_path: Optional[str] = None):
-        super().__init__(input_path, topology_path, feature_list, traj_stride, 
+        super().__init__(input_path, topology_path, features_list, traj_stride, 
                          cv_type, cv_params, ref_topology_path)
         self.sampling_method = sampling_method  # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
         self.sampling_params = sampling_params  # Parameters for the enhanced sampling method

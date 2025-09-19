@@ -1,5 +1,5 @@
 from deep_cartograph.tools.filter_features import filter_features
-from deep_cartograph.modules.common import read_feature_constraints
+from deep_cartograph.modules.common import read_features_list
 import importlib.resources as resources
 from deep_cartograph import tests
 import shutil
@@ -47,10 +47,10 @@ def test_filter_features():
         output_folder = output_path)
     
     # Read the all reference filtered features into a list
-    reference_features = read_feature_constraints(reference_features_path)
+    reference_features = read_features_list(reference_features_path)
     
     # Read the all output filtered features into a list
-    output_features = read_feature_constraints(output_features_path)
+    output_features = read_features_list(output_features_path)
     
     # Compare them without considering the order
     reference_set = set(reference_features)

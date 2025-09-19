@@ -18,7 +18,7 @@ from deep_cartograph.modules.common import (
     check_data,
     get_unique_path,
     validate_configuration,
-    read_feature_constraints,
+    read_features_list,
     read_configuration
 )
 
@@ -186,7 +186,7 @@ def deep_cartograph(
     output_features_path = filter_features(**args)
 
     # Read filtered features
-    filtered_features = read_feature_constraints(output_features_path) 
+    filtered_features = read_features_list(output_features_path)
 
     # Step 3: Train colvars
     # ---------------------
@@ -196,16 +196,13 @@ def deep_cartograph(
         'train_topologies': topologies,
         'trajectory_names': trajectory_names,
         'reference_topology': reference_topology,
-        'feature_constraints': filtered_features,
-        'sup_colvars_paths': supplementary_colvars_paths,
-        'sup_topology_paths': supplementary_tops,
-        'sup_trajectory_names': sup_trajectory_names,
+        'features_list': filtered_features,
         'dimension': dimension,
         'cvs': cvs,
         'frames_per_sample': configuration['compute_features']['plumed_settings']['traj_stride'],
         'output_folder': os.path.join(output_folder, 'train_colvars')
     }
-    cv_trajectories, cv_sup_trajectories = train_colvars(**args)
+    cv_trajectories = train_colvars(**args)
     
     # STEP 4: Trajectory clustering
     # -----------------------------

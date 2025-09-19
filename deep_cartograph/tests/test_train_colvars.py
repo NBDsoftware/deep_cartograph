@@ -115,7 +115,7 @@ def test_train_colvars():
         train_colvars_paths = [colvars_path],
         train_topologies = [topology_path],
         trajectory_names = [Path(trajectory_path).stem],
-        feature_constraints = filtered_features,
+        features_list = filtered_features,
         output_folder = output_path
         )
     

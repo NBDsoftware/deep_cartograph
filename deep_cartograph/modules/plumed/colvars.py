@@ -5,8 +5,7 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -15,7 +14,8 @@ logger = logging.getLogger(__name__)
 # ------------
 #
 # Functions to handle PLUMED CSV files
-def read_colvars(colvars_path: str) -> pd.DataFrame:
+def read_colvars(colvars_path: str,
+                 **kwargs) -> pd.DataFrame:
     '''
     Function that reads a COLVARS file and returns a pandas DataFrame with the same column 
     names as in the COLVARS file. The time column in ps will be converted to ns.
@@ -26,6 +26,8 @@ def read_colvars(colvars_path: str) -> pd.DataFrame:
     ------
 
         colvars_path    (str):          COLVARS file path
+        
+        kwargs          (dict):         keyword arguments passed to pd.read_csv function
 
     Outputs
     -------
@@ -43,7 +45,8 @@ def read_colvars(colvars_path: str) -> pd.DataFrame:
         dtype=np.float32, 
         comment='#', 
         header=None, 
-        names=column_names
+        names=column_names, 
+        **kwargs
     )
 
     # Convert time from ps to ns - working with integers to avoid rounding errors
@@ -289,23 +292,23 @@ def load_dataframe(
     df_list = []
     for i, filename in enumerate(file_paths):
 
-        # check if file is in PLUMED format
         if is_plumed_file(filename):
-            df_tmp = read_colvars(filename)
-            df_tmp["walker"] = [i for _ in range(len(df_tmp))]
-            df_tmp = df_tmp.iloc[start:stop:stride, :]
-            df_list.append(df_tmp)
-
-        # else use read_csv with optional kwargs
+            df_tmp = read_colvars(filename, **kwargs)
         else:
             df_tmp = pd.read_csv(filename, **kwargs)
-            df_tmp["walker"] = [i for _ in range(len(df_tmp))]
-            df_tmp = df_tmp.iloc[start:stop:stride, :]
-            df_list.append(df_tmp)
-
-        # concatenate
-        df = pd.concat(df_list)
-        df.reset_index(drop=True, inplace=True)
+            
+        # df_tmp["walker"] = [i for _ in range(len(df_tmp))] - NOTE: is this needed?
+        df_tmp = df_tmp.iloc[start:stop:stride, :]
+        df_list.append(df_tmp)
+    
+    # Check if df_list is empty
+    if len(df_list) == 0:
+        logger.error("No dataframes to concatenate.")
+        sys.exit(1)
+    
+    # concatenate dataframes
+    df = pd.concat(df_list)
+    df.reset_index(drop=True, inplace=True)
 
     return df
 
@@ -313,17 +316,24 @@ def create_dataframe_from_files(
     colvars_paths: Union[List[str], str],
     topology_paths: Union[List[str], None] = None,
     reference_topology: Union[str, None] = None,
-    load_args: List[Dict] = None,
-    filter_args: Dict = None,
-    create_labels: bool = None,
+    features_list: Optional[List[str]] = None,
+    file_label: str = "traj_label",
     **kwargs,
 ) -> pd.DataFrame:
     """
-    Create a dataframes from a list of colvars files. Each file is loaded and filtered according to the given arguments.
-    If topology_paths and reference_topology are given, translate the feature names of each colvars file to the reference topology.
-    If not given, assume the feature names are the same in all colvars files.
-    If create_labels is True, a new column 'label' is added to the dataframe with the label of the file.
-    If create_labels is False, the label is not added.
+    Create a dataframes from a list of colvars files. 
+    
+    If feature list is given, filter the features based on this list
+    and keep them in the order of the list. If not given, keep all features
+    in the order they appear in the colvars files. In this case, it is assumed
+    that all colvars files have the same features in the same order. If not, 
+    an error is raised. 
+
+    If topology_paths and reference_topology are given, translate the
+    feature names of each colvars file to the reference topology before filtering
+    and concatenating the dataframes. Otherwise, assume the feature names are 
+    the same in all colvars files.
+    
     
     Inputs
     ------
@@ -337,19 +347,13 @@ def create_dataframe_from_files(
     
     reference_topology (Optional)
         Path to reference topology to which the filer_args refer. If no reference topology is given, the first file in topology_paths is used.
-
-    load_args (Optional)
-        List of dictionaries with the arguments passed to load_dataframe function for each file 
-        (keys: start,stop,stride and pandas.read_csv options), by default None
     
-    filter_args (Optional)
-        Dictionary of arguments which are passed to df.filter() to select features (keys: items, like, regex), by default None
-        Note that 'time', 'labels', 'walker' and '*.bias' columns are always discarded.
+    features_list (Optional)
+        List of feature names to filter and keep in this order. If not given, all features are kept
+        and it is assumed that all colvars files have the same feature names in the same order.
         
-    create_labels (Optional)
-        Assign a label to each file, default True if more than a file is given, otherwise False
-        If True, a new column 'label' is added to the dataframe with the label of the file.
-        If False, the label is not added.
+    file_label (Optional)
+        Name of the column to be added with the file label, by default 'traj_label'
         
     kwargs (Optional)
         args passed to pd.load_csv function
@@ -365,16 +369,6 @@ def create_dataframe_from_files(
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
     num_files = len(colvars_paths)
-
-    # check if per file args are given, otherwise set to {}
-    if load_args is None:
-        load_args = [{} for _ in colvars_paths]
-    else:
-        if (not isinstance(load_args, list)) or (len(colvars_paths) != len(load_args)):
-            raise TypeError(
-                """load_args should be a list of dictionaries of arguments of same length as colvars_paths. 
-                If you want to use the same args for all files pass them directly as **kwargs."""
-            )
             
     if topology_paths:
         if (not isinstance(topology_paths, list)) or (num_files != len(topology_paths)):
@@ -383,86 +377,81 @@ def create_dataframe_from_files(
             )
         if not reference_topology:
             reference_topology = topology_paths[0]
-
-    # If the user has not set create_labels, set it to True if more than one file is given
-    if create_labels is None:
-        create_labels = False if len(colvars_paths) == 1 else True
     
-    # initialize pandas dataframe
-    df = pd.DataFrame()
+    # Collect dataframes in a list
+    all_dfs = []
 
-    # load data
+    # load data, one colvars file at a time
     for file_index in range(num_files):
         
         logger.debug(f"Reading colvars file: {colvars_paths[file_index]}")
         
-        tmp_df = load_dataframe(colvars_paths[file_index], **load_args[file_index], **kwargs)
+        tmp_df = load_dataframe(colvars_paths[file_index], **kwargs)
         
+        # Remove unwanted columns by default
+        tmp_df = tmp_df.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
+        
+        # Translate feature names if topologies are given
         if topology_paths:
-            
             
             logger.debug(f"Translating feature names from topology {topology_paths[file_index]} to reference topology {reference_topology}")
             
             # Original feature names
             feature_names = list(tmp_df.columns)
             
-            # Translate feature names to the reference topology
-            ref_feature_names = FeatureTranslator(topology_paths[file_index], reference_topology, feature_names).run()
+            # Translate feature names to the reference topology 
+            translated_feature_names = FeatureTranslator(topology_paths[file_index], reference_topology, feature_names).run()
             
-            # Check if any feature didn't have a translation - all features in the provided colvars should be translatable
-            for feature_index in range(len(ref_feature_names)):
-                if ref_feature_names[feature_index] is None:
-                    logger.error(f'Feature {feature_names[feature_index]} from {colvars_paths[file_index]} not found in the reference topology.')
-                    sys.exit(1)
-                    
-            # Change the column names to the reference names before concatenating
-            tmp_df.columns = ref_feature_names
+            # Create a mask for successfully translated features
+            translated_features_mask = [name is not None for name in translated_feature_names]
             
+            # New feature names
+            new_feature_names = [name for name in translated_feature_names if name is not None]
+            
+            # Warn the user if some features could not be translated
+            num_dropped = len(translated_feature_names) - sum(translated_features_mask)
+            if num_dropped > 0:
+                logger.warning(f"{num_dropped} features could not be translated from topology {topology_paths[file_index]} to reference topology {reference_topology} and will be dropped.")
+            
+            # Filter the dataframe to keep only the successfully translated features
+            tmp_df = tmp_df.loc[:, translated_features_mask]
+            
+            # Change names
+            tmp_df.columns = new_feature_names
+        
         # Filter the dataframe
-        if filter_args is not None:
-            tmp_df = tmp_df.filter(**filter_args)
+        if features_list:
+            # Check for missing features and raise an error
+            missing_features = set(features_list) - set(tmp_df.columns)
+            if missing_features:
+                raise ValueError(
+                    f"Features {missing_features} not found in {colvars_paths[file_index]}."
+                )
+            # Select and reorder columns
+            tmp_df = tmp_df[features_list]
         
-        # Remove unwanted columns - needed in case filter_args is not given
-        tmp_df = tmp_df.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
+        # Add file label
+        tmp_df[file_label] = file_index
+        all_dfs.append(tmp_df)
         
-        # add file label to the dataframe
-        if create_labels:
-            tmp_df["traj_label"] = file_index
+    if not all_dfs:
+        logger.error("No dataframes to concatenate.")
+        return pd.DataFrame()
             
-        # Check this dataframe has the same features and in the same order as the previous ones
-        if not df.empty:
-            
-            # Get the feature names from this dataframe
-            feature_names = list(tmp_df.columns)
-            
-            # Get the set of feature names
-            feature_set = set(feature_names)
-            
-            # Check if it has the same number of features as the accumulated df
-            if len(feature_set) != len(df.columns):
-                logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same number of features as the previous colvars.")
-                logger.error(f"Previous colvars features: {list(df.columns)}")
-                logger.error(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
-                logger.error(f"Please check the colvars files and the topology files used to translate the features.")
+    # FIX: After the loop, validate columns if no features_list was given
+    if not features_list:
+        first_cols = all_dfs[0].columns
+        for i, df_i in enumerate(all_dfs[1:], 1):
+            if not df_i.columns.equals(first_cols):
+                logger.error(f"Column names in {colvars_paths[i]} do not match those in {colvars_paths[0]}. Please provide a features_list to filter and reorder the columns.")
                 sys.exit(1)
             
-            # Check if it has the same features as the accumulated df
-            if not feature_set == set(df.columns):
-                logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same features as the previous colvars.")
-                logger.error(f"Previous colvars features: {list(df.columns)}")
-                logger.error(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
-                logger.error(f"Please check the colvars files and the topology files used to translate the features.")
-                sys.exit(1)
-        
-            # Check if all dataframes have the features in the same order
-            if not feature_names == list(df.columns):
-                logger.error(f"Colvars file {colvars_paths[file_index]} does not have the same order in the features as the previous colvars.")
-                logger.error(f"Previous colvars features: {list(df.columns)}")
-                logger.error(f"Colvars file {colvars_paths[file_index]} features: {feature_names}")
-                logger.error(f"Please check the colvars files and the topology files used to translate the features.")
-                sys.exit(1)
-                
-        # update collective dataframe
-        df = pd.concat([df, tmp_df], ignore_index=True)
+    # Concatenate dataframes
+    df = pd.concat(all_dfs, ignore_index=True)
+    
+    # Check if the dataframe is empty
+    if df.empty:
+        logger.error("The resulting dataframe is empty.")
+        sys.exit(1)
     
     return df
