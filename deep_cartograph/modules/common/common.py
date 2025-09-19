@@ -2,6 +2,7 @@ import os
 import sys
 import yaml
 import math
+import zipfile
 import logging
 import numpy as np
 import pandas as pd
@@ -64,6 +65,71 @@ def files_exist(*file_path):
             
     return all_exist
 
+def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
+    """
+    Compresses one or more files and/or directories into a single ZIP file.
+
+    This function preserves the directory structure. For example, compressing a
+    directory named 'my_folder' will result in a 'my_folder' directory inside
+    the zip archive.
+
+    Parameters
+    ----------
+        output_zip_path: The full path for the output ZIP file (e.g., '/path/to/archive.zip').
+        *paths_to_compress: A variable number of paths to files or directories to compress.
+    """
+    if not paths_to_compress:
+        logger.warning("No input paths were provided to compress.")
+        return
+
+    logger.info(f"Starting compression to '{output_zip_path}'...")
+
+    try:
+        with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for path in paths_to_compress:
+                if not os.path.exists(path):
+                    logger.warning(f"Skipped: Path '{path}' does not exist.")
+                    continue
+
+                if os.path.isfile(path):
+                    # If it's a file, add it directly to the zip.
+                    # The 'arcname' is the name it will have inside the zip.
+                    arcname = os.path.basename(path)
+                    logger.info(f"Adding file: '{path}' as '{arcname}'")
+                    zipf.write(path, arcname=arcname)
+
+                elif os.path.isdir(path):
+                    logger.info(f"Adding directory: '{path}'")
+                    # If it's a directory, walk through its contents.
+                    for root, _, files in os.walk(path):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            # Create a relative path for the arcname to preserve structure.
+                            # This makes 'my_folder/sub/file.txt' appear as such in the zip.
+                            arcname = os.path.relpath(full_path, os.path.dirname(path))
+                            logger.info(f"Compressing: '{full_path}' as '{arcname}'")
+                            zipf.write(full_path, arcname=arcname)
+
+    except FileNotFoundError:
+        logger.error(f"Could not create zip file. The directory for '{output_zip_path}' may not exist.")
+    except PermissionError:
+        logger.error("Permission denied. Check read permissions for source files and write permission for the destination.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+    else:
+        logger.info(f"Successfully created zip file: '{output_zip_path}'")
+       
+def remove_files(*file_paths: str) -> None:
+    """ 
+    Safely remove a list of files.
+    
+    Parameters
+    ----------
+        *file_paths: Variable number of file paths to remove.
+    """
+    for file_path in file_paths:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
 # Related to configuration
 def read_configuration(configuration_path: str) -> Dict[str, Any]:
