@@ -668,7 +668,7 @@ class NonLinear(CVCalculator):
         train_topology_paths: Optional[List[str]] = None,
         ref_topology_path: Optional[str] = None, 
         features_list: Optional[List[str]] = None,
-        output_path: Optional[str] = None
+        output_path: Union[str, None] = None
         ):
         """ 
         Initializes a non-linear CV calculator.
@@ -699,7 +699,7 @@ class NonLinear(CVCalculator):
         self.cv: Union[AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV, None] = None
         self.checkpoint: Union[ModelCheckpoint, None] = None
         self.metrics: Union[MetricsCallback, None] = None
-        self.weights_path: Optional[str] = None
+        self.weights_path: Union[str, None] = None
         
         # Training configuration
         self.training_config: Dict = configuration['training'] 
