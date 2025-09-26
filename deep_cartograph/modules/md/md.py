@@ -614,8 +614,6 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
         # Iterate over groups
         for group_name in coordinate_group_names:
             
-            print("Position groups are not currently supported.")
-            
             group_definition = features_configuration['coordinate_groups'][group_name]
             
             # Find labels for all coordinates in the group
