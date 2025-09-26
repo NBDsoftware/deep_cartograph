@@ -216,7 +216,7 @@ class CVCalculator:
             ranges = (self.features_stats["max"] - self.features_stats["min"]) / 2
         else:
             logger.error(f'Normalization mode {self.feats_norm_mode} not recognized. Exiting...')
-            sys.exit(1)
+            raise ValueError(f'Normalization mode {self.feats_norm_mode} not recognized.')
         
         # Check the ranges are not close to zero
         ranges = sanitize_ranges(ranges)
@@ -525,7 +525,7 @@ class LinearCalculator(CVCalculator):
         # Check the cv weights have been computed
         if self.cv is None:
             logger.error('CV has not been computed. Cannot save CV.')
-            sys.exit(1)
+            raise ValueError('CV has not been computed. Cannot save weights.')
             
         # Path to output weights
         self.weights_path = os.path.join(self.model_output_path, f'{self.cv_name}_weights.npy')
@@ -534,7 +534,7 @@ class LinearCalculator(CVCalculator):
         # Check the cv stats have been computed
         if self.cv_stats.get('max') is None or self.cv_stats.get('min') is None:
             logger.error('CV stats have not been computed. Cannot save CV.')
-            sys.exit(1)
+            raise ValueError('CV stats have not been computed. Cannot save CV.')
             
         # Save the max/min values of each dimension - part of the final cv definition
         np.save(os.path.join(self.model_output_path, 'cv_max.npy'), self.cv_stats['max'])
@@ -586,14 +586,14 @@ class LinearCalculator(CVCalculator):
         # Check the cv has been computed
         if self.cv is None:
             logger.error('CV has not been computed. Cannot project data.')
-            sys.exit(1)
+            raise ValueError('CV has not been computed. Cannot project data.')
             
         projected_data = data @ self.cv
         
         # Check the CV stats have been computed
         if self.cv_stats.get('max') is None or self.cv_stats.get('min') is None:
             logger.error('CV stats have not been computed. Cannot normalize projected data.')
-            sys.exit(1)
+            raise ValueError('CV stats have not been computed. Cannot normalize projected data.')
         
         # Max min normalization between -1 and 1
         normalizing_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
@@ -920,6 +920,7 @@ class NonLinear(CVCalculator):
         model : AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
             Non-linear model object
         """
+
         raise NotImplementedError("This method should be implemented in subclasses.")
 
     def get_callbacks(self) -> List:
@@ -1272,7 +1273,7 @@ class NonLinear(CVCalculator):
         
         if self.cv is None:
             logger.error('No collective variable model to project data.')
-            sys.exit(1)
+            raise ValueError('No collective variable model to project data.')
         
         logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
         
