@@ -518,12 +518,8 @@ class LinearCalculator(CVCalculator):
         normalized_data : pd.DataFrame
             Normalized data
         """
-        
-        # Normalize the data in place
-        for feature, m, r in zip(data.columns, normalizing_mean, normalizing_range):
-            data[feature] = (data[feature] - m) / r
-        
-        return data  # NOTE: try: return (data - normalizing_mean) / normalizing_range
+
+        return (data - normalizing_mean) / normalizing_range
     
     def save_weights(self, weights_path: str):
         """
