@@ -53,9 +53,7 @@ class TrainColvarsWorkflow:
                             component_1_2/
                         plumed_inputs/
                             unbiased_md.zip
-                            opes.zip
-                            metad.zip
-                            ...
+                            biased_md.zip
                         projected_trajectory.csv
                         trajectory.png       
                 

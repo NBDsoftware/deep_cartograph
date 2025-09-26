@@ -365,6 +365,14 @@ class CVCalculator:
             self.plumed_files.append(fit_template_path)
         else:
             fit_template_path = None
+
+        # If the CV is non-linear, add the pytorch model file
+        if self.get_cv_type() == 'non-linear':
+            # Save the model weights and add to the plumed files
+            self.weights_path = os.path.join(output_folder, f'{self.cv_name}_weights.pt')
+            self.save_weights(self.weights_path)
+            self.plumed_files.append(self.weights_path)
+
         # Build the plumed input file to track the CV
         plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat')
         self.plumed_files.append(plumed_input_path)
@@ -380,6 +388,10 @@ class CVCalculator:
         plumed_builder = ComputeCVBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_out.dat')
         
+        # Zip all the accumulated plumed files into a single file
+        unbiased_plumed_path = os.path.join(output_folder, f'plumed_{self.cv_name}_unbiased.zip')
+        zip_files(unbiased_plumed_path, *self.plumed_files)
+
         # Remove previous plumed input file
         os.remove(plumed_input_path)
         self.plumed_files.remove(plumed_input_path)
@@ -395,9 +407,16 @@ class CVCalculator:
         plumed_builder = ComputeEnhancedSamplingBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_{self.bias["method"]}_out.dat')
         
+        # Zip all the accumulated plumed files into a single file
+        biased_plumed_path = os.path.join(output_folder, f'plumed_{self.cv_name}_biased.zip')
+        zip_files(biased_plumed_path, *self.plumed_files)
+
+        # Remove previous plumed files
+        remove_files(*self.plumed_files)
+        
         # Erase the temporary reference topology
         os.remove(ref_plumed_topology_path)
-
+        
     def sensitivity_analysis(self):
         """
         Perform a sensitivity analysis of the CV on the training data.
