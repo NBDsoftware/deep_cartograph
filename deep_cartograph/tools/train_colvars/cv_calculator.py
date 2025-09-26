@@ -3,6 +3,7 @@ import shutil
 import logging
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from scipy.sparse import block_diag
 from sklearn.decomposition import PCA       
 from typing import Dict, List, Tuple, Union, Literal, Optional
@@ -85,16 +86,17 @@ class CVCalculator:
         """
         
         # Create output folder for this CV
-        self.output_path = os.path.join(self.parent_output_path, self.cv_name)
-        os.makedirs(self.output_path, exist_ok=True)
-        
+        parent_path = Path(self.parent_output_path)
+        self.output_path = parent_path / self.cv_name
+        self.output_path.mkdir(parents=True, exist_ok=True)
+
         # Create output folders to sensitivity_analysis, training and model
-        self.sensitivity_output_folder = os.path.join(self.output_path, 'sensitivity_analysis')
-        os.makedirs(self.sensitivity_output_folder, exist_ok=True)
-        self.training_output_folder = os.path.join(self.output_path, 'training')
-        os.makedirs(self.training_output_folder, exist_ok=True)
-        self.model_output_folder = os.path.join(self.output_path, 'model')    
-        os.makedirs(self.model_output_folder, exist_ok=True)
+        self.sensitivity_output_folder = self.output_path / 'sensitivity_analysis'
+        self.sensitivity_output_folder.mkdir(parents=True, exist_ok=True)
+        self.training_output_folder = self.output_path / 'training'
+        self.training_output_folder.mkdir(parents=True, exist_ok=True)
+        self.model_output_folder = self.output_path / 'model'
+        self.model_output_folder.mkdir(parents=True, exist_ok=True)
 
     def load_training_data(self,
         train_colvars_paths: List[str],
