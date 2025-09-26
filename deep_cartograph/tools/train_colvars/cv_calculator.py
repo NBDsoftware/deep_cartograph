@@ -1991,6 +1991,60 @@ class VAECalculator(NonLinear):
             
         return general_callbacks
     
+    def _plot_metric(self, 
+                     metric_data: Dict, 
+                     metric_keys: List, 
+                     labels: List, 
+                     colors: List, 
+                     yscale: str = 'log',
+                     filepath: Optional[str] = None
+                     ):
+        """ 
+        Plot a specific metric
+        
+        Parameters
+        ----------
+        
+        metric_data : Dict
+            Dictionary with the training metrics data.
+        metric_keys : List
+            List of keys in the metric_data to plot.
+        labels : List
+            List of labels for the metric keys.
+        colors : List
+            List of colors for the metric keys in fessa color scheme.
+        yscale : str
+            Y-axis scale. Default is 'log'.
+        filepath : Optional[str]
+            File path to save the plot.
+        
+        """
+        from mlcolvar.utils.plot import plot_metrics  
+        
+        # Check the metric key is present in the data
+        for key in metric_keys:
+            if key not in metric_data:
+                logger.warning(f'Metric {key} not found in metrics. It will not be plotted.')
+                return None 
+            
+        if filepath is None:
+            filepath = os.path.join(self.training_output_folder, f"{'_'.join(metric_keys)}.png")
+        
+        args = {
+            'metrics': metric_data,
+            'keys': metric_keys,
+            'labels': labels,
+            'linestyles': ['-']*len(metric_keys),
+            'colors': colors,
+            'yscale': yscale
+        }
+        ax = plot_metrics(**args)
+        ax.figure.savefig(filepath, dpi=300, bbox_inches='tight')
+        ax.figure.clf()
+
+        return
+        
+            
     def plot_training_metrics(self): 
         """ 
         Plots and saves training metrics specific to VAE.
@@ -1998,7 +2052,6 @@ class VAECalculator(NonLinear):
         super().plot_training_metrics()
         
         from deep_cartograph.modules.common import zip_files, remove_files
-        from mlcolvar.utils.plot import plot_metrics
         import torch
         
         # Create a new dictionary with all tensor metrics moved to the CPU
@@ -2011,7 +2064,7 @@ class VAECalculator(NonLinear):
                 cpu_metrics[key] = metric_list # Assume it's already CPU-compatible
 
         try:
-            # Save the KL and reconstruction losses if requested
+            # Save the training metrics if requested
             if self.training_config['save_loss']:
                 metrics_to_save = ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss', 'beta', 'lr']
                 for key in metrics_to_save:
@@ -2025,65 +2078,44 @@ class VAECalculator(NonLinear):
             # Plot metrics specific to VAE
             
             # KL divergence loss
-            KL_loss_present = ('train_kl_loss' in cpu_metrics) and ('valid_kl_loss' in cpu_metrics)
-            if KL_loss_present:
-                loss_plot_config = {
-                    'keys': ['train_kl_loss', 'valid_kl_loss'],
-                    'labels': ['Training KL', 'Validation KL'],
-                    'colors': ['fessa1', 'fessa5'],
-                    'linestyles': ['-', '-'],
-                    'yscale': 'log'
-                }
-                ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
-            else:
-                logger.warning('KL loss metrics not found. Skipping KL loss plot.')
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['train_kl_loss', 'valid_kl_loss'],
+                labels=['Training KL', 'Validation KL'],
+                colors=['fessa1', 'fessa5'],
+                yscale='log',
+                filepath=os.path.join(self.training_output_folder, 'vae_kl_loss.png')
+            )
             
             # Reconstruction loss
-            Recon_loss_present = ('train_reconstruction_loss' in cpu_metrics) and ('valid_reconstruction_loss' in cpu_metrics)
-            if Recon_loss_present:
-                recon_plot_config = {
-                    'keys': ['train_reconstruction_loss', 'valid_reconstruction_loss'],
-                    'labels': ['Training Reconstruction', 'Validation Reconstruction'],
-                    'colors': ['fessa2', 'fessa6'],
-                    'linestyles': ['-', '-'],
-                    'yscale': 'log'
-                }
-                ax = plot_metrics(cpu_metrics, **recon_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
-            else:
-                logger.warning('Reconstruction loss metrics not found. Skipping reconstruction loss plot.')
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['train_reconstruction_loss', 'valid_reconstruction_loss'],
+                labels=['Training Reconstruction', 'Validation Reconstruction'],
+                colors=['fessa2', 'fessa6'],
+                yscale='log',
+                filepath=os.path.join(self.training_output_folder, 'vae_reconstruction_loss.png')
+            )
 
             # KL + Reconstruction loss
-            if (KL_loss_present and Recon_loss_present):
-                both_plot_config = {
-                    'keys': ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'],
-                    'labels': ['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'],
-                    'colors': ['fessa1', 'fessa5', 'fessa2', 'fessa6'],
-                    'linestyles': ['-', '-', '-', '-'],
-                    'yscale': 'log'
-                }
-                ax = plot_metrics(cpu_metrics, **both_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
-            else:
-                logger.warning('KL and/or Reconstruction loss metrics not found. Skipping combined KL + Reconstruction loss plot.')
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'],
+                labels=['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'],
+                colors=['fessa1', 'fessa5', 'fessa2', 'fessa6'],
+                yscale='log',
+                filepath=os.path.join(self.training_output_folder, 'vae_kl_reconstruction_loss.png')
+            )
             
             # Beta value
-            beta_present = 'beta' in cpu_metrics
-            if beta_present:
-                beta_plot_config = {
-                    'keys': ['beta'],
-                    'labels': ['Beta'],
-                    'colors': ['fessa3'],
-                    'linestyles': ['-'],
-                    'yscale': 'linear'
-                }
-                ax = plot_metrics(cpu_metrics, **beta_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_beta.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['beta'],
+                labels=['Beta'],
+                colors=['fessa3'],
+                yscale='linear',
+                filepath=os.path.join(self.training_output_folder, 'vae_beta.png')
+            )
                
         except Exception as e:
             import traceback
