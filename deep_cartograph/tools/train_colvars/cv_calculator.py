@@ -1,11 +1,11 @@
 import os
-import sys
+import shutil
 import logging
 import numpy as np
 import pandas as pd
 from scipy.sparse import block_diag
-from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
+from typing import Dict, List, Tuple, Union, Literal, Optional
 
 from deep_cartograph.modules.plumed.colvars import create_dataframe_from_files
 import deep_cartograph.modules.md as md
@@ -227,7 +227,6 @@ class CVCalculator:
     def run(self, cv_dimension: Union[int, None] = None) -> Union[pd.DataFrame, None]:
         """
         Runs the CV calculator.
-        Overwrites the dimension in the configuration if provided.
         
         Parameters
         ----------
@@ -254,7 +253,6 @@ class CVCalculator:
         # If the CV was computed successfully
         if self.cv is not None:
             
-            # NOTE: using max min normalization on the projected training data
             self.normalize_cv()
 
             self.projected_training_data = self.project_data(self.training_data)
@@ -265,7 +263,7 @@ class CVCalculator:
             # Return file labels to the projected training data
             self.projected_training_data['traj_label'] = self.training_data_labels
             
-            self.save_cv()
+            self.save_model()
             
             self.sensitivity_analysis()
 
@@ -278,12 +276,30 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def save_cv(self):
+    def save_weights(self, weights_path: str):
         """
-        Saves the collective variable weights to a file. Implement in subclasses.
+        Saves the collective variable to a text file. Implement in subclasses.
+        
+        Parameters
+        ----------
+        
+        weights_path : str
+            Path to the output file where the weights will be saved
         """
         
-        raise NotImplementedError
+        raise NotImplementedError   
+    
+    def save_model(self):
+        """
+        Saves the collective variable to a zip file. Here we save the files common to all CV calculators.
+        """
+        
+        # Save the list of features reference labels used to compute the CV
+        np.savetxt(os.path.join(self.model_output_folder, 'features_labels.txt'), self.features_ref_labels, fmt='%s')
+            
+        # Save the reference topology used to compute the CV
+        if self.ref_topology_path is not None:
+            md.create_pdb(self.ref_topology_path, os.path.join(self.model_output_folder, 'ref_topology.pdb'))
 
     def get_cv_parameters(self) -> Dict:
         """
@@ -322,7 +338,7 @@ class CVCalculator:
         """
         
         raise NotImplementedError
-        
+
     def write_plumed_files(self, topology: str, output_folder: str) -> None:
         """
         Creates all files needed to compute the collective variable from the features
@@ -424,15 +440,7 @@ class CVCalculator:
         """
         raise NotImplementedError("Sensitivity analysis not implemented for this CV calculator.")
     
-    # Getters
-    def get_projected_sup_data(self) -> Union[pd.DataFrame, None]:
-        """
-        Returns the projected supplementary data. 
-        May be None if no supplementary data was provided or the CV computation failed.
-        """
-        
-        return self.projected_supplementary_data
-    
+    # Getters  
     def get_labels(self) -> List[str]:
         """
         Returns the labels of the collective variable.
@@ -515,39 +523,62 @@ class LinearCalculator(CVCalculator):
         for feature, m, r in zip(data.columns, normalizing_mean, normalizing_range):
             data[feature] = (data[feature] - m) / r
         
-        return data
+        return data  # NOTE: try: return (data - normalizing_mean) / normalizing_range
+    
+    def save_weights(self, weights_path: str):
+        """
+        Saves the collective variable linear weights to a text file.
         
-    def save_cv(self):
+        Parameters
+        ----------
+        
+        weights_path : str
+            Path to the output file where the weights will be saved
+        """
+        
+        if self.cv is None:
+            logger.error('CV has not been computed. Cannot save weights.')
+            raise ValueError('CV has not been computed. Cannot save weights.')
+            
+        np.save(weights_path, self.cv)
+        logger.debug(f'CV weights saved to {weights_path}')
+        
+    def save_model(self):
         """
         Saves the collective variable linear weights to a text file.
         """
+        super().save_model()
         
-        # Check the cv weights have been computed
-        if self.cv is None:
-            logger.error('CV has not been computed. Cannot save CV.')
-            raise ValueError('CV has not been computed. Cannot save weights.')
-            
-        # Path to output weights
-        self.weights_path = os.path.join(self.model_output_path, f'{self.cv_name}_weights.npy')
-        np.save(self.weights_path, self.cv)
+        from deep_cartograph.modules.common import zip_files
         
+        # Save the cv weights
+        weights_path = os.path.join(self.model_output_folder, f'{self.cv_name}_weights.npy')
+        self.save_weights(weights_path)
+
         # Check the cv stats have been computed
         if self.cv_stats.get('max') is None or self.cv_stats.get('min') is None:
             logger.error('CV stats have not been computed. Cannot save CV.')
             raise ValueError('CV stats have not been computed. Cannot save CV.')
             
         # Save the max/min values of each dimension - part of the final cv definition
-        np.save(os.path.join(self.model_output_path, 'cv_max.npy'), self.cv_stats['max'])
-        np.save(os.path.join(self.model_output_path, 'cv_min.npy'), self.cv_stats['min'])
+        np.save(os.path.join(self.model_output_folder, 'cv_max.npy'), self.cv_stats['max'])
+        np.save(os.path.join(self.model_output_folder, 'cv_min.npy'), self.cv_stats['min'])
         
         if 'mean_std' in self.feats_norm_mode:
-            np.save(os.path.join(self.model_output_path, 'features_mean.npy'), self.features_stats['mean'])
-            np.save(os.path.join(self.model_output_path, 'features_std.npy'), self.features_stats['std'])
+            np.save(os.path.join(self.model_output_folder, 'features_mean.npy'), self.features_stats['mean'])
+            np.save(os.path.join(self.model_output_folder, 'features_std.npy'), self.features_stats['std'])
         elif 'min_max' in self.feats_norm_mode:
-            np.save(os.path.join(self.model_output_path, 'features_max.npy'), self.features_stats['max'])
-            np.save(os.path.join(self.model_output_path, 'features_min.npy'), self.features_stats['min'])
+            np.save(os.path.join(self.model_output_folder, 'features_max.npy'), self.features_stats['max'])
+            np.save(os.path.join(self.model_output_folder, 'features_min.npy'), self.features_stats['min'])
+    
+        # Zip the model output folder
+        model_path = os.path.join(self.output_path, 'model.zip')
+        zip_files(model_path, self.model_output_folder)
 
-        logger.info(f'Collective variable weights saved to {self.weights_path}')
+        # Remove the unzipped model output folder
+        shutil.rmtree(self.model_output_folder)
+
+        logger.info(f'Model saved to {model_path}')
 
     def get_cv_parameters(self):
         """ 
@@ -628,7 +659,7 @@ class LinearCalculator(CVCalculator):
         for cv_index in range(cv_sensitivities.shape[1]):
             
             # Create directory for sensitivity analysis results
-            sensitivity_output_path = os.path.join(self.sensitivity_output_path, f'sensitivity_analysis_{cv_index+1}')
+            sensitivity_output_path = os.path.join(self.sensitivity_output_folder, f'sensitivity_analysis_{cv_index+1}')
             os.makedirs(sensitivity_output_path, exist_ok=True)
             
             sensitivities = cv_sensitivities[:, cv_index]
@@ -637,7 +668,7 @@ class LinearCalculator(CVCalculator):
             # Order the sensitivities from lowest to highest, order the feature labels accordingly
             indices = np.argsort(sensitivities)
             sensitivities = sensitivities[indices]
-            feature_labels = np.array(self.feature_labels)[indices]
+            feature_labels = np.array(self.features_ref_labels)[indices]
         
             # Create a Dictionary with the results
             results = {
@@ -678,8 +709,6 @@ class NonLinear(CVCalculator):
         
         from mlcolvar.utils.trainer import MetricsCallback
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
-        
-        import torch 
                 
         super().__init__(
             configuration,
@@ -721,18 +750,19 @@ class NonLinear(CVCalculator):
         self.cv_score: Union[float, None] = None
         self.tries: int = 0
         
-        self.patience: int = self.early_stopping_config['patience']
-        self.min_delta: float = self.early_stopping_config['min_delta']
+        self.early_stop_patience: int = self.early_stopping_config['patience']
+        self.early_stop_delta: float = self.early_stopping_config['min_delta']
                 
         # Neural network settings
         self.encoder_config: Dict = self.architecture_config['encoder']
-        self.decoder_config: Optional[Dict] = self.architecture_config['decoder'] 
+        self.decoder_config: Optional[Dict] = self.architecture_config['decoder']
+        self.encoder_hidden_layers: List[int] = self.encoder_config.get('layers', []) 
+        self.decoder_hidden_layers: Optional[List[int]] = self.decoder_config.get('layers', []) if self.decoder_config is not None else None
         
-        # Set layers from NN config 
-        self.encoder_layers: List = self.set_encoder_layers()
-        self.decoder_layers: Optional[List] = self.set_decoder_layers()
-        
-        # Set options from NN config
+        # CV options for the mlcolvar CV class
+        self.cv_options: Dict = {}
+
+        # Set options from NN settings
         self.encoder_options: Dict = self.encoder_config
         self.encoder_options.pop('layers', {})
         if self.decoder_config is not None:
@@ -740,7 +770,18 @@ class NonLinear(CVCalculator):
             self.decoder_options.pop('layers', {})
         else:
             self.decoder_options = self.encoder_options
+            
+        # Optimizer
+        self.opt_name: str = None
+        self.optimizer_options: Dict = {}
         
+        # Set up the last layer of the decoder
+        self.set_up_last_layer()
+    
+    def set_up_last_layer(self):
+        """
+        Sets up the last layer of the decoder based on the normalization of the features.
+        """
         # Add activation function to the last layer of the decoder based on the normalization of the features
         if isinstance(self.decoder_options['activation'], list):
             # Normalized using min max with range [0, 1] -> use sigmoid activation
@@ -767,47 +808,8 @@ class NonLinear(CVCalculator):
             self.decoder_options['batchnorm'].append(False)
         elif self.decoder_options['batchnorm'] is True:
             logger.warning('''Batch normalization is set to True for all layers of the decoder, 
-                           including the last layer. Make sure this is intended or choose batchnorm as a list.''')
-        
-        # Normalization of features in the Non-linear models
-        # No normalization
-        if self.feats_norm_mode == 'none':
-            self.cv_options: Dict = {'norm_in' : None}
-        # Corresponding normalization, see prepare_normalization() in base class
-        else:
-            self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std',
-                                                  'mean': torch.tensor(self.features_norm_mean),
-                                                  'range': torch.tensor(self.features_norm_range)}}
-
-        # Optimizer
-        self.opt_name: str = self.optimizer_config['name']
-        self.optimizer_options: Dict = self.optimizer_config['kwargs']
-        
-        self.cv_options["optimizer"] = self.optimizer_options
-        
-        # Construct the lr_scheduler option - scheduler class and its kwargs
-        if self.lr_scheduler is not None:           
-            # Obtain the class from the name
-            lr_scheduler_class = getattr(torch.optim.lr_scheduler, self.lr_scheduler['name'], None)
-            if lr_scheduler_class is None:
-                logger.error(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized. Exiting...')
-                sys.exit(1)
-                
-            self.cv_options["lr_scheduler"] = {
-                "scheduler" : lr_scheduler_class    
-            }   
-            
-            self.cv_options["lr_scheduler"].update(self.lr_scheduler.get('kwargs', {}))
-            
-            # NEW FEATURE
-            # If OneCycleLR is used -> Adjust epochs and steps_per_epoch according to the training configuration and the number of samples
-            # If ReduceLROnPlateau is used -> Adjust patience and cooldown
-            # Check where do we have the info to do the update
-            
-            # Construct the lr_scheduler_config option
-            if self.lr_scheduler_config is not None:
-                self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
-    
+                           including the last layer. Make sure this is intended or provide a list for batchnorm.''')
+                       
     def _adjust_lr_scheduler(self, datamodule):
         """
         Adjusts LR scheduler parameters based on the training configuration.
@@ -836,22 +838,24 @@ class NonLinear(CVCalculator):
             # Adjust the interval from the configuration to 'step'
             self.cv_options["lr_scheduler_config"]["interval"] = 'step'
             
-            logger.info(f"OneCycleLR configured with epochs = {self.cv_options['lr_scheduler']['epochs']}, steps_per_epoch = {self.cv_options['lr_scheduler'].get('steps_per_epoch')}")
-            
         elif scheduler_name == 'ReduceLROnPlateau':
             
             # Give reasonable default values if not provided in the configuration
-            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', min(self.patience // 4, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 5))
-            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', min(self.patience // 8, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 10))
-            
+            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', self.early_stop_patience // 4)
+            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', self.early_stop_patience // 8)
+
             # Adjust the interval from the configuration to 'epoch'
             self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
             
-            logger.info(f"ReduceLROnPlateau configured with patience = {self.cv_options['lr_scheduler']['patience']}, cooldown = {self.cv_options['lr_scheduler']['cooldown']}")
-            
     def check_batch_size(self):
+        """  
+        Check the batch size is not larger than the number of samples in the training set.
+        If it is, set the batch size to the closest power of two smaller than the number
+        of samples in the training set.
+        """
+        from deep_cartograph.modules.common import closest_power_of_two
         
-       # Get the number of samples in the training set
+        # Get the number of samples in the training set
         self.num_training_samples = int(self.num_samples*self.training_validation_lengths[0])
         
         # Check the batch size is not larger than the number of samples in the training set
@@ -905,8 +909,47 @@ class NonLinear(CVCalculator):
         
         return None
         
-    def create_model(self):
+    def set_up_cv_options(self):
+        """
+        Sets up the options for the CV based on the training configuration and the normalization of the features
+        """
+        import torch 
         
+        # Normalization of features in the Non-linear models
+        # No normalization
+        if self.feats_norm_mode == 'none':
+            self.cv_options = {'norm_in' : None}
+        # Corresponding normalization, see prepare_normalization() in base class
+        else:
+            self.cv_options = {'norm_in' : {'mode' : 'mean_std',
+                                                  'mean': torch.tensor(self.features_norm_mean),
+                                                  'range': torch.tensor(self.features_norm_range)}}
+
+        # Optimizer
+        self.opt_name = self.optimizer_config['name']
+        self.optimizer_options = self.optimizer_config['kwargs']
+        
+        self.cv_options["optimizer"] = self.optimizer_options
+        
+        # Construct the lr_scheduler option - scheduler class and its kwargs
+        if self.lr_scheduler is not None:           
+            # Obtain the class from the name
+            lr_scheduler_class = getattr(torch.optim.lr_scheduler, self.lr_scheduler['name'], None)
+            if lr_scheduler_class is None:
+                logger.error(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized. Exiting...')
+                raise ValueError(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized.')
+                
+            self.cv_options["lr_scheduler"] = {
+                "scheduler" : lr_scheduler_class    
+            }   
+            
+            self.cv_options["lr_scheduler"].update(self.lr_scheduler.get('kwargs', {}))
+            
+            # Construct the lr_scheduler_config option
+            if self.lr_scheduler_config is not None:
+                self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
+                
+    def create_model(self):
         """
         Implement this method in subclasses to create the non-linear model.
         
@@ -942,13 +985,13 @@ class NonLinear(CVCalculator):
         # Define EarlyStopping callback to stop training
         self.early_stopping = EarlyStopping(
             monitor="valid_loss", 
-            min_delta=self.min_delta, 
-            patience=self.patience, 
+            min_delta=self.early_stop_delta, 
+            patience=self.early_stop_patience, 
             mode = "min")
         general_callbacks.append(self.early_stopping)
 
         # Define ModelCheckpoint callback to save the best/last model
-        checkpoints_path = os.path.join(self.training_output_path, 'checkpoints')
+        checkpoints_path = os.path.join(self.training_output_folder, 'checkpoints')
         self.checkpoint = ModelCheckpoint(
             dirpath=checkpoints_path,                  # Directory to save the checkpoints  
             monitor="valid_loss",                      # Quantity to monitor
@@ -971,6 +1014,10 @@ class NonLinear(CVCalculator):
         from mlcolvar.data import DictModule
 
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
+        
+        self.set_up_cv_options()
+        
+        self.check_batch_size()
 
         training_succeeded = False
         while not training_succeeded and (self.tries < self.max_tries):
@@ -1136,10 +1183,10 @@ class NonLinear(CVCalculator):
                     if key not in cpu_metrics:
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
-                    filepath = os.path.join(self.training_output_path, f'{key}.npy')
+                    filepath = os.path.join(self.training_output_folder, f'{key}.npy')
                     self.training_metrics_paths.append(filepath)
                     np.save(filepath, np.array(cpu_metrics[key]))
-                np.savetxt(os.path.join(self.training_output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
+                np.savetxt(os.path.join(self.training_output_folder, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                     
             # Plot general metrics to all Non-linear CVs
             
@@ -1154,7 +1201,7 @@ class NonLinear(CVCalculator):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Training and/or validation loss not found in metrics. Loss plot will not be generated.')
@@ -1169,7 +1216,7 @@ class NonLinear(CVCalculator):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **lr_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_path, f'learning_rate.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'learning_rate.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Learning rate not found in metrics. Learning rate plot will not be generated.')
@@ -1216,37 +1263,57 @@ class NonLinear(CVCalculator):
             # After training, put model in evaluation mode - needed for cv normalization and data projection
             self.cv.eval()
 
-    def save_cv(self):
+    def save_weights(self, weights_path: str):
+        """ 
+        Saves the collective variable weights to a pytorch file.
         """
-        Saves the collective variable model to a PyTorch TorchScript file.
-        """
-
-        # Path to output model
-        self.weights_path = os.path.join(self.model_output_path, f'{self.cv_name}_model.pt')
-
-        if self.cv is None:
-            logger.error('No collective variable model to save.')
-            return
 
         successfully_saved = False
         try:
             # The model is set to evaluation mode before tracing
             self.cv.eval() 
-            self.cv.to_torchscript(file_path=self.weights_path, method='trace')
-            logger.info(f'Collective variable model saved to {self.weights_path}')
+            self.cv.to_torchscript(file_path=weights_path, method='trace')
+            logger.debug(f'Collective variable model saved to {weights_path}')
             successfully_saved = True
         except Exception as e:
             logger.error(f'Failed to save TorchScript model using trace mode. Error: {e}')
             
         if not successfully_saved:
-            logger.info('Attempting to save the model using script mode instead of trace...')
+            logger.debug('Attempting to save the model using script mode instead of trace...')
             try:
                 # Attempt to save the model using script mode
-                self.cv.to_torchscript(file_path=self.weights_path, method='script')
-                logger.info(f'Collective variable model saved to {self.weights_path} using script mode')
+                self.cv.to_torchscript(file_path=weights_path, method='script')
+                logger.debug(f'Collective variable model saved to {weights_path} using script mode')
             except Exception as e:
                 logger.error(f'Failed to save TorchScript model using script mode. Error: {e}')
-                
+        
+    def save_model(self):
+        """
+        Saves the collective variable model to a PyTorch TorchScript file.
+        """
+        super().save_model()   
+
+        from deep_cartograph.modules.common import zip_files
+        
+        # Path to output model
+        weights_path = os.path.join(self.model_output_folder, f'{self.cv_name}_weights.pt')
+
+        if self.cv is None:
+            logger.error('No collective variable model to save.')
+            return
+
+        # Save the model weights
+        self.save_weights(weights_path)
+
+        # Zip the model output folder
+        model_path = os.path.join(self.output_path, 'model.zip')
+        zip_files(model_path, self.model_output_folder)
+
+        # Remove the unzipped model output folder
+        shutil.rmtree(self.model_output_folder)
+
+        logger.info(f'Model saved to {model_path}')
+   
     def get_cv_parameters(self):
         """
         Get the collective variable parameters.
@@ -1305,12 +1372,12 @@ class NonLinear(CVCalculator):
         
         # Save the sensitivities to a file
         sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
-        sensitivity_path = os.path.join(self.sensitivity_output_path, 'sensitivity_analysis.csv')
+        sensitivity_path = os.path.join(self.sensitivity_output_folder, 'sensitivity_analysis.csv')
         sensitivity_df.to_csv(sensitivity_path)
         
         # Plot the sensitivity results
         modes = ['barh', 'violin']
-        plot_sensitivity_results(results, modes=modes, output_folder=self.sensitivity_output_path)
+        plot_sensitivity_results(results, modes=modes, output_folder=self.sensitivity_output_folder)
 
 
 # Specific Collective Variable calculators
@@ -1331,9 +1398,11 @@ class PCACalculator(LinearCalculator):
             output_path)
         
         self.cv_name = 'pca'
+
+        self.create_output_folders()
         
-        self.initialize_cv()
-        
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
+
     def compute_cv(self):
         """
         Compute Principal Component Analysis (PCA) on the input features. 
@@ -1365,9 +1434,6 @@ class TICACalculator(LinearCalculator):
         """
         Initializes the TICA calculator.
         """
-        
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         super().__init__(
             configuration, 
             output_path)
@@ -1385,8 +1451,6 @@ class TICACalculator(LinearCalculator):
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
         self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration['lag_time'])
-        
-        self.initialize_cv()
         
     def compute_cv(self):
         """
@@ -1426,8 +1490,6 @@ class HTICACalculator(LinearCalculator):
         Initializes the HTICA calculator.
         """
         
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         super().__init__(
             configuration, 
             output_path)
@@ -1450,9 +1512,6 @@ class HTICACalculator(LinearCalculator):
         # NOTE: Are we duplicating the data here? :(
         # NOTE: this function returns less samples than expected: N-lag_time-2
         self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration['lag_time'])
-        
-        self.initialize_cv()
-        
     
     def compute_cv(self):
         """
@@ -1537,27 +1596,16 @@ class AECalculator(NonLinear):
         """
         Initializes the Autoencoder calculator.
         """
-        import torch 
-        
-        from mlcolvar.data import DictDataset
         
         super().__init__(
             configuration, 
             output_path)
         
-        # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
-        
         self.cv_name = 'ae'
         
-        self.initialize_cv()
+        self.create_output_folders()
         
-        self.check_batch_size()
-        
-        # NOTE: In the future we might want to allow for a custom last layer before the latent space
-        # Currently it will be the same as the one for the hidden layers - if not a list
-        # or no activation/dropout is applied to the last layer
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
         
         # Add encoder activation and dropout option for last layer if these are lists
         if isinstance(self.encoder_options['dropout'], list):
@@ -1565,6 +1613,12 @@ class AECalculator(NonLinear):
         if isinstance(self.encoder_options['activation'], list):
             self.encoder_options['activation'].append(None)
 
+    def set_up_cv_options(self):
+        """ 
+        Update cv options for the Autoencoder.
+        """
+        super().set_up_cv_options()
+        
         # Update options
         cv_options = {
             "encoder": self.encoder_options,
@@ -1594,7 +1648,7 @@ class AECalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.architecture_config['encoder']['layers'] + [self.cv_dimension]
+        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
     
     def set_decoder_layers(self) -> Optional[List]:
         """ 
@@ -1612,8 +1666,8 @@ class AECalculator(NonLinear):
         if self.architecture_config['decoder'] is None:
             return None
         else:
-            return [self.cv_dimension] + self.architecture_config['decoder']['layers'] + [self.num_features]
-        
+            return [self.cv_dimension] + self.decoder_hidden_layers + [self.num_features]
+
     def create_model(self):
         """ 
         Create the Autoencoder model.
@@ -1625,6 +1679,10 @@ class AECalculator(NonLinear):
         """
         
         from mlcolvar.cvs import AutoEncoderCV
+
+        # Set layers from NN settings 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
         
         model = AutoEncoderCV(
             encoder_layers=self.encoder_layers, 
@@ -1641,7 +1699,7 @@ class AECalculator(NonLinear):
         
         from deep_cartograph.modules.common import zip_files, remove_files
     
-        metrics_zip_file = os.path.join(self.training_output_path, 'training_metrics.zip')
+        metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
         zip_files(metrics_zip_file, *self.training_metrics_paths)
         remove_files(*self.training_metrics_paths)
         logger.info(f'Training metrics saved to {metrics_zip_file}')
@@ -1657,21 +1715,15 @@ class DeepTICACalculator(NonLinear):
         """
         Initializes the DeepTICA calculator.
         """      
-        
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         super().__init__(
             configuration, 
             output_path)
         
         self.cv_name = 'deep_tica'
+
+        self.create_output_folders()
         
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration['lag_time'])
-        
-        self.initialize_cv()
-        
-        self.check_batch_size()
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
             
         # NOTE: In the future we might want to allow for a custom last layer before the latent space
         # Currently it will be the same as the one for the hidden layers - if not a list
@@ -1682,7 +1734,13 @@ class DeepTICACalculator(NonLinear):
             self.encoder_options['dropout'].append(None)
         if isinstance(self.encoder_options['activation'], list):
             self.encoder_options['activation'].append(None)
-            
+
+    def set_up_cv_options(self):
+        """ 
+        Update cv options for DeepTICA.
+        """
+        super().set_up_cv_options()
+        
         # Update options
         cv_options = {
             "nn": self.encoder_options
@@ -1708,8 +1766,8 @@ class DeepTICACalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_config['layers'] + [self.cv_dimension]
-    
+        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
+
     def create_model(self):
         """
         Create the DeepTICA model.
@@ -1722,6 +1780,10 @@ class DeepTICACalculator(NonLinear):
         """
         
         from mlcolvar.cvs import DeepTICA
+
+        # Set layers from NN settings 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
         
         model = DeepTICA(
             layers=self.encoder_layers,
@@ -1734,22 +1796,10 @@ class DeepTICACalculator(NonLinear):
         Plots and saves training metrics specific to Deep TICA.
         """      
         super().plot_training_metrics()
-        
-        from deep_cartograph.modules.common import zip_files, remove_files
     
-        metrics_zip_file = os.path.join(self.training_output_path, 'training_metrics.zip')
-        zip_files(metrics_zip_file, *self.training_metrics_paths)
-        remove_files(*self.training_metrics_paths)
-        logger.info(f'Training metrics saved to {metrics_zip_file}')
-        
-    def save_cv(self):
-        """
-        Save the eigenvectors and eigenvalues of the best model.
-        """
-        from mlcolvar.utils.plot import plot_metrics
-        
-        super().save_cv()
-            
+        from deep_cartograph.modules.common import zip_files, remove_files
+        from mlcolvar.utils.plot import plot_metrics   
+
         # Find the epoch where the best model was found
         best_index = self.metrics.metrics['valid_loss'].index(self.cv_score)
         best_epoch = self.metrics.metrics['epoch'][best_index]
@@ -1760,7 +1810,7 @@ class DeepTICACalculator(NonLinear):
         for i in range(self.cv_dimension):
             logger.info(f'Eigenvalue {i+1}: {best_eigvals[i]}')
             
-        np.savetxt(os.path.join(self.model_output_path, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
+        np.savetxt(os.path.join(self.training_output_folder, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
         
         # Plot eigenvalues
         ax = plot_metrics(self.metrics.metrics,
@@ -1770,8 +1820,13 @@ class DeepTICACalculator(NonLinear):
                             yscale=None)
 
         # Save figure
-        ax.figure.savefig(os.path.join(self.training_output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
+        ax.figure.savefig(os.path.join(self.training_output_folder, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
+        
+        metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
 
 class VAECalculator(NonLinear):
     """
@@ -1783,11 +1838,7 @@ class VAECalculator(NonLinear):
         ):
         """
         Initializes the Variational Autoencoder calculator.
-        """
-        import torch 
-        
-        from mlcolvar.data import DictDataset
-        
+        """      
         super().__init__(
             configuration, 
             output_path)
@@ -1801,19 +1852,21 @@ class VAECalculator(NonLinear):
         self.n_cycles = self.kl_annealing_config['n_cycles']
         self.n_epochs_anneal = self.kl_annealing_config['n_epochs_anneal']
         
-        # Create DictDatase
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
-        
         self.cv_name = 'vae'
+
+        self.create_output_folders()
         
-        self.initialize_cv()
-        
-        self.check_batch_size()
+        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
         
         # If the activation functions / dropout are given as a list, add one for the last layer 
         # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
-            
+
+    def set_up_cv_options(self):
+        """ 
+        Update cv options for the VAE.
+        """
+        super().set_up_cv_options()
+        
         # Update options
         nn_options = {
             "encoder": self.encoder_options,
@@ -1836,7 +1889,7 @@ class VAECalculator(NonLinear):
         Set the layers for the VAE
         
         Here the model already includes a mean and variance layer with
-        cv_dimension outputs, so we do not need to add them explicitly.
+        cv_dimension outputs, so we do not need to add the last layer explicitly.
         
         Return
         ------
@@ -1846,7 +1899,7 @@ class VAECalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_config['layers']
+        return [self.num_features] + self.encoder_hidden_layers
     
     def set_decoder_layers(self):
         """ 
@@ -1867,7 +1920,7 @@ class VAECalculator(NonLinear):
         if self.decoder_config is None:
             return None
         else:
-            return self.decoder_config['layers'] + [self.num_features]
+            return self.decoder_hidden_layers + [self.num_features]
    
     def create_model(self):
         """
@@ -1881,6 +1934,10 @@ class VAECalculator(NonLinear):
         """
         
         from mlcolvar.cvs import VariationalAutoEncoderCV
+        
+        # Set layers from NN settings 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
         
         model = VariationalAutoEncoderCV(
             n_cvs=self.cv_dimension,
@@ -1928,7 +1985,7 @@ class VAECalculator(NonLinear):
         # If there is a KL annealing stage
         if self.n_epochs_anneal > 0:
             # Add a callback to start saving the best model after the KL annealing 
-            checkpoints_path = os.path.join(self.training_output_path, "checkpoints")
+            checkpoints_path = os.path.join(self.training_output_folder, "checkpoints")
             self.post_annealing_checkpoint = ml.PostAnnealingCheckpoint(
                 monitor="valid_loss",
                 dirpath=checkpoints_path,
@@ -1965,7 +2022,7 @@ class VAECalculator(NonLinear):
                     if key not in cpu_metrics:
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
-                    filepath = os.path.join(self.training_output_path, f'{key}.npy')
+                    filepath = os.path.join(self.training_output_folder, f'{key}.npy')
                     self.training_metrics_paths.append(filepath)
                     np.save(filepath, np.array(cpu_metrics[key]))
 
@@ -1982,7 +2039,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('KL loss metrics not found. Skipping KL loss plot.')
@@ -1998,7 +2055,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **recon_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Reconstruction loss metrics not found. Skipping reconstruction loss plot.')
@@ -2013,7 +2070,7 @@ class VAECalculator(NonLinear):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **both_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('KL and/or Reconstruction loss metrics not found. Skipping combined KL + Reconstruction loss plot.')
@@ -2029,14 +2086,14 @@ class VAECalculator(NonLinear):
                     'yscale': 'linear'
                 }
                 ax = plot_metrics(cpu_metrics, **beta_plot_config)
-                ax.figure.savefig(os.path.join(self.training_output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'vae_beta.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
                
         except Exception as e:
             import traceback
             logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
 
-        metrics_zip_file = os.path.join(self.training_output_path, 'training_metrics.zip')
+        metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
         zip_files(metrics_zip_file, *self.training_metrics_paths)
         remove_files(*self.training_metrics_paths)
         logger.info(f'Training metrics saved to {metrics_zip_file}')

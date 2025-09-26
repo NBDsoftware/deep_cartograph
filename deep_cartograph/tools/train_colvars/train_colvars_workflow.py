@@ -6,7 +6,7 @@ import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Union, Literal, Optional
+from typing import List, Dict, Literal, Optional
 
 # Local imports
 from deep_cartograph.modules.figures import figures
@@ -237,13 +237,18 @@ class TrainColvarsWorkflow:
             # Construct the corresponding CV calculator
             args = {
                 'configuration': copy.deepcopy(merged_configuration),
-                'train_colvars_paths': self.train_colvars_paths,
-                'train_topology_paths': self.train_topology_paths,
-                'ref_topology_path': self.ref_topology_path,
-                'features_list': self.features_list,
                 'output_path': self.output_folder
             }
             cv_calculator = cv_calculators_map[cv_name](**args)
+            
+            # Load training data
+            args = {
+                'train_colvars_paths': self.train_colvars_paths,
+                'train_topology_paths': self.train_topology_paths,
+                'ref_topology_path': self.ref_topology_path,
+                'features_list': self.features_list
+            }
+            cv_calculator.load_training_data(**args)
             
             # Run the CV calculator - obtain a dataframe with the projected training data
             projected_train_df = cv_calculator.run(self.cv_dimension)
