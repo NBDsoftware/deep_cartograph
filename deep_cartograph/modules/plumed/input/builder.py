@@ -19,12 +19,12 @@ class ComputeFeaturesBuilder(Assembler):
     """
     Builder to create an input file that computes a collection of features during an MD simulation or trajectory.
     """           
-    def __init__(self, input_path: str, 
+    def __init__(self, plumed_input_path: str, 
                  topology_path: str, 
                  features_list: List[str], 
                  traj_stride: int,
-                 ref_topology_path: Optional[str] = None):
-        return super().__init__(input_path, topology_path, features_list, traj_stride, ref_topology_path)
+                 fit_template_path: Optional[str] = None):
+        return super().__init__(plumed_input_path, topology_path, features_list, traj_stride, fit_template_path)
     
     def build(self, colvars_path: str):
         """ 
@@ -45,15 +45,15 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
     """
     Builder to create an input file that computes a collective variable during an MD simulation or trajectory.
     """
-    def __init__(self, input_path: str, 
+    def __init__(self, plumed_input_path: str, 
                  topology_path: str, 
                  features_list: List[str], 
                  traj_stride: int, 
                  cv_type: str, 
                  cv_params: Dict,
-                 ref_topology_path: Optional[str] = None):
-        return super().__init__(input_path, topology_path, features_list, 
-                                traj_stride, cv_type, cv_params, ref_topology_path)
+                 fit_template_path: Optional[str] = None):
+        return super().__init__(plumed_input_path, topology_path, features_list, 
+                                traj_stride, cv_type, cv_params, fit_template_path)
     
     def build(self, colvars_path: str):
         """ 
@@ -80,12 +80,12 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
      Builder to create an input file to enhance sampling during an MD simulation or trajectory.
     """
     
-    def __init__(self, input_path: str, topology_path: str, features_list: List[str], 
+    def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
-                 sampling_params: Dict, ref_topology_path: Optional[str] = None):
-        return super().__init__(input_path, topology_path, features_list, traj_stride, 
+                 sampling_params: Dict, fit_template_path: Optional[str] = None):
+        return super().__init__(plumed_input_path, topology_path, features_list, traj_stride, 
                                 cv_type, cv_params, sampling_method, sampling_params,
-                                ref_topology_path)
+                                fit_template_path)
     
     def build(self, colvars_path: str):
         """ 

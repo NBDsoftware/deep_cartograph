@@ -352,56 +352,75 @@ class CVCalculator:
         
         raise NotImplementedError
         
-    def write_plumed_input(self, topology: str, output_folder: str) -> None:
+    def write_plumed_files(self, topology: str, output_folder: str) -> None:
         """
-        Creates a plumed input file that computes the collective variable from the features 
-        for the given topology.
+        Creates all files needed to compute the collective variable from the features
+        for the given topology using plumed.
         
         Parameters
         ----------
         
         topology : str
-            Path to the topology file
+            Path to the topology file of the system (used to translate the features)
             
         output_folder : str
-            Path to the output folder where the plumed input file and the mda topology will be saved
+            Path to the output folder where the files will be written
         """
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
         from deep_cartograph.modules.plumed.features import FeatureTranslator
+        from deep_cartograph.modules.md import create_plumed_rmsd_template
+        
+        from deep_cartograph.modules.common import zip_files, remove_files
+        
+        # Reset plumed files list
+        self.plumed_files = []
 
-        # Save new PLUMED-compliant topology
+        # Save new PLUMED-compliant topology for this trajectory - we try to avoid the 
+        # limitations of the PLUMED PDB parser going through MDAnalysis :)
         plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
         md.create_pdb(topology, plumed_topology_path)
+        self.plumed_files.append(plumed_topology_path)
         
-        # Save new temporary reference PLUMED-compliant topology
+        # Translate the features from the reference topology to this system's topology
         ref_plumed_topology_path = os.path.join(output_folder, 'ref_plumed_topology.pdb')
         md.create_pdb(self.ref_topology_path, ref_plumed_topology_path)
+        features_list = FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.features_ref_labels).run()
         
-        # Translate the features from the reference topology to this topology
-        features_list = FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.feature_labels).run()
-        
-        # Construct builder arguments for these features and this CV
+        # If features contain coordinates, we need to fit the structure to the reference topology
+        need_fit_template = any(feat.startswith("coord") for feat in features_list)
+        if need_fit_template:
+            fit_template_path = os.path.join(output_folder, "fit_template.pdb")
+            create_plumed_rmsd_template(self.ref_topology_path, fit_template_path)
+            self.plumed_files.append(fit_template_path)
+        else:
+            fit_template_path = None
+        # Build the plumed input file to track the CV
+        plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat')
+        self.plumed_files.append(plumed_input_path)
         builder_args = {
-            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat'),
+            'plumed_input_path': plumed_input_path,
             'topology_path': plumed_topology_path,
             'features_list': features_list,
             'traj_stride': 1,
             'cv_type': self.get_cv_type(),
             'cv_params': self.get_cv_parameters(),
-            'ref_topology_path': self.ref_topology_path
+            'fit_template_path': fit_template_path
         }
-        
-        # Build the plumed input file to track the CV
         plumed_builder = ComputeCVBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_out.dat')
         
+        # Remove previous plumed input file
+        os.remove(plumed_input_path)
+        self.plumed_files.remove(plumed_input_path)
+        
+        # Build the plumed input file to perform enhanced sampling
+        plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
+        self.plumed_files.append(plumed_input_path)
         builder_args.update({
             'sampling_method': self.bias["method"], 
             'sampling_params': self.bias["args"],
-            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
-            })
-            
-        # Build the plumed input file to perform enhanced sampling
+            'plumed_input_path': plumed_input_path
+        })
         plumed_builder = ComputeEnhancedSamplingBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_{self.bias["method"]}_out.dat')
         

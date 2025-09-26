@@ -21,11 +21,11 @@ class Assembler:
     """
     Base class to assemble the contents of a PLUMED input file.
     """
-    def __init__(self, input_path: str, 
+    def __init__(self, plumed_input_path: str, 
                  topology_path: str, 
                  features_list: List[str], 
                  traj_stride: int,
-                 ref_topology_path: Optional[str] = None
+                 fit_template_path: Optional[str] = None
         ):
         """ 
         Minimal attributes to construct a PLUMED input file.
@@ -33,7 +33,7 @@ class Assembler:
         Parameters
         ----------
         
-            input_path (str):
+            plumed_input_path (str):
                 Path to the PLUMED input file. The file that will be written.
                 
             topology_path (str):
@@ -45,26 +45,32 @@ class Assembler:
             traj_stride (int):
                 Stride to use when computing the features from a trajectory or MD simulation.
                 
-            ref_topology_path (str, optional):
-                Path to the reference topology file. If provided, it will be used for the FIT TO TEMPLATE command.
+            fit_template_path (str, optional):
+                Path to the reference topology with beta and occupancy factors ready to use as RMSD template. 
+                If provided, it will be used for the FIT TO TEMPLATE command.
         """
         # Path to the contents of the input file
         self.input_content: str = ""
         
         # Path to the input file
-        self.input_path: str = input_path
+        self.plumed_input_path: str = plumed_input_path
         
         # Path to the topology file used by PLUMED (MOLINFO command)
         self.topology_path: str = topology_path
         
         # Path to the reference topology file used by PLUMED (FIT TO TEMPLATE command)
-        self.ref_topology_path: str = ref_topology_path if ref_topology_path else topology_path
+        self.fit_template_path: str = fit_template_path
 
         # List of features to be tracked
         self.features_list: List[str] = features_list
         
         # Asses the need for Fit to template (if there are coordinates in the feature list)
-        self.fit_to_template: bool = any(feat.startswith("coord") for feat in features_list)
+        self.fit_to_template_needed: bool = any(feat.startswith("coord") for feat in features_list)
+        
+        if self.fit_to_template_needed and not self.fit_template_path:
+            logger.error("Features contain coordinates but no fit template path was provided.")
+            logger.error("Please provide a fit template path or remove coordinate features.")
+            sys.exit(1)
         
         # List of variables to be printed in a COLVAR file
         self.print_args: List[str] = []
@@ -90,16 +96,8 @@ class Assembler:
         self.input_content += plumed.command.wholemolecules(whole_mol_indices)
         
         # If needed, write FIT TO TEMPLATE command - to align the structure to a reference
-        if self.fit_to_template:
-            
-            from deep_cartograph.modules.md import create_plumed_rmsd_template
-            from pathlib import Path
-            
-            # Create a template file in the same directory as the reference topology
-            template_path = os.path.join(Path(self.input_path).parent, "fit_template.pdb")
-            create_plumed_rmsd_template(self.ref_topology_path, template_path)
-    
-            self.input_content += plumed.command.fit_to_template(os.path.abspath(template_path))
+        if self.fit_to_template_needed:
+            self.input_content += plumed.command.fit_to_template(os.path.abspath(self.fit_template_path))
             
         # Leave blank line
         self.input_content += "\n"
@@ -254,7 +252,7 @@ class Assembler:
         """
         Write the PLUMED input file. This method is not used by the Assembler classes but the Builder classes.
         """
-        with open(self.input_path, "w") as f:
+        with open(self.plumed_input_path, "w") as f:
             f.write(self.input_content)
             
 class CollectiveVariableAssembler(Assembler):
@@ -264,7 +262,7 @@ class CollectiveVariableAssembler(Assembler):
     Parameters
     ----------
     
-        input_path (str):
+        plumed_input_path (str):
             Path to the PLUMED input file. The file that will be written.
             
         topology_path (str):
@@ -283,9 +281,9 @@ class CollectiveVariableAssembler(Assembler):
             Parameters for the collective variable. The parameters depend on the CV type.
 
     """
-    def __init__(self, input_path: str, topology_path: str, features_list: List[str], traj_stride: int, 
-                 cv_type: str, cv_params: Dict, ref_topology_path: Optional[str] = None):
-        super().__init__(input_path, topology_path, features_list, traj_stride, ref_topology_path)
+    def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], traj_stride: int, 
+                 cv_type: str, cv_params: Dict, fit_template_path: Optional[str] = None):
+        super().__init__(plumed_input_path, topology_path, features_list, traj_stride, fit_template_path)
         self.cv_type: Literal["linear", "non-linear"] = cv_type
         self.cv_params: Dict = cv_params
         self.cv_labels: List[str] = []
@@ -430,11 +428,11 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
     Assembler class to add enhanced sampling to a PLUMED input file.
     """
-    def __init__(self, input_path: str, topology_path: str, features_list: List[str], 
+    def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
-                 sampling_params: Dict, ref_topology_path: Optional[str] = None):
-        super().__init__(input_path, topology_path, features_list, traj_stride, 
-                         cv_type, cv_params, ref_topology_path)
+                 sampling_params: Dict, fit_template_path: Optional[str] = None):
+        super().__init__(plumed_input_path, topology_path, features_list, traj_stride, 
+                         cv_type, cv_params, fit_template_path)
         self.sampling_method = sampling_method  # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
         self.sampling_params = sampling_params  # Parameters for the enhanced sampling method
         self.bias_labels = []  # Labels of the bias potentials

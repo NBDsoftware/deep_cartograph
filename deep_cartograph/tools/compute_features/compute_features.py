@@ -211,13 +211,22 @@ def compute_features(
         if os.path.exists(colvars_path):
             logger.info(f"Skipping {top_name}. Colvars file already exists.")
             continue
+        
+        # If features contain coordinates, we need to fit the structure to the reference topology
+        need_fit_template = any(feat.startswith("coord") for feat in features_list)
+        if need_fit_template:
+            fit_template_path = os.path.join(traj_output_folder, "fit_template.pdb")
+            md.create_plumed_rmsd_template(reference_topology, fit_template_path)
+        else:
+            fit_template_path = None
 
         # Create the plumed input builder
         builder_args = {
-            'input_path': plumed_input_path,
+            'plumed_input_path': plumed_input_path,
             'topology_path': plumed_topology_path,
             'features_list': features_list,
-            'traj_stride': configuration['plumed_settings']['traj_stride']
+            'traj_stride': configuration['plumed_settings']['traj_stride'],
+            'fit_template_path': fit_template_path
         }
         plumed_builder = plumed.input.builder.ComputeFeaturesBuilder(**builder_args)
         plumed_builder.build(colvars_path)
