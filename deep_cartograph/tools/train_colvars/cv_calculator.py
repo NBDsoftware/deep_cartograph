@@ -301,12 +301,6 @@ class CVCalculator:
             self.normalize_cv()
 
             self.projected_training_data = self.project_data(self.training_data)
-
-            # Set the cv labels to the projected training data
-            self.projected_training_data.columns = self.cv_labels
-            
-            # Return file labels to the projected training data
-            self.projected_training_data['traj_label'] = self.training_data_labels
             
             self.save_model()
             
@@ -707,6 +701,9 @@ class LinearCalculator(CVCalculator):
 
         # Normalize the projected data
         projected_data = self.normalize_data(projected_data, self.cv_norm_mean, self.cv_norm_range)
+        
+        # Set the cv labels to the projected training data
+        projected_data.columns = self.cv_labels
 
         return projected_data
             

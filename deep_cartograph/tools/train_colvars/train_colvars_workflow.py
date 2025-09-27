@@ -253,6 +253,9 @@ class TrainColvarsWorkflow:
             # Run the CV calculator - obtain a dataframe with the projected training data
             projected_train_df = cv_calculator.run(self.cv_dimension)
             
+            # Return file labels to the projected training data
+            projected_train_df['traj_label'] = cv_calculator.training_data_labels
+
             # Update CV info
             self.cv_dimension = cv_calculator.get_cv_dimension()
             self.cv_labels = cv_calculator.get_labels()
