@@ -78,6 +78,49 @@ class CVCalculator:
         # Plumed files - used to construct plumed zip files
         self.plumed_files: List[str] = []
     
+    def load_model(self, 
+        input_path: str
+        ):
+        """
+        Loads a previously saved CV model from a zip file.
+        Here we load just the common files to all CV calculators.
+        Mainly the cv name, features labels and reference topology.
+        
+        Parameters
+        ----------
+        
+        model_path : str
+            Path to the zip file containing the CV model
+        """
+        
+        from deep_cartograph.modules.common import unzip_files # NOTE: todo
+        
+        # Unzip the model files to a temporary folder
+        temp_folder = os.path.join(self.parent_output_path, 'temp_model')
+        unzip_files(input_path, temp_folder)
+
+        # Load the cv name
+        with open(os.path.join(temp_folder, 'cv_name.txt'), 'r') as f:
+            self.cv_name = f.read().strip()
+            
+        # Move the temporary folder to the model output folder
+        self.model_output_folder = os.path.join(self.parent_output_path, self.cv_name, 'model')
+        shutil.move(temp_folder, self.model_output_folder)
+        
+        # Load the list of features reference labels used to compute the CV
+        with open(os.path.join(self.model_output_folder, 'features_labels.txt'), 'r') as f:
+            self.features_ref_labels = f.read().strip().split('\n')
+            self.num_features = len(self.features_ref_labels)
+        
+        # Load the reference topology used to compute the CV
+        ref_topology_path = os.path.join(self.model_output_folder, 'ref_topology.pdb')
+        if os.path.exists(ref_topology_path):
+            self.ref_topology_path = ref_topology_path
+        else:
+            self.ref_topology_path = None
+            logger.warning('''Reference topology file not found in the model. 
+                           Make sure to use the same topologies as the one used to train the CV.''')
+
     def create_output_folders(self):
         """ 
         Creates the output folders for this CV.
@@ -295,6 +338,9 @@ class CVCalculator:
         """
         Saves the collective variable to a zip file. Here we save the files common to all CV calculators.
         """
+        # Save the CV name into a text file
+        with open(os.path.join(self.model_output_folder, 'cv_name.txt'), 'w') as f:
+            f.write(self.cv_name)
         
         # Save the list of features reference labels used to compute the CV
         np.savetxt(os.path.join(self.model_output_folder, 'features_labels.txt'), self.features_ref_labels, fmt='%s')
@@ -487,6 +533,43 @@ class LinearCalculator(CVCalculator):
         self.weights_path: Union[str, None] = None 
         
         self.cv_stats: Dict[str, np.array] = {}
+        self.cv_norm_mean: np.array = None
+        self.cv_norm_range: np.array = None
+
+    def load_model(self, 
+        input_path: str
+        ):
+        """ 
+        Loads a previously saved CV model from a zip file.
+        Here we load the files specific to linear CV calculators.
+        Mainly the cv weights, the cv normalization parameters and the features normalization parameters.
+        """
+        super().load_model(input_path)
+        
+        # Load the cv weights
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.npy')
+        if not os.path.exists(weights_path):
+            logger.error(f'CV weights file not found in the model: {weights_path}')
+            raise FileNotFoundError(f'CV weights file not found in the model: {weights_path}')
+        self.cv = np.load(weights_path)
+        
+        # Load the cv normalization parameters
+        cv_norm_mean_path = os.path.join(self.model_output_folder, 'cv_norm_mean.npy')
+        cv_norm_range_path = os.path.join(self.model_output_folder, 'cv_norm_range.npy')
+        if not os.path.exists(cv_norm_mean_path) or not os.path.exists(cv_norm_range_path):
+            logger.error('CV normalization parameters not found in the model.')
+            raise FileNotFoundError('CV normalization parameters not found in the model.')
+        self.cv_norm_mean = np.load(cv_norm_mean_path)
+        self.cv_norm_range = np.load(cv_norm_range_path)
+
+        # Load the feature normalization parameters
+        features_norm_mean_path = os.path.join(self.model_output_folder, 'features_norm_mean.npy')
+        features_norm_range_path = os.path.join(self.model_output_folder, 'features_norm_range.npy')
+        if not os.path.exists(features_norm_mean_path) or not os.path.exists(features_norm_range_path):
+            logger.error('Features normalization parameters not found in the model.')
+            raise FileNotFoundError('Features normalization parameters not found in the model.')
+        self.features_norm_mean = np.load(features_norm_mean_path)
+        self.features_norm_range = np.load(features_norm_range_path)
 
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
@@ -543,32 +626,30 @@ class LinearCalculator(CVCalculator):
         
     def save_model(self):
         """
-        Saves the collective variable linear weights to a text file.
+        Saves the collective variable linear weights and normalization parameters to a zip file.
         """
         super().save_model()
         
         from deep_cartograph.modules.common import zip_files
         
         # Save the cv weights
-        weights_path = os.path.join(self.model_output_folder, f'{self.cv_name}_weights.npy')
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.npy')
         self.save_weights(weights_path)
 
-        # Check the cv stats have been computed
-        if self.cv_stats.get('max') is None or self.cv_stats.get('min') is None:
-            logger.error('CV stats have not been computed. Cannot save CV.')
-            raise ValueError('CV stats have not been computed. Cannot save CV.')
-            
-        # Save the max/min values of each dimension - part of the final cv definition
-        np.save(os.path.join(self.model_output_folder, 'cv_max.npy'), self.cv_stats['max'])
-        np.save(os.path.join(self.model_output_folder, 'cv_min.npy'), self.cv_stats['min'])
-        
-        if 'mean_std' in self.feats_norm_mode:
-            np.save(os.path.join(self.model_output_folder, 'features_mean.npy'), self.features_stats['mean'])
-            np.save(os.path.join(self.model_output_folder, 'features_std.npy'), self.features_stats['std'])
-        elif 'min_max' in self.feats_norm_mode:
-            np.save(os.path.join(self.model_output_folder, 'features_max.npy'), self.features_stats['max'])
-            np.save(os.path.join(self.model_output_folder, 'features_min.npy'), self.features_stats['min'])
-    
+        # Check the cv normalization parameters have been computed
+        if self.cv_norm_mean is None or self.cv_norm_range is None:
+            logger.error('CV normalization parameters have not been computed. Cannot save model.')
+            raise ValueError('CV normalization parameters have not been computed. Cannot save model.')
+        np.save(os.path.join(self.model_output_folder, 'cv_norm_mean.npy'), self.cv_norm_mean)
+        np.save(os.path.join(self.model_output_folder, 'cv_norm_range.npy'), self.cv_norm_range)
+
+        # Check the features normalization parameters have been computed
+        if self.features_norm_mean is None or self.features_norm_range is None:
+            logger.error('Features normalization parameters have not been computed. Cannot save model.')
+            raise ValueError('Features normalization parameters have not been computed. Cannot save model.')
+        np.save(os.path.join(self.model_output_folder, 'features_norm_mean.npy'), self.features_norm_mean)
+        np.save(os.path.join(self.model_output_folder, 'features_norm_range.npy'), self.features_norm_range)
+
         # Zip the model output folder
         model_path = os.path.join(self.output_path, 'model.zip')
         zip_files(model_path, self.model_output_folder)
@@ -618,19 +699,15 @@ class LinearCalculator(CVCalculator):
             raise ValueError('CV has not been computed. Cannot project data.')
             
         projected_data = data @ self.cv
-        
-        # Check the CV stats have been computed
-        if self.cv_stats.get('max') is None or self.cv_stats.get('min') is None:
-            logger.error('CV stats have not been computed. Cannot normalize projected data.')
-            raise ValueError('CV stats have not been computed. Cannot normalize projected data.')
-        
-        # Max min normalization between -1 and 1
-        normalizing_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
-        normalizing_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
-        
+
+        # Check the CV normalization parameters have been computed
+        if self.cv_norm_mean is None or self.cv_norm_range is None:
+            logger.error('CV normalization parameters have not been computed. Cannot normalize projected data.')
+            raise ValueError('CV normalization parameters have not been computed. Cannot normalize projected data.')
+
         # Normalize the projected data
-        projected_data = self.normalize_data(projected_data, normalizing_mean, normalizing_range)
-        
+        projected_data = self.normalize_data(projected_data, self.cv_norm_mean, self.cv_norm_range)
+
         return projected_data
             
     def normalize_cv(self):
@@ -643,6 +720,10 @@ class LinearCalculator(CVCalculator):
         stats_df = projected_training_data.agg(stats).T 
         self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         
+        # Max min normalization between -1 and 1
+        self.cv_norm_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
+        self.cv_norm_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
+
     def sensitivity_analysis(self):
         """  
         Perform a sensitivity analysis of the CV on the training data.
@@ -702,9 +783,8 @@ class NonLinear(CVCalculator):
         """ 
         Initializes a non-linear CV calculator.
         """
-        
+        from lightning import LightningModule
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
-        
         from mlcolvar.utils.trainer import MetricsCallback
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
                 
@@ -719,11 +799,11 @@ class NonLinear(CVCalculator):
         }
         
         # Main attributes
-        self.cv: Union[AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV, None] = None
-        self.checkpoint: Union[ModelCheckpoint, None] = None
-        self.metrics: Union[MetricsCallback, None] = None
-        self.weights_path: Union[str, None] = None
-        
+        self.cv: Optional[lightning.LightningModule] = None
+        self.checkpoint: Optional[ModelCheckpoint] = None
+        self.metrics: Optional[MetricsCallback] = None
+        self.weights_path: Optional[str] = None
+
         # Training configuration
         self.training_config: Dict = configuration['training'] 
         self.general_config: Dict = self.training_config['general']
@@ -775,7 +855,28 @@ class NonLinear(CVCalculator):
         
         # Set up the last layer of the decoder
         self.set_up_last_layer()
-    
+
+    def load_model(self, 
+        input_path: str
+        ):
+        """ 
+        Loads a previously saved CV model from a zip file.
+        Here we load the files specific to non-linear CV calculators.
+        Mainly the cv model in PyTorch format.
+        """
+        super().load_model(input_path)
+        
+        import torch
+        
+        # Load the cv model weights
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.pt')
+
+        if not os.path.exists(weights_path):
+            logger.error(f"CV model weights not found at {weights_path}")
+            raise FileNotFoundError(f"CV model weights not found at {weights_path}")
+        self.cv = torch.jit.load(weights_path)
+        self.cv.eval()
+
     def set_up_last_layer(self):
         """
         Sets up the last layer of the decoder based on the normalization of the features.
@@ -1294,7 +1395,7 @@ class NonLinear(CVCalculator):
         from deep_cartograph.modules.common import zip_files
         
         # Path to output model
-        weights_path = os.path.join(self.model_output_folder, f'{self.cv_name}_weights.pt')
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.pt')
 
         if self.cv is None:
             logger.error('No collective variable model to save.')
