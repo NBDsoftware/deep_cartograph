@@ -3,7 +3,7 @@ Deep Cartograph
 
 <img src="deep_cartograph/data/images/DeepCarto_logo.png" width="200">
 
-Deep cartograph is a package to analyze and enhance MD simulations.
+Deep cartograph is a package to analyze and enhance MD simulations. This software has been developed for the [European BioExcel](http://bioexcel.eu/), funded by the European Commission (EU Horizon Europe [101093290](https://cordis.europa.eu/project/id/101093290)).
 
 ---
 
@@ -134,3 +134,5 @@ A full copy of the license is available in the [LICENSE](LICENSE) file in this r
 If you wish to use this software in a commercial product, for-profit service, or any other commercial context, you must obtain a separate commercial license.
 
 Please contact **it@nostrumbiodiscovery.com** to inquire about purchasing a commercial license.
+
+![](https://bioexcel.eu/wp-content/uploads/2019/04/Bioexcell_logo_1080px_transp.png "Bioexcel")
