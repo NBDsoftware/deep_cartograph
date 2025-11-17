@@ -102,11 +102,13 @@ def traj_cluster(
     )
         
     # Run the workflow if clustering is enabled in the configuration
-    workflow.run()
+    output_paths = workflow.run()
     
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
+
+    return output_paths
 
 def set_logger(verbose: bool, log_path: str):
     """

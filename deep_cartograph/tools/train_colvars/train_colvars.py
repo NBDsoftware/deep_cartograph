@@ -117,34 +117,15 @@ def train_colvars(
         frames_per_sample=frames_per_sample,
         output_folder=output_folder
     )
-    
-    # Get the list of cvs to be trained/computed
-    cvs_list = workflow.get_cvs_list()
-    
-    # Check if the cvs have already been computed
-    all_cvs_computed = True
-    for cv in cvs_list:
-        all_cvs_computed = all_cvs_computed and workflow.check_cv_trajectories(cv)
-    
-    # Get the paths to the cv trajectories for each cv
-    cv_trajs = {}
-    for cv in cvs_list:
-        cv_trajs[cv] = workflow.get_cv_trajectories(cv)
-        
-    if all_cvs_computed:
-        logger.info("All collective variables have already been computed. Skipping collective variable computation.")
-        logger.info("""If you want to recompute them, please delete the train_colvars folder inside 
-                    the output folder or remove the -restart flag to create a new output folder.""")
-        return cv_trajs
 
     # Run the workflow
-    workflow.run()          # NOTE -> include the check for existing output inside the .run() method?
+    output_paths = workflow.run()
 
     # End timer
     elapsed_time = time.time() - start_time
     logger.info('Elapsed time (Train colvars): %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))
 
-    return cv_trajs
+    return output_paths
 
 def set_logger(verbose: bool, log_path: str):
     """

@@ -121,7 +121,38 @@ def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
     else:
         logger.info(f"Successfully created zip file: '{output_zip_path}'")
-       
+
+def unzip_files(zip_path: str, output_folder: str) -> None:
+    """
+    Extracts the contents of a ZIP file to a specified output folder.
+
+    Parameters
+    ----------
+        zip_path: The full path to the ZIP file to be extracted (e.g., '/path/to/archive.zip').
+        output_folder: The directory where the contents will be extracted. 
+                       If it doesn't exist, it will be created.
+    """
+    if not os.path.isfile(zip_path):
+        logger.error(f"ZIP file '{zip_path}' does not exist.")
+        return
+
+    # Create the output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+
+    logger.info(f"Starting extraction of '{zip_path}' to '{output_folder}'...")
+
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            zipf.extractall(output_folder)
+    except zipfile.BadZipFile:
+        logger.error(f"The file '{zip_path}' is not a valid ZIP file or is corrupted.")
+    except PermissionError:
+        logger.error("Permission denied. Check read permissions for the ZIP file and write permission for the output folder.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+    else:
+        logger.info(f"Successfully extracted '{zip_path}' to '{output_folder}'")
+        
 def remove_files(*file_paths: str) -> None:
     """ 
     Safely remove a list of files.

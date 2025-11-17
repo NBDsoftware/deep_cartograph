@@ -29,7 +29,7 @@ setup(name='deep_cartograph',
     },
     entry_points={
         "console_scripts": [
-            "deep_carto=deep_cartograph.run:main",
+            "deep_carto=deep_cartograph.deep_carto:main",
             "compute_features=deep_cartograph.tools.compute_features.compute_features:main",
             "filter_features=deep_cartograph.tools.filter_features.filter_features:main",
             "train_colvars=deep_cartograph.tools.train_colvars.train_colvars:main",

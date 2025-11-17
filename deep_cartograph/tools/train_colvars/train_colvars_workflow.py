@@ -13,7 +13,7 @@ from deep_cartograph.modules.figures import figures
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
 from deep_cartograph.modules.common import package_is_installed, validate_configuration, files_exist, merge_configurations 
 
-from deep_cartograph.tools.train_colvars.cv_calculator import cv_calculators_map
+from deep_cartograph.modules.cv_learning import cv_calculators_map
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class TrainColvarsWorkflow:
                  cv_dimension: Optional[int] = None,
                  cvs: Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]] = None,
                  frames_per_sample: Optional[int] = 1,
-                 output_folder: str = 'train_colvars'):
+                 output_folder: Optional[str] = 'train_colvars'):
         """
         Initializes the TrainColvarsWorkflow class.
         
@@ -116,9 +116,8 @@ class TrainColvarsWorkflow:
                 sys.exit(1)
          
     def create_fes_plots(self, 
-                         data_df: pd.DataFrame, 
-                         output_folder: str,
-                         sup_data: Optional[List[np.ndarray]] = None
+                         data: pd.DataFrame, 
+                         output_folder: str
         ):
         """ 
         Create all the required FES plots
@@ -130,23 +129,19 @@ class TrainColvarsWorkflow:
         Inputs
         ------
         
-        data_df: 
+        data: 
             Main data to compute the FES
             
         output_folder:
             Directory where the FES will be saved
-            
-        sup_data:
-            Optional supplementary data to compute the FES and show it alongside the main data
         """
         
         # 1D plots for each component
         # Iterate over the dimensions of the projected data
         for dimension in range(self.cv_dimension):
 
-            data_i = data_df.iloc[:,dimension]
+            data_i = data.iloc[:,dimension]
             label_i = [self.cv_labels[dimension]]
-            sup_data_i = [x[:,dimension] for x in sup_data] if sup_data else None
             
             fes_output_folder = os.path.join(output_folder, f'fes_{self.cv_type}_{dimension+1}')
             os.makedirs(fes_output_folder, exist_ok=True)
@@ -157,18 +152,17 @@ class TrainColvarsWorkflow:
                 cv_labels = label_i,
                 settings = self.figures_configuration['fes'],
                 output_path = fes_output_folder,
-                num_blocks = 100,  
-                sup_data = sup_data_i)
-        
+                num_blocks = 100
+            )
+
         if self.cv_dimension > 1:
             
             # Generate all possible 2D plots
             for i in range(0, self.cv_dimension-1):
                 for j in range(i+1, self.cv_dimension):
                     
-                    data_ij = data_df.iloc[:, [i,j]]
+                    data_ij = data.iloc[:, [i,j]]
                     label_ij = [self.cv_labels[i], self.cv_labels[j]]
-                    sup_data_ij = [x[:,[i,j]] for x in sup_data] if sup_data else None
     
                     fes_output_folder = os.path.join(output_folder, f'fes_{self.cv_type}_{i+1}_{j+1}')
                     os.makedirs(fes_output_folder, exist_ok=True)
@@ -179,14 +173,56 @@ class TrainColvarsWorkflow:
                         cv_labels = label_ij,
                         settings = self.figures_configuration['fes'],
                         output_path = fes_output_folder,
-                        num_blocks = 1,
-                        sup_data = sup_data_ij)
+                        num_blocks = 1
+                    )
 
-    def get_cvs_list(self) -> List[str]:
+    def workflow_finished(self) -> bool:
         """
-        Returns the list of collective variables to compute.
+        Check if the workflow has been completed.
         """
-        return self.cvs_list
+        
+        workflow_finished = True
+        
+        for cv_name in self.cvs_list:
+            cv_model_exists = self.check_cv_model(cv_name)
+            cv_trajs_exist = self.check_cv_trajectories(cv_name)
+            
+            if not (cv_model_exists and cv_trajs_exist):
+                workflow_finished = False
+                break
+        
+        return workflow_finished
+    
+    def get_output_paths(self) -> Dict:
+        """
+        Get the output paths of the workflow.
+        """
+        
+        output_paths = {}
+        
+        for cv_name in self.cvs_list:
+            cv_output_folder = os.path.join(self.output_folder, cv_name)
+            model_path = self.get_output_cv_model_path(cv_name)
+            traj_paths = self.get_output_cv_trajectories(cv_name)
+            
+            output_paths[cv_name] = {
+                'output_folder': cv_output_folder,
+                'model_path': model_path,
+                'traj_paths': traj_paths
+            }
+        
+        return output_paths
+    
+    def check_cv_model(self, cv_name: str) -> bool:
+        """
+        Check if the model for the given cv has been trained.
+        """
+        
+        model_path = self.get_output_cv_model_path(cv_name)
+        
+        cv_model_exists = files_exist(model_path, verbose=False)
+
+        return cv_model_exists
     
     def check_cv_trajectories(self, cv_name: str) -> bool:
         """
@@ -194,13 +230,22 @@ class TrainColvarsWorkflow:
         """
         
         # Get the trajectory paths along the given cv
-        traj_paths = self.get_cv_trajectories(cv_name)
+        traj_paths = self.get_output_cv_trajectories(cv_name)
 
         cv_trajs_exist = files_exist(*traj_paths, verbose=False)
 
         return cv_trajs_exist
 
-    def get_cv_trajectories(self, cv_name: str) -> List[str]:
+    def get_output_cv_model_path(self, cv_name: str) -> str:
+        """
+        Returns the path to the trained model for the given cv.
+        """
+        cv_output_folder = os.path.join(self.output_folder, cv_name)
+        model_path = os.path.join(cv_output_folder, 'model.zip')
+        
+        return model_path
+    
+    def get_output_cv_trajectories(self, cv_name: str) -> List[str]:
         """
         Returns the list of trajectories along the given cv.
         """
@@ -219,6 +264,16 @@ class TrainColvarsWorkflow:
         """
         Run the train_colvars workflow.
         """
+        
+        # Check if the workflow has been run already
+        if self.workflow_finished():
+
+            logger.info("Skipping collective variable computation.")
+            logger.info("All collective variables have already been computed.")
+            logger.info("""If you want to recompute them, please delete the train_colvars folder inside 
+                        the output folder or remove the -restart flag to create a new output folder.""")
+            
+            return self.get_output_paths()
         
         logger.info(f"Collective variables to compute: {self.cvs_list}")
         
@@ -291,12 +346,12 @@ class TrainColvarsWorkflow:
                     
                     fes_output_folder = os.path.join(traj_output_folder, 'fes')
                     self.create_fes_plots(
-                        data_df = projected_train_df_i,
+                        data = projected_train_df_i,
                         output_folder = fes_output_folder
                     )
                     
                     # Add a column with the frame of each sample
-                    projected_train_df_i['frame'] = np.arange(0, len(projected_train_df_i)) * self.frames_per_sample
+                    projected_train_df_i['frame'] = np.arange(len(projected_train_df_i)) * self.frames_per_sample
 
                     # 2D plots of the input data projected onto the CV space
                     if cv_calculator.get_cv_dimension() == 2:
@@ -318,3 +373,5 @@ class TrainColvarsWorkflow:
             else:
                 logger.warning(f"Projected colvars dataframe is empty for {cv_name}. Skipping this CV.")
                 continue
+            
+        return self.get_output_paths()
