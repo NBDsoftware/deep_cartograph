@@ -1,13 +1,14 @@
 import os
-import sys
+import shutil
 import logging
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from scipy.sparse import block_diag
-from typing import Dict, List, Tuple, Union, Literal, Optional
 from sklearn.decomposition import PCA       
+from typing import Dict, List, Tuple, Union, Literal, Optional
 
-from deep_cartograph.modules.common import closest_power_of_two
+from deep_cartograph.modules.plumed.colvars import create_dataframe_from_files
 import deep_cartograph.modules.md as md
 
 # Set logger
@@ -19,13 +20,7 @@ class CVCalculator:
     Base class for collective variables calculators.
     """
     def __init__(self, 
-        configuration: Dict,
-        train_colvars_paths: List[str],
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
+        configuration: Optional[Dict] = None,
         output_path: Optional[str] = None
         ):
         """
@@ -34,9 +29,182 @@ class CVCalculator:
         Parameters
         ----------
     
-        configuration
-            Configuration dictionary with settings for the CV
+        configuration (Optional)
+            Configuration dictionary with settings for the CV, not needed when loading a model from a zip file.
+
+        output_path (Optional)
+            Output path where the CV results folder will be created
+        """
+        
+        # Configuration
+        self.configuration: Dict = configuration if configuration is not None else {}
+        self.architecture_config: Dict = self.configuration.get('architecture', {})
+        self.training_reading_settings: Dict = self.configuration.get('input_colvars', {})
+        self.feats_norm_mode: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = self.configuration.get('features_normalization', 'none')
+        self.bias: Dict = self.configuration.get('bias', {})
+
+        # Topologies
+        self.ref_topology_path: Optional[str] = None
+        
+        # Training data
+        self.training_data: Optional[pd.DataFrame] = None
+        self.training_data_labels: Optional[np.array] = None
+
+        # Projection data labels
+        self.projection_data_labels: Optional[np.array] = None
+        
+        # Number of samples
+        self.num_samples: int = None
+        self.num_training_samples: Union[int, None] = None
+    
+        # Features
+        self.features_ref_labels: List[str] = []
+        self.features_stats: Dict[str, np.array] = {}
+        self.features_norm_mean: np.array = None
+        self.features_norm_range: np.array = None
+        self.num_features: int = 0
+        
+        # General CV attributes
+        self.cv_dimension: int = self.configuration.get('dimension')
+        self.cv_labels: List[str] = []
+        self.cv_name: str = None
+        self.cv_range: List[Tuple[float, float]] = [] 
+
+        # Parent output path
+        self.parent_output_path: str = output_path
+        
+        # Plumed files - used to construct plumed zip files
+        self.plumed_files: List[str] = []
+        
+        # Temporary attributes used when loading from a model
+        self.temp_model_path: Optional[str] = None
+
+    def __del__(self):
+        # Remove temporary unzipped model folder if it exists
+        if self.temp_model_path and os.path.exists(self.temp_model_path):
+            shutil.rmtree(self.temp_model_path)
             
+    @classmethod
+    def load(cls, model_path: str, output_path: str):
+        """
+        Factory method to load a CVCalculator from a model.zip file.
+
+        This method automatically determines the correct CVCalculator subclass
+        from the model file, instantiates it, and loads the data.
+
+        Parameters
+        ----------
+        model_path : str
+            Path to the model.zip file.
+        output_path : str
+            Output path where the CV results folder will be created.
+
+        Returns
+        -------
+        An instance of the appropriate CVCalculator subclass.
+        """
+        from deep_cartograph.modules.common import unzip_files
+        import json
+
+        # Define a path to unzip the model temporarily
+        temp_model_path = os.path.join(output_path, "model")
+        unzip_files(model_path, output_path)
+
+        # Read the metadata to determine the CV type
+        metadata_path = os.path.join(temp_model_path, 'metadata.json')
+        if not os.path.exists(metadata_path):
+            logger.error(f'Metadata file not found in the model: {metadata_path}')
+        else:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                cv_name = metadata.get('cv_name')
+
+        if not cv_name:
+            raise ValueError("Could not determine the CV name from the model file.")
+
+        # Look up the correct class from the map
+        CalculatorClass = cv_calculators_map.get(cv_name)
+        if not CalculatorClass:
+            raise TypeError(f"Unknown CV calculator name: {cv_name}")
+
+        # Instantiate the correct subclass
+        instance = CalculatorClass(output_path=output_path)
+
+        # Now load the cv weights and parameters from the unzipped files
+        instance._load_from_folder(temp_model_path)
+        instance.temp_model_path = temp_model_path
+
+        return instance
+
+    def _load_from_folder(self, folder_path: str):
+        """
+        Loads common model attributes from a directory.
+        This is called by the factory after unzipping.
+        """
+        import json
+        
+        # Read the metadata to determine the CV dimension
+        metadata_path = os.path.join(folder_path, 'metadata.json')
+        if not os.path.exists(metadata_path):
+            logger.error(f'Metadata file not found in the model: {metadata_path}')
+        else:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                self.cv_dimension = metadata.get('cv_dimension')
+                self.cv_name = metadata.get('cv_name')
+                self.set_labels()
+
+        # Set the model output folder directly
+        self.model_output_folder = os.path.join(self.parent_output_path, self.cv_name, 'model')
+        if os.path.exists(self.model_output_folder):
+            shutil.rmtree(self.model_output_folder) # Clean up previous runs
+        shutil.copytree(folder_path, self.model_output_folder)
+
+        # Load the list of features reference labels
+        with open(os.path.join(self.model_output_folder, 'features_labels.txt'), 'r') as f:
+            self.features_ref_labels = f.read().strip().split('\n')
+            self.num_features = len(self.features_ref_labels)
+
+        # Load the reference topology
+        ref_topology_path = os.path.join(self.model_output_folder, 'ref_topology.pdb')
+        if os.path.exists(ref_topology_path):
+            self.ref_topology_path = ref_topology_path
+        else:
+            self.ref_topology_path = None
+            logger.warning('Reference topology file not found in the model.')
+
+    def create_output_folders(self):
+        """ 
+        Creates the output folders for this CV.
+
+        Used after the specific CV calculator constructor has been called.
+        """
+        
+        # Create output folder for this CV
+        parent_path = Path(self.parent_output_path)
+        self.output_path = parent_path / self.cv_name
+        self.output_path.mkdir(parents=True, exist_ok=True)
+
+        # Create output folders to sensitivity_analysis, training and model
+        self.sensitivity_output_folder = self.output_path / 'sensitivity_analysis'
+        self.sensitivity_output_folder.mkdir(parents=True, exist_ok=True)
+        self.training_output_folder = self.output_path / 'training'
+        self.training_output_folder.mkdir(parents=True, exist_ok=True)
+        self.model_output_folder = self.output_path / 'model'
+        self.model_output_folder.mkdir(parents=True, exist_ok=True)
+
+    def load_training_data(self,
+        train_colvars_paths: List[str],
+        train_topology_paths: Optional[List[str]] = None, 
+        ref_topology_path: Optional[str] = None, 
+        features_list: Optional[List[str]] = None, 
+        ):
+        """
+        Loads the training data from the colvars files
+    
+        Parameters
+        ----------
+
         train_colvars_paths 
             List of paths to colvars files with the main data used for training
                 
@@ -46,118 +214,44 @@ class CVCalculator:
         ref_topology_path (Optional)
             Path to the reference topology file. If None, the first topology file is used as reference topology
             
-        feature_constraints (Optional)
-            List with the features to use for the training or str with regex to filter feature names.
-            
-        sup_colvars_paths (Optional)
-            List of paths to colvars files with supplementary data to project alongside the FES of the training data 
-            (e.g. experimental structures). If None, no supplementary data is used
-        
-        sup_topology_paths (Optional)
-            List of paths to topology files corresponding to the supplementary colvars files (same order)
-            
-        output_path (Optional)
-            Output path where the CV results folder will be created
+        features_list (Optional)
+            List with the features to use for the training (names from reference topology) or None to use all features in the colvars files
         """
         
-        # Total number of samples
-        self.num_samples: int = None
-        # Filter dictionary
-        self.feature_filter: Union[Dict, None] = self.get_feature_filter(feature_constraints)
-        
-        # Configuration
-        self.configuration: Dict = configuration
-        self.architecture_config: Dict = configuration['architecture']
-        self.training_reading_settings: Dict = configuration['input_colvars']
-        self.feats_norm_mode: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = configuration['features_normalization']
-        self.bias: Dict = configuration['bias']
-        
-        # Colvars paths
-        self.train_colvars_paths: List[str] = train_colvars_paths
-        self.sup_colvars_paths: Optional[List[str]] = sup_colvars_paths
-        
         # Topologies
-        self.topologies: Optional[List[str]] = train_topology_paths     # NOTE: Should these be attributes?
-        self.ref_topology_path: Optional[str] = ref_topology_path
-        if self.topologies is not None:
+        train_topology_paths
+        self.ref_topology_path = ref_topology_path
+        if train_topology_paths is not None:
             if self.ref_topology_path is None:
-                self.ref_topology_path = self.topologies[0]
+                self.ref_topology_path = train_topology_paths[0]
         
         # Filtered training data used to train / compute the CVs
-        logger.info('Reading training data from colvars files...')
-        reading_args = {
-            'colvars_paths': train_colvars_paths,
-            'topology_paths': self.topologies,
-            'ref_topology_path': self.ref_topology_path,
-            'load_args': self.training_reading_settings}
-        self.training_data: pd.DataFrame = self.read_data(**reading_args)
-        self.training_data_labels: np.array = self.training_data.pop('traj_label').to_numpy()
-
-        # Projected training data NOTE: make sure they have the labels from the training_data
-        self.projected_training_data: Optional[pd.DataFrame] = None
+        logger.info('Reading training data from colvars files...')    
+        self.training_data = create_dataframe_from_files( 
+            colvars_paths = train_colvars_paths,
+            topology_paths = train_topology_paths,
+            reference_topology = self.ref_topology_path,   
+            features_list = features_list,  
+            file_label = 'traj_label',
+            **self.training_reading_settings
+        )
         
-        # Number of samples used to train / compute the CV - depends on the specific CV calculator
-        self.num_training_samples: Union[int, None] = None
+        self.training_data_labels = self.training_data.pop('traj_label').to_numpy()
         
-        # Read the supplementary data
-        if sup_colvars_paths:
-            logger.info('Reading supplementary data from supplementary colvars files...')
-            reading_args = {
-                'colvars_paths': sup_colvars_paths,
-                'topology_paths': sup_topology_paths,
-                'ref_topology_path': ref_topology_path,
-                'load_args': self.training_reading_settings
-            }
-            self.supplementary_data: pd.DataFrame = self.read_data(**reading_args)
-            self.supplementary_data_labels: np.array = self.supplementary_data.pop('traj_label').to_numpy()
-    
-            # Make sure we use the same features between training and supplementary data
-            self.training_data, self.supplementary_data = self.align_dataframes(self.training_data, self.supplementary_data)
-            
-        else:
-            self.supplementary_data: Optional[pd.DataFrame] = None
-            
         # List of features used for training (features in the colvars files after filtering) 
-        self.feature_labels: List[str] = self.training_data.columns.tolist()
-        self.num_features: int = len(self.feature_labels)
+        self.features_ref_labels: List[str] = self.training_data.columns.tolist()
+        self.num_features: int = len(self.features_ref_labels)
         logger.info(f'Number of features: {self.num_features}')
         
         # Compute training data statistics
         stats = ['mean', 'std', 'min', 'max']
         stats_df = self.training_data.agg(stats).T
-        self.features_stats: Dict[str, np.array] = {stat: stats_df[stat].to_numpy() for stat in stats}
+        self.features_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         self.features_norm_mean, self.features_norm_range = self.prepare_normalization()
-
-        # Projected supplementary data
-        self.projected_supplementary_data : Optional[pd.DataFrame] = None
         
-        # General CV attributes
-        self.cv_dimension: int = configuration['dimension']
-        self.cv_labels: List[str] = []
-        self.cv_name: str = None
-        self.cv_range: List[Tuple[float, float]] = [] 
-
-        self.output_path: str = output_path
-    
-    def initialize_cv(self):
-        """
-        Initialize the specific CV. 
-        
-        These are tasks that are common to all CV calculators
-        but have to be done after the specific CV calculator constructor has been called.
-        
-            - Creates the output folder for the CV using the cv_name
-            - Logs the start of the calculation using the cv_name
-        """
         # Get the total number of samples
         self.num_samples = len(self.training_data)
         logger.info(f'Number of samples: {self.num_samples}')
-        
-        # Create output folder for this CV
-        self.output_path = os.path.join(self.output_path, self.cv_name)
-        os.makedirs(self.output_path, exist_ok=True)
-
-        logger.info(f'Calculating {cv_names_map[self.cv_name]} ...')
 
     def cv_ready(self) -> bool:
         """
@@ -216,156 +310,17 @@ class CVCalculator:
             ranges = (self.features_stats["max"] - self.features_stats["min"]) / 2
         else:
             logger.error(f'Normalization mode {self.feats_norm_mode} not recognized. Exiting...')
-            sys.exit(1)
+            raise ValueError(f'Normalization mode {self.feats_norm_mode} not recognized.')
         
         # Check the ranges are not close to zero
         ranges = sanitize_ranges(ranges)
         
         return means, ranges
-        
-    # Readers
-    def read_data(self, 
-                  colvars_paths: List[str],
-                  topology_paths: Optional[List[str]] = None,   
-                  ref_topology_path: Optional[str] = None,
-                  load_args: Optional[Dict] = None
-        ) -> pd.DataFrame:
-        """
-        Read the data from the colvars files, translate the feature names using the 
-        topology files and filter the features based on the feature filter.
-        
-        Parameters
-        ----------
-        
-        colvars_paths : str
-            List of paths to colvars files with the data
-            
-        topology_paths : Optional[str]
-            List of paths to topology files corresponding to the colvars files (same order)
-        
-        ref_topology_path : Optional[str]
-            Path to the reference topology file. If None, the first topology file is used as reference topology
-        
-        load_args : Optional[Dict]
-            Dictionary with the arguments to load the colvars files. 
-            
-        Returns
-        -------
-        
-        df : pd.DataFrame
-            Dataframe with the data from the colvars files
-        """
-        from deep_cartograph.modules.plumed.colvars import create_dataframe_from_files
-        
-        if load_args is None:
-            load_args = {}
-        df = create_dataframe_from_files(
-            colvars_paths = colvars_paths,
-            topology_paths = topology_paths,
-            reference_topology = ref_topology_path,   
-            filter_args = self.feature_filter,  
-            create_labels = True,
-            **load_args
-        )
-        
-        # If the dataframe is empty, raise an error
-        if df.empty:
-            logger.error(f'No data found in the colvars files: {colvars_paths}. Exiting...')
-            sys.exit(1)
-        
-        return df
-    
-    def align_dataframes(self, training_data: pd.DataFrame, supplementary_data: pd.DataFrame):
-        """
-        Align two pandas DataFrames to have the same columns in the same order, 
-        based on the columns of the first DataFrame.
-
-        This function:
-        - Identifies the common columns between training_data and supplementary_data.
-        - Keeps the column order as in training_data.
-        - Drops any columns not shared by both DataFrames.
-        - Prints a warning if any columns are dropped from either DataFrame.
-
-        Parameters
-        ----------
-            training_data : pd.DataFrame
-                The reference DataFrame whose column order is preserved.
-            supplementary_data : pd.DataFrame
-                The DataFrame to be aligned with training_data.
-
-        Returns
-        -------
-            training_data_aligned : pd.DataFrame
-                A version of training_data with only the common columns.
-            supplementary_data_aligned : pd.DataFrame
-                A version of supplementary_data with columns aligned to training_data's order.
-        """
-        
-        logger.debug(f"Aligning Training and Supplementary data...")
-    
-        # Get column name sets
-        cols1 = set(training_data.columns)
-        cols2 = set(supplementary_data.columns)
-
-        # Find common columns, preserving order of training_data
-        common_cols = [col for col in training_data.columns if col in cols2]
-        
-        # If no common columns, raise an error
-        if not common_cols:
-            logger.error("No common columns found between training_data and supplementary_data. Exiting...")
-            sys.exit(1)
-
-        # Warn if any columns are discarded
-        dropped_from_training_data = cols1 - cols2
-        dropped_from_supplementary_data = cols2 - cols1
-
-        if dropped_from_training_data:
-            logger.warning(f"Dropping columns from training_data: {sorted(dropped_from_training_data)}")
-        if dropped_from_supplementary_data:
-            logger.warning(f"Dropping columns from supplementary_data: {sorted(dropped_from_supplementary_data)}")
-
-        # Align both DataFrames
-        training_data_aligned = training_data[common_cols]
-        supplementary_data_aligned = supplementary_data[common_cols]
-
-        return training_data_aligned, supplementary_data_aligned
-
-    def get_feature_filter(self, feature_constraints: Union[List[str], str]) -> Dict:
-        """
-        Create the filter dictionary to select the features to use from the feature constraints.
-
-        Parameters
-        ----------
-
-        feature_constraints
-            List of features to use or regex to select the features
-        
-        Returns
-        -------
-        
-        feature_filter
-            Dictionary with the filter to select the features
-        """
-
-        if isinstance(feature_constraints, list):
-            # List of features is given
-            feature_filter = dict(items=feature_constraints)
-
-        elif isinstance(feature_constraints, str):
-            # Regex is given
-            feature_filter = dict(regex=feature_constraints)
-            
-        else:
-            # No constraints are given
-            feature_filter = None
-        
-        return feature_filter
     
     # Main CV-related methods
     def run(self, cv_dimension: Union[int, None] = None) -> Union[pd.DataFrame, None]:
         """
         Runs the CV calculator.
-        Overwrites the dimension in the configuration if provided.
         
         Parameters
         ----------
@@ -392,31 +347,16 @@ class CVCalculator:
         # If the CV was computed successfully
         if self.cv is not None:
             
-            # NOTE: using max min normalization on the projected training data
             self.normalize_cv()
+
+            # Project the normalized training data onto the CV space
+            projected_training_data = self.project_data(self.training_data, normalize_data=False)
             
-            self.project_training_data()
-            
-            # Set the cv labels to the projected training data
-            self.projected_training_data.columns = self.cv_labels
-            
-            # Return file labels to the projected training data
-            self.projected_training_data['traj_label'] = self.training_data_labels
-            
-            # NOTE: If the CV is normalized, this data might fall outside the expected range - check when plotting
-            self.project_supplementary_data() 
-            
-            if self.projected_supplementary_data is not None:
-                # Set the cv labels to the projected supplementary data
-                self.projected_supplementary_data.columns = self.cv_labels
-                # Return file labels to the projected supplementary data
-                self.projected_supplementary_data['traj_label'] = self.supplementary_data_labels
-            
-            self.save_cv()
+            self.save_model()
             
             self.sensitivity_analysis()
 
-        return self.projected_training_data
+        return projected_training_data
         
     def compute_cv(self):
         """
@@ -425,12 +365,36 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def save_cv(self):
+    def save_weights(self, weights_path: str):
         """
-        Saves the collective variable weights to a file. Implement in subclasses.
+        Saves the collective variable to a text file. Implement in subclasses.
+        
+        Parameters
+        ----------
+        
+        weights_path : str
+            Path to the output file where the weights will be saved
         """
         
-        raise NotImplementedError
+        raise NotImplementedError   
+    
+    def save_model(self):
+        """
+        Saves the collective variable to a zip file. Here we save the files common to all CV calculators.
+        """
+        import json
+
+        # Save cv metadata
+        metadata = {'cv_name': self.cv_name, 'cv_dimension': self.cv_dimension}
+        with open(os.path.join(self.model_output_folder, 'metadata.json'), 'w') as f:
+            json.dump(metadata, f)
+        
+        # Save the list of features reference labels used to compute the CV
+        np.savetxt(os.path.join(self.model_output_folder, 'features_labels.txt'), self.features_ref_labels, fmt='%s')
+            
+        # Save the reference topology used to compute the CV
+        if self.ref_topology_path is not None:
+            md.create_pdb(self.ref_topology_path, os.path.join(self.model_output_folder, 'ref_topology.pdb'))
 
     def get_cv_parameters(self) -> Dict:
         """
@@ -446,20 +410,60 @@ class CVCalculator:
         
         raise NotImplementedError
     
-    def project_training_data(self):
-        """ 
-        Projects the training data onto the CV space.
-        Implement in subclasses.
+    def project_data(self, 
+                     data: Optional[pd.DataFrame], 
+                     normalize_data: bool = True
+        ) -> Union[pd.DataFrame, None]:
         """
-        
-    def project_supplementary_data(self):
-        """
-        Projects the supplementary data onto the CV space. 
-        Implement in subclasses.
+        Projects the data onto the CV space. Implement in subclasses.
         """
         
         raise NotImplementedError
-          
+    
+    def project_colvars(self, 
+                        colvars_paths: Union[List[str], str], 
+                        topology_paths: Union[List[str], str]
+        ) -> Union[pd.DataFrame, None]:
+        """
+        Projects a colvars file onto the CV space.
+        
+        Parameters
+        ----------
+        
+        colvars_paths : List[str] or str
+            Paths to the colvars files to project
+
+        topology_paths : List[str] or str
+            Paths to the topology files corresponding to the colvars files
+            
+        Returns
+        -------
+        
+        projected_data : pd.DataFrame
+            Projected data or None if the projection fails
+        """
+        
+        if self.ref_topology_path is None:
+            logger.warning('Reference topology not set. Make sure the colvars file matches the training data.')
+            return None
+
+        # Read the colvars file and translate the features
+        colvars_data = create_dataframe_from_files(
+            colvars_paths = colvars_paths,
+            topology_paths = topology_paths,
+            reference_topology = self.ref_topology_path,
+            features_list = self.features_ref_labels,
+            file_label='traj_label',
+        )
+        
+        # Extract the trajectory labels
+        self.projection_data_labels = colvars_data.pop('traj_label').to_numpy()
+
+        # Project the data onto the CV space
+        projected_data = self.project_data(colvars_data)
+        
+        return projected_data
+        
     def set_labels(self):
         """
         Sets the labels of the CV.
@@ -476,63 +480,101 @@ class CVCalculator:
         """
         
         raise NotImplementedError
-        
-    def write_plumed_input(self, topology: str, output_folder: str) -> None:
+
+    def write_plumed_files(self, topology: str, output_folder: str) -> None:
         """
-        Creates a plumed input file that computes the collective variable from the features 
-        for the given topology.
+        Creates all files needed to compute the collective variable from the features
+        for the given topology using plumed.
         
         Parameters
         ----------
         
         topology : str
-            Path to the topology file
+            Path to the topology file of the system (used to translate the features)
             
         output_folder : str
-            Path to the output folder where the plumed input file and the mda topology will be saved
+            Path to the output folder where the files will be written
         """
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
         from deep_cartograph.modules.plumed.features import FeatureTranslator
+        from deep_cartograph.modules.md import create_plumed_rmsd_template
+        
+        from deep_cartograph.modules.common import zip_files, remove_files
+        
+        # Reset plumed files list
+        self.plumed_files = []
 
-        # Save new PLUMED-compliant topology
+        # Save new PLUMED-compliant topology for this trajectory - we try to avoid the 
+        # limitations of the PLUMED PDB parser going through MDAnalysis :)
         plumed_topology_path = os.path.join(output_folder, 'plumed_topology.pdb')
         md.create_pdb(topology, plumed_topology_path)
+        self.plumed_files.append(plumed_topology_path)
         
-        # Save new temporary reference PLUMED-compliant topology
+        # Translate the features from the reference topology to this system's topology
         ref_plumed_topology_path = os.path.join(output_folder, 'ref_plumed_topology.pdb')
         md.create_pdb(self.ref_topology_path, ref_plumed_topology_path)
+        features_list = FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.features_ref_labels).run()
         
-        # Translate the features from the reference topology to this topology
-        features_list = FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.feature_labels).run()
-        
-        # Construct builder arguments for these features and this CV
+        # If features contain coordinates, we need to fit the structure to the reference topology
+        need_fit_template = any(feat.startswith("coord") for feat in features_list)
+        if need_fit_template:
+            fit_template_path = os.path.join(output_folder, "fit_template.pdb")
+            create_plumed_rmsd_template(self.ref_topology_path, fit_template_path)
+            self.plumed_files.append(fit_template_path)
+        else:
+            fit_template_path = None
+
+        # If the CV is non-linear, add the pytorch model file
+        if self.get_cv_type() == 'non-linear':
+            # Save the model weights and add to the plumed files
+            self.weights_path = os.path.join(output_folder, f'{self.cv_name}_weights.pt')
+            self.save_weights(self.weights_path)
+            self.plumed_files.append(self.weights_path)
+
+        # Build the plumed input file to track the CV
+        plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat')
+        self.plumed_files.append(plumed_input_path)
         builder_args = {
-            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}.dat'),
+            'plumed_input_path': plumed_input_path,
             'topology_path': plumed_topology_path,
-            'feature_list': features_list,
+            'features_list': features_list,
             'traj_stride': 1,
             'cv_type': self.get_cv_type(),
             'cv_params': self.get_cv_parameters(),
-            'ref_topology_path': self.ref_topology_path
+            'fit_template_path': fit_template_path
         }
-        
-        # Build the plumed input file to track the CV
         plumed_builder = ComputeCVBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_out.dat')
         
+        # Zip all the accumulated plumed files into a single file
+        unbiased_plumed_path = os.path.join(output_folder, f'plumed_{self.cv_name}_unbiased.zip')
+        zip_files(unbiased_plumed_path, *self.plumed_files)
+
+        # Remove previous plumed input file
+        os.remove(plumed_input_path)
+        self.plumed_files.remove(plumed_input_path)
+        
+        # Build the plumed input file to perform enhanced sampling
+        plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
+        self.plumed_files.append(plumed_input_path)
         builder_args.update({
             'sampling_method': self.bias["method"], 
             'sampling_params': self.bias["args"],
-            'input_path': os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
-            })
-            
-        # Build the plumed input file to perform enhanced sampling
+            'plumed_input_path': plumed_input_path
+        })
         plumed_builder = ComputeEnhancedSamplingBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_{self.bias["method"]}_out.dat')
         
+        # Zip all the accumulated plumed files into a single file
+        biased_plumed_path = os.path.join(output_folder, f'plumed_{self.cv_name}_biased.zip')
+        zip_files(biased_plumed_path, *self.plumed_files)
+
+        # Remove previous plumed files
+        remove_files(*self.plumed_files)
+        
         # Erase the temporary reference topology
         os.remove(ref_plumed_topology_path)
-
+        
     def sensitivity_analysis(self):
         """
         Perform a sensitivity analysis of the CV on the training data.
@@ -540,15 +582,7 @@ class CVCalculator:
         """
         raise NotImplementedError("Sensitivity analysis not implemented for this CV calculator.")
     
-    # Getters
-    def get_projected_sup_data(self) -> Union[pd.DataFrame, None]:
-        """
-        Returns the projected supplementary data. 
-        May be None if no supplementary data was provided or the CV computation failed.
-        """
-        
-        return self.projected_supplementary_data
-    
+    # Getters  
     def get_labels(self) -> List[str]:
         """
         Returns the labels of the collective variable.
@@ -570,46 +604,57 @@ class CVCalculator:
         
         return self.cv_range
 
-# Subclass for linear collective variables calculators
+
+# Types of Collective Variable calculators
 class LinearCalculator(CVCalculator):
     """
     Base class for linear collective variable calculators
     """
     
     def __init__(self, 
-        configuration: Dict, 
-        train_colvars_paths: List[str], 
-        train_topology_paths: Optional[List[str]] = None,
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None
+        configuration: Optional[Dict] = None, 
+        output_path: Optional[str] = None
         ):
         """ 
         Initializes a linear CV calculator.
         """
         super().__init__(
             configuration, 
-            train_colvars_paths, 
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths, 
-            sup_topology_paths, 
             output_path)
                 
         # Main attributes
-        self.cv: Union[np.array, None] = None 
-        self.weights_path: Union[str, None] = None 
+        self.cv: Optional[np.array] = None
+        self.weights_path: Optional[str] = None
+
+        self.cv_stats: Dict[str, np.array] = {}
+        self.cv_norm_mean: Optional[np.array] = None
+        self.cv_norm_range: Optional[np.array] = None
+
+    def _load_from_folder(self, folder_path: str):
+        """Loads linear model specific files from a directory."""
+        super()._load_from_folder(folder_path)
+
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.npy')
+        self.cv = np.load(weights_path)
+
+        cv_norm_mean_path = os.path.join(self.model_output_folder, 'cv_norm_mean.npy')
+        self.cv_norm_mean = np.load(cv_norm_mean_path)
+
+        cv_norm_range_path = os.path.join(self.model_output_folder, 'cv_norm_range.npy')
+        self.cv_norm_range = np.load(cv_norm_range_path)
+
+        features_norm_mean_path = os.path.join(self.model_output_folder, 'features_norm_mean.npy')
+        self.features_norm_mean = np.load(features_norm_mean_path)
+
+        features_norm_range_path = os.path.join(self.model_output_folder, 'features_norm_range.npy')
+        self.features_norm_range = np.load(features_norm_range_path)
+
+    def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
-        # Normalize the data NOTE: I'm assuming here that after init is called I will just need the normalized data
+        # Normalize the training data
         self.training_data: pd.DataFrame = self.normalize_data(self.training_data, self.features_norm_mean, self.features_norm_range)
-    
-        # If supplementary data is provided, normalize it as well
-        if self.supplementary_data is not None:
-            self.supplementary_data = self.normalize_data(self.supplementary_data, self.features_norm_mean, self.features_norm_range)
-            
+        
     def normalize_data(self, 
                        data: pd.DataFrame,
                        normalizing_mean: np.array,
@@ -636,31 +681,61 @@ class LinearCalculator(CVCalculator):
         normalized_data : pd.DataFrame
             Normalized data
         """
-        
-        # Normalize the data in place
-        for feature, m, r in zip(data.columns, normalizing_mean, normalizing_range):
-            data[feature] = (data[feature] - m) / r
-        
-        return data
-        
-    def save_cv(self):
+
+        return (data - normalizing_mean) / normalizing_range
+    
+    def save_weights(self, weights_path: str):
         """
         Saves the collective variable linear weights to a text file.
+        
+        Parameters
+        ----------
+        
+        weights_path : str
+            Path to the output file where the weights will be saved
         """
         
-        # Path to output weights
-        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_weights.txt')
+        if self.cv is None:
+            logger.error('CV has not been computed. Cannot save weights.')
+            raise ValueError('CV has not been computed. Cannot save weights.')
+            
+        np.save(weights_path, self.cv)
+        logger.debug(f'CV weights saved to {weights_path}')
         
-        np.savetxt(self.weights_path, self.cv, fmt='%.7g')
+    def save_model(self):
+        """
+        Saves the collective variable linear weights and normalization parameters to a zip file.
+        """
+        super().save_model()
         
-        if 'mean_std' in self.feats_norm_mode:
-            np.savetxt(os.path.join(self.output_path, 'features_mean.txt'), self.features_stats['mean'], fmt='%.7g')
-            np.savetxt(os.path.join(self.output_path, 'features_std.txt'), self.features_stats['std'], fmt='%.7g')
-        elif 'min_max' in self.feats_norm_mode:
-            np.savetxt(os.path.join(self.output_path, 'features_max.txt'), self.features_stats['max'], fmt='%.7g')
-            np.savetxt(os.path.join(self.output_path, 'features_min.txt'), self.features_stats['min'], fmt='%.7g')
+        from deep_cartograph.modules.common import zip_files
         
-        logger.info(f'Collective variable weights saved to {self.weights_path}')
+        # Save the cv weights
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.npy')
+        self.save_weights(weights_path)
+
+        # Check the cv normalization parameters have been computed
+        if self.cv_norm_mean is None or self.cv_norm_range is None:
+            logger.error('CV normalization parameters have not been computed. Cannot save model.')
+            raise ValueError('CV normalization parameters have not been computed. Cannot save model.')
+        np.save(os.path.join(self.model_output_folder, 'cv_norm_mean.npy'), self.cv_norm_mean)
+        np.save(os.path.join(self.model_output_folder, 'cv_norm_range.npy'), self.cv_norm_range)
+
+        # Check the features normalization parameters have been computed
+        if self.features_norm_mean is None or self.features_norm_range is None:
+            logger.error('Features normalization parameters have not been computed. Cannot save model.')
+            raise ValueError('Features normalization parameters have not been computed. Cannot save model.')
+        np.save(os.path.join(self.model_output_folder, 'features_norm_mean.npy'), self.features_norm_mean)
+        np.save(os.path.join(self.model_output_folder, 'features_norm_range.npy'), self.features_norm_range)
+
+        # Zip the model output folder
+        model_path = os.path.join(self.output_path, 'model.zip')
+        zip_files(model_path, self.model_output_folder)
+
+        # Remove the unzipped model output folder
+        shutil.rmtree(self.model_output_folder)
+
+        logger.info(f'Model saved to {model_path}')
 
     def get_cv_parameters(self):
         """ 
@@ -686,46 +761,60 @@ class LinearCalculator(CVCalculator):
         
         return 'linear'
     
-    def project_training_data(self):
+    def project_data(self, 
+                     data: Optional[pd.DataFrame], 
+                     normalize_data: bool = True
+        ) -> Union[pd.DataFrame, None]:
         """
-        Projects the training data onto the CV space.
-        """
+        Projects the data onto the normalized CV space.
         
-        logger.info(f'Projecting training data onto {cv_names_map[self.cv_name]} ...')
-        
-        # Project the training data onto the CV space
-        self.projected_training_data = self.training_data @ self.cv
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Data to project onto the CV space
 
-        # Max min normalization between -1 and 1
-        normalizing_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
-        normalizing_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
+        normalize_data : bool
+            Whether to normalize the data before projection, not needed when re
 
-        # Normalize the projected training data
-        self.projected_training_data = self.normalize_data(self.projected_training_data, 
-                                                           normalizing_mean, 
-                                                           normalizing_range)
-        
-    def project_supplementary_data(self):
-        """
-        Projects the supplementary data onto the CV space.
+        Returns
+        -------
+        projected_data : pd.DataFrame
+            Projected data or None if the projection fails
         """
         
-        # If supplementary data is not empty
-        if self.supplementary_data is not None:
-            
-            logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
-             
-            # Project the supplementary data onto the CV space NOTE: check the dimensions make sense and match
-            self.projected_supplementary_data = self.supplementary_data @ self.cv
-            
-            # Max min normalization between -1 and 1
-            normalizing_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
-            normalizing_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
-            
-            # Normalize the projected supplementary data
-            self.projected_supplementary_data = self.normalize_data(self.projected_supplementary_data, 
-                                                                    normalizing_mean, 
-                                                                    normalizing_range)
+        if data is None:
+            return None
+
+        logger.debug(f"Projecting data onto {cv_names_map[self.cv_name]} ...")
+        
+        # Check the cv has been computed
+        if self.cv is None:
+            logger.error('CV has not been computed. Cannot project data.')
+            raise ValueError('CV has not been computed. Cannot project data.')
+        
+        if normalize_data:
+            # Check the feature normalization parameters have been computed
+            if self.features_norm_mean is None or self.features_norm_range is None:
+                logger.error('Feature normalization parameters have not been computed. Cannot normalize data.')
+                raise ValueError('Feature normalization parameters have not been computed. Cannot normalize data.')
+        
+            # Normalize the data
+            data = self.normalize_data(data, self.features_norm_mean, self.features_norm_range)
+        
+        projected_data = data @ self.cv
+
+        # Check the CV normalization parameters have been computed
+        if self.cv_norm_mean is None or self.cv_norm_range is None:
+            logger.error('CV normalization parameters have not been computed. Cannot normalize projected data.')
+            raise ValueError('CV normalization parameters have not been computed. Cannot normalize projected data.')
+        
+        # Normalize the projected data
+        projected_data = self.normalize_data(projected_data, self.cv_norm_mean, self.cv_norm_range)
+
+        # Set the cv labels to the projected training data
+        projected_data.columns = self.cv_labels
+
+        return projected_data
             
     def normalize_cv(self):
         
@@ -737,9 +826,9 @@ class LinearCalculator(CVCalculator):
         stats_df = projected_training_data.agg(stats).T 
         self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         
-        # Save the max/min values of each dimension - part of the final cv definition
-        np.savetxt(os.path.join(self.output_path, 'cv_max.txt'), self.cv_stats['max'], fmt='%.7g')
-        np.savetxt(os.path.join(self.output_path, 'cv_min.txt'), self.cv_stats['min'], fmt='%.7g')
+        # Max min normalization between -1 and 1
+        self.cv_norm_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
+        self.cv_norm_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
 
     def sensitivity_analysis(self):
         """  
@@ -755,7 +844,7 @@ class LinearCalculator(CVCalculator):
         for cv_index in range(cv_sensitivities.shape[1]):
             
             # Create directory for sensitivity analysis results
-            sensitivity_output_path = os.path.join(self.output_path, f'sensitivity_analysis_{cv_index+1}')
+            sensitivity_output_path = os.path.join(self.sensitivity_output_folder, f'sensitivity_analysis_{cv_index+1}')
             os.makedirs(sensitivity_output_path, exist_ok=True)
             
             sensitivities = cv_sensitivities[:, cv_index]
@@ -764,7 +853,7 @@ class LinearCalculator(CVCalculator):
             # Order the sensitivities from lowest to highest, order the feature labels accordingly
             indices = np.argsort(sensitivities)
             sensitivities = sensitivities[indices]
-            feature_labels = np.array(self.feature_labels)[indices]
+            feature_labels = np.array(self.features_ref_labels)[indices]
         
             # Create a Dictionary with the results
             results = {
@@ -788,42 +877,25 @@ class LinearCalculator(CVCalculator):
 
         return
 
-# Subclass for non-linear collective variables calculators
 class NonLinear(CVCalculator):
     """
     Non-linear collective variables calculator (e.g. Autoencoder)
     """
     
     def __init__(self, 
-        configuration: Dict, 
-        train_colvars_paths: List[str], 
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None,
-        sup_topology_paths: Optional[List[str]] = None, 
-        output_path: Union[str, None] = None
+        configuration: Optional[Dict] = None,
+        output_path: Optional[str] = None
         ):
         """ 
         Initializes a non-linear CV calculator.
         """
-        
+        from lightning import LightningModule
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
-        
         from mlcolvar.utils.trainer import MetricsCallback
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
-        
-        import torch 
-        import lightning
                 
         super().__init__(
             configuration,
-            train_colvars_paths,  
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths, 
-            sup_topology_paths,
             output_path)
 
         self.nonlinear_cv_map: Dict = {
@@ -833,56 +905,84 @@ class NonLinear(CVCalculator):
         }
         
         # Main attributes
-        self.cv: Union[AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV, None] = None
-        self.checkpoint: Union[ModelCheckpoint, None] = None
-        self.metrics: Union[MetricsCallback, None] = None
-        self.weights_path: Union[str, None] = None
-        
+        self.cv: Optional[lightning.LightningModule] = None
+        self.checkpoint: Optional[ModelCheckpoint] = None
+        self.metrics: Optional[MetricsCallback] = None
+        self.weights_path: Optional[str] = None
+
         # Training configuration
-        self.training_config: Dict = configuration['training'] 
-        self.general_config: Dict = self.training_config['general']
-        self.early_stopping_config: Dict  = self.training_config['early_stopping']
-        self.optimizer_config: Dict = self.training_config['optimizer']
-        self.lr_scheduler_config: Optional[Dict] = self.training_config['lr_scheduler_config']
-        self.lr_scheduler: Optional[Dict] = self.training_config['lr_scheduler']
-        self.model_to_save: Literal['best', 'last'] = self.training_config['model_to_save']
-        
+        self.training_config: Dict = self.configuration.get('training', {})
+        self.general_config: Dict = self.training_config.get('general', {})
+        self.early_stopping_config: Dict  = self.training_config.get('early_stopping', {})
+        self.optimizer_config: Dict = self.training_config.get('optimizer', {})
+        self.lr_scheduler_config: Optional[Dict] = self.training_config.get('lr_scheduler_config', {})
+        self.lr_scheduler: Optional[Dict] = self.training_config.get('lr_scheduler', {})
+        self.model_to_save: Literal['best', 'last'] = self.training_config.get('model_to_save', 'best')
+
         # Training attributes
-        self.max_tries: int = self.general_config['max_tries']
-        self.seed: int = self.general_config['seed']
-        self.training_validation_lengths: List = self.general_config['lengths']
-        self.batch_size: int = self.general_config['batch_size']
-        self.shuffle: bool = self.general_config['shuffle']
-        self.random_split: bool = self.general_config['random_split']
-        self.max_epochs: int = self.general_config['max_epochs']
-        self.check_val_every_n_epoch: int = self.general_config['check_val_every_n_epoch']
-        self.save_check_every_n_epoch: int = self.general_config['save_check_every_n_epoch']
-        
+        self.max_tries: int = self.general_config.get('max_tries', 5)
+        self.seed: int = self.general_config.get('seed', 42)
+        self.training_validation_lengths: List = self.general_config.get('lengths', [])
+        self.batch_size: int = self.general_config.get('batch_size', 32)
+        self.shuffle: bool = self.general_config.get('shuffle', True)
+        self.random_split: bool = self.general_config.get('random_split', True)
+        self.max_epochs: int = self.general_config.get('max_epochs', 100)
+        self.check_val_every_n_epoch: int = self.general_config.get('check_val_every_n_epoch', 1)
+        self.save_check_every_n_epoch: int = self.general_config.get('save_check_every_n_epoch', 5)
+        self.training_metrics_paths: List[str] = []
+
         self.cv_score: Union[float, None] = None
         self.tries: int = 0
-        
-        self.patience: int = self.early_stopping_config['patience']
-        self.min_delta: float = self.early_stopping_config['min_delta']
-                
+
+        self.early_stop_patience: int = self.early_stopping_config.get('patience')
+        self.early_stop_delta: float = self.early_stopping_config.get('min_delta')
+
         # Neural network settings
-        self.encoder_config: Dict = self.architecture_config['encoder']
-        self.decoder_config: Optional[Dict] = self.architecture_config['decoder'] 
-        
-        # Set layers from NN config 
-        self.encoder_layers: List = self.set_encoder_layers()
-        self.decoder_layers: Optional[List] = self.set_decoder_layers()
-        
-        # Set options from NN config
+        self.encoder_config: Dict = self.architecture_config.get('encoder', {})
+        self.decoder_config: Optional[Dict] = self.architecture_config.get('decoder', {})
+        self.encoder_hidden_layers: List[int] = self.encoder_config.get('layers', [])
+        self.decoder_hidden_layers: Optional[List[int]] = self.decoder_config.get('layers', []) if self.decoder_config is not None else None
+
+        # Set options from NNs
+        self.encoder_config.pop('layers', {})
         self.encoder_options: Dict = self.encoder_config
-        self.encoder_options.pop('layers', {})
-        if self.decoder_config is not None:
-            self.decoder_options = self.decoder_config
-            self.decoder_options.pop('layers', {})
+        if self.decoder_config is None:
+            logger.warning('No decoder configuration provided. Using encoder options for the decoder.')
+            self.decoder_options: Dict = self.encoder_options
         else:
-            self.decoder_options = self.encoder_options
+            self.decoder_config.pop('layers', {})
+            self.decoder_options: Dict = self.decoder_config
         
+        # CV options for the mlcolvar CV class
+        self.cv_options: Dict = {}
+            
+        # Optimizer
+        self.opt_name: str = None
+        self.optimizer_options: Dict = {}
+
+    def _load_from_folder(self, folder_path: str):
+        """ 
+        Loads non-linear model specific files from a directory.
+        """
+        super()._load_from_folder(folder_path)
+
+        import torch
+        
+        # Load the cv model weights
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.pt')
+
+        if not os.path.exists(weights_path):
+            logger.error(f"CV model weights not found at {weights_path}")
+            raise FileNotFoundError(f"CV model weights not found at {weights_path}")
+        self.cv = torch.jit.load(weights_path)
+        self.cv.eval()
+
+    def set_up_last_layer(self):
+        """
+        Sets up the last layer of the decoder based on the normalization of the features.
+        """
         # Add activation function to the last layer of the decoder based on the normalization of the features
-        if isinstance(self.decoder_options['activation'], list):
+        if isinstance(self.decoder_options.get('activation'), list):
             # Normalized using min max with range [0, 1] -> use sigmoid activation
             if self.feats_norm_mode == 'min_max_range1':
                 self.decoder_options['activation'].append('custom_sigmoid')
@@ -907,47 +1007,8 @@ class NonLinear(CVCalculator):
             self.decoder_options['batchnorm'].append(False)
         elif self.decoder_options['batchnorm'] is True:
             logger.warning('''Batch normalization is set to True for all layers of the decoder, 
-                           including the last layer. Make sure this is intended or choose batchnorm as a list.''')
-        
-        # Normalization of features in the Non-linear models
-        # No normalization
-        if self.feats_norm_mode == 'none':
-            self.cv_options: Dict = {'norm_in' : None}
-        # Corresponding normalization, see prepare_normalization() in base class
-        else:
-            self.cv_options: Dict = {'norm_in' : {'mode' : 'mean_std',
-                                                  'mean': torch.tensor(self.features_norm_mean),
-                                                  'range': torch.tensor(self.features_norm_range)}}
-
-        # Optimizer
-        self.opt_name: str = self.optimizer_config['name']
-        self.optimizer_options: Dict = self.optimizer_config['kwargs']
-        
-        self.cv_options["optimizer"] = self.optimizer_options
-        
-        # Construct the lr_scheduler option - scheduler class and its kwargs
-        if self.lr_scheduler is not None:           
-            # Obtain the class from the name
-            lr_scheduler_class = getattr(torch.optim.lr_scheduler, self.lr_scheduler['name'], None)
-            if lr_scheduler_class is None:
-                logger.error(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized. Exiting...')
-                sys.exit(1)
-                
-            self.cv_options["lr_scheduler"] = {
-                "scheduler" : lr_scheduler_class    
-            }   
-            
-            self.cv_options["lr_scheduler"].update(self.lr_scheduler.get('kwargs', {}))
-            
-            # NEW FEATURE
-            # If OneCycleLR is used -> Adjust epochs and steps_per_epoch according to the training configuration and the number of samples
-            # If ReduceLROnPlateau is used -> Adjust patience and cooldown
-            # Check where do we have the info to do the update
-            
-            # Construct the lr_scheduler_config option
-            if self.lr_scheduler_config is not None:
-                self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
-    
+                           including the last layer. Make sure this is intended or provide a list for batchnorm.''')
+                       
     def _adjust_lr_scheduler(self, datamodule):
         """
         Adjusts LR scheduler parameters based on the training configuration.
@@ -976,22 +1037,24 @@ class NonLinear(CVCalculator):
             # Adjust the interval from the configuration to 'step'
             self.cv_options["lr_scheduler_config"]["interval"] = 'step'
             
-            logger.info(f"OneCycleLR configured with epochs = {self.cv_options['lr_scheduler']['epochs']}, steps_per_epoch = {self.cv_options['lr_scheduler'].get('steps_per_epoch')}")
-            
         elif scheduler_name == 'ReduceLROnPlateau':
             
             # Give reasonable default values if not provided in the configuration
-            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', min(self.patience // 4, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 5))
-            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', min(self.patience // 8, (self.max_epochs - self.start_epoch - self.n_epochs_anneal) // 10))
-            
+            self.cv_options["lr_scheduler"]['patience'] = self.cv_options["lr_scheduler"].get('patience', self.early_stop_patience // 4)
+            self.cv_options["lr_scheduler"]['cooldown'] = self.cv_options["lr_scheduler"].get('cooldown', self.early_stop_patience // 8)
+
             # Adjust the interval from the configuration to 'epoch'
             self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
             
-            logger.info(f"ReduceLROnPlateau configured with patience = {self.cv_options['lr_scheduler']['patience']}, cooldown = {self.cv_options['lr_scheduler']['cooldown']}")
-            
     def check_batch_size(self):
+        """  
+        Check the batch size is not larger than the number of samples in the training set.
+        If it is, set the batch size to the closest power of two smaller than the number
+        of samples in the training set.
+        """
+        from deep_cartograph.modules.common import closest_power_of_two
         
-       # Get the number of samples in the training set
+        # Get the number of samples in the training set
         self.num_training_samples = int(self.num_samples*self.training_validation_lengths[0])
         
         # Check the batch size is not larger than the number of samples in the training set
@@ -1045,8 +1108,48 @@ class NonLinear(CVCalculator):
         
         return None
         
-    def create_model(self):
+    def set_up_cv_options(self):
+        """
+        Sets up the options for the CV based on the training configuration and the normalization of the features
+        """
+        import torch 
         
+        # Set up the last layer of the decoder
+        self.set_up_last_layer()
+        
+        # Normalization of features in the Non-linear models
+        if self.feats_norm_mode == 'none':
+            self.cv_options = {'norm_in' : None}
+        else:
+            self.cv_options = {'norm_in' : {'mode' : 'mean_std',
+                                            'mean': torch.tensor(self.features_norm_mean),
+                                            'range': torch.tensor(self.features_norm_range)}}
+
+        # Optimizer
+        self.opt_name = self.optimizer_config['name']
+        self.optimizer_options = self.optimizer_config['kwargs']
+        
+        self.cv_options["optimizer"] = self.optimizer_options
+        
+        # Construct the lr_scheduler option - scheduler class and its kwargs
+        if self.lr_scheduler is not None:           
+            # Obtain the class from the name
+            lr_scheduler_class = getattr(torch.optim.lr_scheduler, self.lr_scheduler['name'], None)
+            if lr_scheduler_class is None:
+                logger.error(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized. Exiting...')
+                raise ValueError(f'Learning rate scheduler {self.lr_scheduler["name"]} not recognized.')
+                
+            self.cv_options["lr_scheduler"] = {
+                "scheduler" : lr_scheduler_class    
+            }   
+            
+            self.cv_options["lr_scheduler"].update(self.lr_scheduler.get('kwargs', {}))
+            
+            # Construct the lr_scheduler_config option
+            if self.lr_scheduler_config is not None:
+                self.cv_options["lr_scheduler_config"] = self.lr_scheduler_config
+                
+    def create_model(self):
         """
         Implement this method in subclasses to create the non-linear model.
         
@@ -1060,6 +1163,7 @@ class NonLinear(CVCalculator):
         model : AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
             Non-linear model object
         """
+
         raise NotImplementedError("This method should be implemented in subclasses.")
 
     def get_callbacks(self) -> List:
@@ -1081,14 +1185,15 @@ class NonLinear(CVCalculator):
         # Define EarlyStopping callback to stop training
         self.early_stopping = EarlyStopping(
             monitor="valid_loss", 
-            min_delta=self.min_delta, 
-            patience=self.patience, 
+            min_delta=self.early_stop_delta, 
+            patience=self.early_stop_patience, 
             mode = "min")
         general_callbacks.append(self.early_stopping)
 
         # Define ModelCheckpoint callback to save the best/last model
+        checkpoints_path = os.path.join(self.training_output_folder, 'checkpoints')
         self.checkpoint = ModelCheckpoint(
-            dirpath=self.output_path,                  # Directory to save the checkpoints  
+            dirpath=checkpoints_path,                  # Directory to save the checkpoints  
             monitor="valid_loss",                      # Quantity to monitor
             save_last=True,                            # Save the last checkpoint - useful for VAE
             save_top_k=1,                              # Number of best models to save according to the quantity monitored
@@ -1109,6 +1214,10 @@ class NonLinear(CVCalculator):
         from mlcolvar.data import DictModule
 
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
+        
+        self.set_up_cv_options()
+        
+        self.check_batch_size()
 
         training_succeeded = False
         while not training_succeeded and (self.tries < self.max_tries):
@@ -1244,9 +1353,9 @@ class NonLinear(CVCalculator):
 
         return True
     
-    def save_loss(self):
+    def plot_training_metrics(self):
         """
-        Saves the loss of the training and common metrics to all CVs
+        Plots and saves training metrics common to all Non-linear CVs.
         """
         from mlcolvar.utils.plot import plot_metrics
         import torch
@@ -1274,9 +1383,10 @@ class NonLinear(CVCalculator):
                     if key not in cpu_metrics:
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
-                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    filepath = os.path.join(self.training_output_folder, f'{key}.npy')
+                    self.training_metrics_paths.append(filepath)
                     np.save(filepath, np.array(cpu_metrics[key]))
-                np.savetxt(os.path.join(self.output_path, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
+                np.savetxt(os.path.join(self.training_output_folder, 'model_score.txt'), np.array([best_model_score_cpu]), fmt='%.7g')
                     
             # Plot general metrics to all Non-linear CVs
             
@@ -1291,7 +1401,7 @@ class NonLinear(CVCalculator):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'loss.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Training and/or validation loss not found in metrics. Loss plot will not be generated.')
@@ -1306,7 +1416,7 @@ class NonLinear(CVCalculator):
                     'yscale': 'log'
                 }
                 ax = plot_metrics(cpu_metrics, **lr_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'learning_rate.png'), dpi=300, bbox_inches='tight')
+                ax.figure.savefig(os.path.join(self.training_output_folder, f'learning_rate.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
             else:
                 logger.warning('Learning rate not found in metrics. Learning rate plot will not be generated.')
@@ -1348,42 +1458,62 @@ class NonLinear(CVCalculator):
         if successfully_trained:
         
             # Save the loss 
-            self.save_loss()
+            self.plot_training_metrics()
 
             # After training, put model in evaluation mode - needed for cv normalization and data projection
             self.cv.eval()
 
-    def save_cv(self):
+    def save_weights(self, weights_path: str):
+        """ 
+        Saves the collective variable weights to a pytorch file.
         """
-        Saves the collective variable model to a PyTorch TorchScript file.
-        """
-
-        # Path to output model
-        self.weights_path = os.path.join(self.output_path, f'{self.cv_name}_model.pt')
-
-        if self.cv is None:
-            logger.error('No collective variable model to save.')
-            return
 
         successfully_saved = False
         try:
             # The model is set to evaluation mode before tracing
             self.cv.eval() 
-            self.cv.to_torchscript(file_path=self.weights_path, method='trace')
-            logger.info(f'Collective variable model saved to {self.weights_path}')
+            self.cv.to_torchscript(file_path=weights_path, method='trace')
+            logger.debug(f'Collective variable model saved to {weights_path}')
             successfully_saved = True
         except Exception as e:
             logger.error(f'Failed to save TorchScript model using trace mode. Error: {e}')
             
         if not successfully_saved:
-            logger.info('Attempting to save the model using script mode instead of trace...')
+            logger.debug('Attempting to save the model using script mode instead of trace...')
             try:
                 # Attempt to save the model using script mode
-                self.cv.to_torchscript(file_path=self.weights_path, method='script')
-                logger.info(f'Collective variable model saved to {self.weights_path} using script mode')
+                self.cv.to_torchscript(file_path=weights_path, method='script')
+                logger.debug(f'Collective variable model saved to {weights_path} using script mode')
             except Exception as e:
                 logger.error(f'Failed to save TorchScript model using script mode. Error: {e}')
-                
+        
+    def save_model(self):
+        """
+        Saves the collective variable model to a PyTorch TorchScript file.
+        """
+        super().save_model()   
+
+        from deep_cartograph.modules.common import zip_files
+        
+        # Path to output model
+        weights_path = os.path.join(self.model_output_folder, 'cv_weights.pt')
+
+        if self.cv is None:
+            logger.error('No collective variable model to save.')
+            return
+
+        # Save the model weights
+        self.save_weights(weights_path)
+
+        # Zip the model output folder
+        model_path = os.path.join(self.output_path, 'model.zip')
+        zip_files(model_path, self.model_output_folder)
+
+        # Remove the unzipped model output folder
+        shutil.rmtree(self.model_output_folder)
+
+        logger.info(f'Model saved to {model_path}')
+   
     def get_cv_parameters(self):
         """
         Get the collective variable parameters.
@@ -1401,49 +1531,53 @@ class NonLinear(CVCalculator):
         """
         
         return "non-linear"
-    
-    def project_supplementary_data(self):
-        """
-        Projects the supplementary data onto the CV space.
-        """
-        
-        import torch
-        
-        # If supplementary data is not empty
-        if self.supplementary_data is not None:
-            
-            logger.info(f'Projecting supplementary data onto {cv_names_map[self.cv_name]} ...')
 
-            with torch.no_grad():
-                # Move data to the device of the model (GPU or CPU)
-                supplementary_data_on_model_device = torch.tensor(self.supplementary_data.values).to(self.cv.device)
-                # Project the supplementary data onto the CV space
-                projected_sup_tensor = self.cv(supplementary_data_on_model_device)
-            
-            # Move to CPU and convert to numpy array
-            projected_sup_array = projected_sup_tensor.cpu().numpy()
-            
-            self.projected_supplementary_data = pd.DataFrame(projected_sup_array, columns=self.cv_labels)
-
-    def project_training_data(self):
+    def project_data(self, 
+                     data: pd.DataFrame,
+                     normalize_data: bool = True
+                     ) -> pd.DataFrame:
         """
-        Projects the training data onto the CV space.
+        Projects the given data onto the CV space.
+        
+        Parameters
+        ----------
+        
+        data : pd.DataFrame
+            Data to be projected onto the CV space.
+            
+        normalize_data : bool, optional
+            Whether to normalize the data before projection. This argument is ignored for non-linear CVs,
+            as the normalization is handled within the model itself. Default is True.
         """
         import torch 
         
-        logger.info(f'Projecting training data onto {cv_names_map[self.cv_name]} ...')
+        if self.cv is None:
+            logger.error('No collective variable model to project data.')
+            raise ValueError('No collective variable model to project data.')
         
-        # Project the training data onto the CV space
+        logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
+        
+        # Project the data onto the CV space
         with torch.no_grad():
+            
+            # Try to find the device of the model
+            if hasattr(self.cv, 'device'):
+                logger.debug(f'Model device found: {self.cv.device}')
+            else:
+                logger.debug('Model device not found, defaulting to CPU.')
+                self.cv.device = torch.device('cpu')
+                
             # Move data to the device of the model (GPU or CPU)
-            training_data_on_model_device = torch.tensor(self.training_data.values).to(self.cv.device)
-            # Project the training data onto the CV space
-            projected_training_tensor = self.cv(training_data_on_model_device)
+            data_on_model_device = torch.tensor(data.values).to(self.cv.device)
+            # Project the data onto the CV space
+            projected_tensor = self.cv(data_on_model_device)
             
         # Move to CPU and convert to numpy array
-        projected_training_array = projected_training_tensor.cpu().numpy()
+        projected_array = projected_tensor.cpu().numpy()
             
-        self.projected_training_data = pd.DataFrame(projected_training_array, columns=self.cv_labels)   
+        projected_data = pd.DataFrame(projected_array, columns=self.cv_labels)   
+        
+        return projected_data  
 
     def sensitivity_analysis(self):
         """  
@@ -1453,57 +1587,43 @@ class NonLinear(CVCalculator):
         
         from deep_cartograph.modules.figures import plot_sensitivity_results
         
-        # Create directory for sensitivity analysis results
-        sensitivity_output_path = os.path.join(self.output_path, 'sensitivity_analysis')
-        os.makedirs(sensitivity_output_path, exist_ok=True)
-        
         # Compute the sensitivity analysis
         results = sensitivity_analysis(self.cv, self.training_input_dtset, metric="mean_abs_val", 
                                        feature_names=None, per_class=False, plot_mode=None)
         
         # Save the sensitivities to a file
         sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
-        sensitivity_path = os.path.join(sensitivity_output_path, 'sensitivity_analysis.csv')
+        sensitivity_path = os.path.join(self.sensitivity_output_folder, 'sensitivity_analysis.csv')
         sensitivity_df.to_csv(sensitivity_path)
         
         # Plot the sensitivity results
         modes = ['barh', 'violin']
-        plot_sensitivity_results(results, modes=modes, output_folder=sensitivity_output_path)
+        plot_sensitivity_results(results, modes=modes, output_folder=self.sensitivity_output_folder)
 
-# Collective variables calculators
+
+# Specific Collective Variable calculators
 class PCACalculator(LinearCalculator):
     """
     Principal component analysis calculator.
     """
-
+    
     def __init__(self, 
-        configuration: Dict,
-        train_colvars_paths: List[str], 
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None
+        configuration: Optional[Dict] = None,
+        output_path: Optional[str] = None
         ):
         """
         Initializes the PCA calculator.
         """
-        
         super().__init__(
-            configuration,
-            train_colvars_paths, 
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths, 
-            sup_topology_paths,
+            configuration, 
             output_path)
         
         self.cv_name = 'pca'
+
+        self.create_output_folders()
         
-        self.initialize_cv()
-        
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
+
     def compute_cv(self):
         """
         Compute Principal Component Analysis (PCA) on the input features. 
@@ -1529,37 +1649,29 @@ class TICACalculator(LinearCalculator):
     """
     
     def __init__(self, 
-        configuration: Dict,
-        train_colvars_paths: List[str],  
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None
+        configuration: Optional[Dict] = None,
+        output_path: Optional[str] = None
         ):
         """
         Initializes the TICA calculator.
         """
-        
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         super().__init__(
-            configuration,
-            train_colvars_paths, 
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths, 
-            sup_topology_paths,
+            configuration, 
             output_path)
         
         self.cv_name = 'tica'
         
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration['lag_time'])
+        self.create_output_folders()
         
-        self.initialize_cv()
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
+    
+    def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
+
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
+        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration.get('lag_time'))
         
     def compute_cv(self):
         """
@@ -1592,44 +1704,36 @@ class HTICACalculator(LinearCalculator):
     and Computation 12, no. 12 (December 13, 2016): 6118–29. https://doi.org/10.1021/acs.jctc.6b00738.
     """
     def __init__(self, 
-        configuration: Dict,
-        train_colvars_paths: List[str], 
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None
+        configuration: Optional[Dict] = None,
+        output_path: Optional[str] = None
         ):
         """
         Initializes the HTICA calculator.
         """
         
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         super().__init__(
-            configuration,
-            train_colvars_paths,  
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths, 
-            sup_topology_paths,
+            configuration, 
             output_path)
         
         self.cv_name = 'htica'
         
-        self.num_subspaces = configuration['num_subspaces']
-        self.subspaces_dimension = configuration['subspaces_dimension']
+        self.num_subspaces = self.configuration.get('num_subspaces')
+        self.subspaces_dimension = self.configuration.get('subspaces_dimension')
+        
+        self.create_output_folders()
+        
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
+    
+    def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
+        
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         # NOTE: Are we duplicating the data here? :(
         # NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration['lag_time'])
-        
-        self.initialize_cv()
-        
-    
+        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration.get('lag_time'))
+
     def compute_cv(self):
         """
         Compute Hierarchical Time-lagged Independent Component Analysis (TICA) on the input features. 
@@ -1707,52 +1811,35 @@ class AECalculator(NonLinear):
     Autoencoder calculator.
     """
     def __init__(self, 
-        configuration: Dict,
-        train_colvars_paths: List[str],  
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
-        output_path: Union[str, None] = None
+        configuration: Optional[Dict] = None,
+        output_path: Optional[str] = None
         ):
         """
         Initializes the Autoencoder calculator.
         """
-        import torch 
-        
-        from mlcolvar.data import DictDataset
         
         super().__init__(
-            configuration,
-            train_colvars_paths, 
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths,
-            sup_topology_paths, 
+            configuration, 
             output_path)
-        
-        # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
         
         self.cv_name = 'ae'
         
-        self.initialize_cv()
+        self.create_output_folders()
         
-        self.check_batch_size()
-        
-        # NOTE: In the future we might want to allow for a custom last layer before the latent space
-        # Currently it will be the same as the one for the hidden layers - if not a list
-        # or no activation/dropout is applied to the last layer
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
         
         # Add encoder activation and dropout option for last layer if these are lists
-        if isinstance(self.encoder_options['dropout'], list):
+        if isinstance(self.encoder_options.get('dropout'), list):
             self.encoder_options['dropout'].append(None)
-        if isinstance(self.encoder_options['activation'], list):
+        if isinstance(self.encoder_options.get('activation'), list):
             self.encoder_options['activation'].append(None)
 
+    def set_up_cv_options(self):
+        """ 
+        Update cv options for the Autoencoder.
+        """
+        super().set_up_cv_options()
+        
         # Update options
         cv_options = {
             "encoder": self.encoder_options,
@@ -1760,7 +1847,16 @@ class AECalculator(NonLinear):
             "optimizer": self.optimizer_options
         }
         self.cv_options.update(cv_options)
-
+        
+    def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
+        
+        import torch 
+        from mlcolvar.data import DictDataset
+        # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
+        dictionary = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(dictionary, feature_names=self.features_ref_labels)
+        
     def set_encoder_layers(self) -> List:
         """ 
         Set the layers for the encoder of the Autoencoder
@@ -1773,7 +1869,7 @@ class AECalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.architecture_config['encoder']['layers'] + [self.cv_dimension]
+        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
     
     def set_decoder_layers(self) -> Optional[List]:
         """ 
@@ -1791,8 +1887,8 @@ class AECalculator(NonLinear):
         if self.architecture_config['decoder'] is None:
             return None
         else:
-            return [self.cv_dimension] + self.architecture_config['decoder']['layers'] + [self.num_features]
-        
+            return [self.cv_dimension] + self.decoder_hidden_layers + [self.num_features]
+
     def create_model(self):
         """ 
         Create the Autoencoder model.
@@ -1804,6 +1900,10 @@ class AECalculator(NonLinear):
         """
         
         from mlcolvar.cvs import AutoEncoderCV
+
+        # Set layers from NN settings 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
         
         model = AutoEncoderCV(
             encoder_layers=self.encoder_layers, 
@@ -1811,61 +1911,69 @@ class AECalculator(NonLinear):
             options=self.cv_options)
          
         return model
+
+    def plot_training_metrics(self): 
+        """ 
+        Plots and saves training metrics specific to Deep TICA.
+        """      
+        super().plot_training_metrics()
+        
+        from deep_cartograph.modules.common import zip_files, remove_files
+    
+        metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
         
 class DeepTICACalculator(NonLinear):
     """
     DeepTICA calculator.
     """
-    def __init__(self,  
-        configuration: Dict, 
-        train_colvars_paths: List[str], 
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
+    def __init__(self, 
+        configuration: Optional[Dict] = None,
         output_path: Union[str, None] = None
         ):
         """
         Initializes the DeepTICA calculator.
         """      
-        
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         super().__init__(
-            configuration,
-            train_colvars_paths,
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths, 
-            sup_topology_paths,
+            configuration, 
             output_path)
         
         self.cv_name = 'deep_tica'
+
+        self.create_output_folders()
         
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration['lag_time'])
-        
-        self.initialize_cv()
-        
-        self.check_batch_size()
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
             
         # NOTE: In the future we might want to allow for a custom last layer before the latent space
         # Currently it will be the same as the one for the hidden layers - if not a list
         # or no activation/dropout is applied to the last layer
         
         # Add encoder activation and dropout option for last layer if these are lists
-        if isinstance(self.encoder_options['dropout'], list):
+        if isinstance(self.encoder_options.get('dropout'), list):
             self.encoder_options['dropout'].append(None)
-        if isinstance(self.encoder_options['activation'], list):
+        if isinstance(self.encoder_options.get('activation'), list):
             self.encoder_options['activation'].append(None)
-            
+
+    def set_up_cv_options(self):
+        """ 
+        Update cv options for DeepTICA.
+        """
+        super().set_up_cv_options()
+        
         # Update options
         cv_options = {
             "nn": self.encoder_options
         }
         self.cv_options.update(cv_options)
+        
+    def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
+        
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
+        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
 
     def set_encoder_layers(self) -> List:
         """ 
@@ -1879,8 +1987,8 @@ class DeepTICACalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_config['layers'] + [self.cv_dimension]
-    
+        return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
+
     def create_model(self):
         """
         Create the DeepTICA model.
@@ -1893,6 +2001,10 @@ class DeepTICACalculator(NonLinear):
         """
         
         from mlcolvar.cvs import DeepTICA
+
+        # Set layers from NN settings 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
         
         model = DeepTICA(
             layers=self.encoder_layers,
@@ -1900,14 +2012,15 @@ class DeepTICACalculator(NonLinear):
         
         return model
     
-    def save_cv(self):
-        """
-        Save the eigenvectors and eigenvalues of the best model.
-        """
-        from mlcolvar.utils.plot import plot_metrics
-        
-        super().save_cv()
-            
+    def plot_training_metrics(self): 
+        """ 
+        Plots and saves training metrics specific to Deep TICA.
+        """      
+        super().plot_training_metrics()
+    
+        from deep_cartograph.modules.common import zip_files, remove_files
+        from mlcolvar.utils.plot import plot_metrics   
+
         # Find the epoch where the best model was found
         best_index = self.metrics.metrics['valid_loss'].index(self.cv_score)
         best_epoch = self.metrics.metrics['epoch'][best_index]
@@ -1918,7 +2031,7 @@ class DeepTICACalculator(NonLinear):
         for i in range(self.cv_dimension):
             logger.info(f'Eigenvalue {i+1}: {best_eigvals[i]}')
             
-        np.savetxt(os.path.join(self.output_path, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
+        np.savetxt(os.path.join(self.training_output_folder, 'eigenvalues.txt'), np.array(best_eigvals), fmt='%.7g')
         
         # Plot eigenvalues
         ax = plot_metrics(self.metrics.metrics,
@@ -1928,75 +2041,76 @@ class DeepTICACalculator(NonLinear):
                             yscale=None)
 
         # Save figure
-        ax.figure.savefig(os.path.join(self.output_path, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
+        ax.figure.savefig(os.path.join(self.training_output_folder, f'eigenvalues.png'), dpi=300, bbox_inches='tight')
         ax.figure.clf()
+        
+        metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
 
 class VAECalculator(NonLinear):
     """
     Variational Autoencoder calculator.
     """
     def __init__(self, 
-        configuration: Dict,
-        train_colvars_paths: List[str],  
-        train_topology_paths: Optional[List[str]] = None, 
-        ref_topology_path: Optional[str] = None, 
-        feature_constraints: Union[List[str], str, None] = None, 
-        sup_colvars_paths: Optional[List[str]] = None, 
-        sup_topology_paths: Optional[List[str]] = None,
+        configuration: Optional[Dict] = None,
         output_path: Union[str, None] = None
         ):
         """
         Initializes the Variational Autoencoder calculator.
-        """
-        import torch 
-        
-        from mlcolvar.data import DictDataset
-        
+        """      
         super().__init__(
-            configuration,
-            train_colvars_paths, 
-            train_topology_paths, 
-            ref_topology_path, 
-            feature_constraints, 
-            sup_colvars_paths,
-            sup_topology_paths, 
+            configuration, 
             output_path)
         
         # VAE-specific settings
-        self.kl_annealing_config = self.training_config['kl_annealing']
-        self.type = self.kl_annealing_config['type']
-        self.start_beta = self.kl_annealing_config['start_beta']
-        self.max_beta = self.kl_annealing_config['max_beta']
-        self.start_epoch = self.kl_annealing_config['start_epoch']
-        self.n_cycles = self.kl_annealing_config['n_cycles']
-        self.n_epochs_anneal = self.kl_annealing_config['n_epochs_anneal']
-        
-        # Create DictDatase
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.feature_labels)
-        
+        self.kl_annealing_config = self.training_config.get('kl_annealing', {})
+        self.type = self.kl_annealing_config.get('type')
+        self.start_beta = self.kl_annealing_config.get('start_beta')
+        self.max_beta = self.kl_annealing_config.get('max_beta')
+        self.start_epoch = self.kl_annealing_config.get('start_epoch')
+        self.n_cycles = self.kl_annealing_config.get('n_cycles')
+        self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal')
+
         self.cv_name = 'vae'
+
+        self.create_output_folders()
         
-        self.initialize_cv()
-        
-        self.check_batch_size()
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
         
         # If the activation functions / dropout are given as a list, add one for the last layer 
         # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
-            
+
+    def set_up_cv_options(self):
+        """ 
+        Update cv options for the VAE.
+        """
+        super().set_up_cv_options()
+        
         # Update options
         nn_options = {
             "encoder": self.encoder_options,
             "decoder": self.decoder_options
         }
         self.cv_options.update(nn_options)
+        
+    def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
 
+        import torch 
+        from mlcolvar.data import DictDataset
+        
+        # Create DictDatase
+        dictionary = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(dictionary, feature_names=self.features_ref_labels)
+        
     def set_encoder_layers(self) -> List:
         """ 
         Set the layers for the VAE
         
         Here the model already includes a mean and variance layer with
-        cv_dimension outputs, so we do not need to add them explicitly.
+        cv_dimension outputs, so we do not need to add the last layer explicitly.
         
         Return
         ------
@@ -2006,7 +2120,7 @@ class VAECalculator(NonLinear):
             Contains the input dimension, hidden layers and output dimension.
         """
         
-        return [self.num_features] + self.encoder_config['layers']
+        return [self.num_features] + self.encoder_hidden_layers
     
     def set_decoder_layers(self):
         """ 
@@ -2027,7 +2141,7 @@ class VAECalculator(NonLinear):
         if self.decoder_config is None:
             return None
         else:
-            return self.decoder_config['layers'] + [self.num_features]
+            return self.decoder_hidden_layers + [self.num_features]
    
     def create_model(self):
         """
@@ -2041,6 +2155,10 @@ class VAECalculator(NonLinear):
         """
         
         from mlcolvar.cvs import VariationalAutoEncoderCV
+        
+        # Set layers from NN settings 
+        self.encoder_layers: List = self.set_encoder_layers()
+        self.decoder_layers: Optional[List] = self.set_decoder_layers()
         
         model = VariationalAutoEncoderCV(
             n_cvs=self.cv_dimension,
@@ -2088,22 +2206,77 @@ class VAECalculator(NonLinear):
         # If there is a KL annealing stage
         if self.n_epochs_anneal > 0:
             # Add a callback to start saving the best model after the KL annealing 
+            checkpoints_path = os.path.join(self.training_output_folder, "checkpoints")
             self.post_annealing_checkpoint = ml.PostAnnealingCheckpoint(
                 monitor="valid_loss",
-                dirpath=self.output_path,
+                dirpath=checkpoints_path,
                 annealing_end_epoch=self.start_epoch + self.n_epochs_anneal,
             )
             general_callbacks.append(self.post_annealing_checkpoint)
             
         return general_callbacks
     
-    def save_loss(self): 
+    def _plot_metric(self, 
+                     metric_data: Dict, 
+                     metric_keys: List, 
+                     labels: List, 
+                     colors: List, 
+                     yscale: str = 'log',
+                     filepath: Optional[str] = None
+                     ):
         """ 
-        Saves the loss of the training. Adds saving of VAE-specific metrics such as KL divergence.
-        """      
-        super().save_loss()
+        Plot a specific metric
         
-        from mlcolvar.utils.plot import plot_metrics
+        Parameters
+        ----------
+        
+        metric_data : Dict
+            Dictionary with the training metrics data.
+        metric_keys : List
+            List of keys in the metric_data to plot.
+        labels : List
+            List of labels for the metric keys.
+        colors : List
+            List of colors for the metric keys in fessa color scheme.
+        yscale : str
+            Y-axis scale. Default is 'log'.
+        filepath : Optional[str]
+            File path to save the plot.
+        
+        """
+        from mlcolvar.utils.plot import plot_metrics  
+        
+        # Check the metric key is present in the data
+        for key in metric_keys:
+            if key not in metric_data:
+                logger.warning(f'Metric {key} not found in metrics. It will not be plotted.')
+                return None 
+            
+        if filepath is None:
+            filepath = os.path.join(self.training_output_folder, f"{'_'.join(metric_keys)}.png")
+        
+        args = {
+            'metrics': metric_data,
+            'keys': metric_keys,
+            'labels': labels,
+            'linestyles': ['-']*len(metric_keys),
+            'colors': colors,
+            'yscale': yscale
+        }
+        ax = plot_metrics(**args)
+        ax.figure.savefig(filepath, dpi=300, bbox_inches='tight')
+        ax.figure.clf()
+
+        return
+        
+            
+    def plot_training_metrics(self): 
+        """ 
+        Plots and saves training metrics specific to VAE.
+        """      
+        super().plot_training_metrics()
+        
+        from deep_cartograph.modules.common import zip_files, remove_files
         import torch
         
         # Create a new dictionary with all tensor metrics moved to the CPU
@@ -2116,83 +2289,68 @@ class VAECalculator(NonLinear):
                 cpu_metrics[key] = metric_list # Assume it's already CPU-compatible
 
         try:
-            # Save the KL and reconstruction losses if requested
+            # Save the training metrics if requested
             if self.training_config['save_loss']:
                 metrics_to_save = ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss', 'beta', 'lr']
                 for key in metrics_to_save:
                     if key not in cpu_metrics:
                         logger.warning(f'Metric {key} not found in metrics. It will not be saved.')
                         continue
-                    filepath = os.path.join(self.output_path, f'{key}.npy')
+                    filepath = os.path.join(self.training_output_folder, f'{key}.npy')
+                    self.training_metrics_paths.append(filepath)
                     np.save(filepath, np.array(cpu_metrics[key]))
 
             # Plot metrics specific to VAE
             
             # KL divergence loss
-            KL_loss_present = ('train_kl_loss' in cpu_metrics) and ('valid_kl_loss' in cpu_metrics)
-            if KL_loss_present:
-                loss_plot_config = {
-                    'keys': ['train_kl_loss', 'valid_kl_loss'],
-                    'labels': ['Training KL', 'Validation KL'],
-                    'colors': ['fessa1', 'fessa5'],
-                    'linestyles': ['-', '-'],
-                    'yscale': 'log'
-                }
-                ax = plot_metrics(cpu_metrics, **loss_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_loss.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
-            else:
-                logger.warning('KL loss metrics not found. Skipping KL loss plot.')
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['train_kl_loss', 'valid_kl_loss'],
+                labels=['Training KL', 'Validation KL'],
+                colors=['fessa1', 'fessa5'],
+                yscale='log',
+                filepath=os.path.join(self.training_output_folder, 'vae_kl_loss.png')
+            )
             
             # Reconstruction loss
-            Recon_loss_present = ('train_reconstruction_loss' in cpu_metrics) and ('valid_reconstruction_loss' in cpu_metrics)
-            if Recon_loss_present:
-                recon_plot_config = {
-                    'keys': ['train_reconstruction_loss', 'valid_reconstruction_loss'],
-                    'labels': ['Training Reconstruction', 'Validation Reconstruction'],
-                    'colors': ['fessa2', 'fessa6'],
-                    'linestyles': ['-', '-'],
-                    'yscale': 'log'
-                }
-                ax = plot_metrics(cpu_metrics, **recon_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
-            else:
-                logger.warning('Reconstruction loss metrics not found. Skipping reconstruction loss plot.')
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['train_reconstruction_loss', 'valid_reconstruction_loss'],
+                labels=['Training Reconstruction', 'Validation Reconstruction'],
+                colors=['fessa2', 'fessa6'],
+                yscale='log',
+                filepath=os.path.join(self.training_output_folder, 'vae_reconstruction_loss.png')
+            )
 
             # KL + Reconstruction loss
-            if (KL_loss_present and Recon_loss_present):
-                both_plot_config = {
-                    'keys': ['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'],
-                    'labels': ['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'],
-                    'colors': ['fessa1', 'fessa5', 'fessa2', 'fessa6'],
-                    'linestyles': ['-', '-', '-', '-'],
-                    'yscale': 'log'
-                }
-                ax = plot_metrics(cpu_metrics, **both_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_kl_reconstruction_loss.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
-            else:
-                logger.warning('KL and/or Reconstruction loss metrics not found. Skipping combined KL + Reconstruction loss plot.')
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['train_kl_loss', 'valid_kl_loss', 'train_reconstruction_loss', 'valid_reconstruction_loss'],
+                labels=['Training KL', 'Validation KL', 'Training Reconstruction', 'Validation Reconstruction'],
+                colors=['fessa1', 'fessa5', 'fessa2', 'fessa6'],
+                yscale='log',
+                filepath=os.path.join(self.training_output_folder, 'vae_kl_reconstruction_loss.png')
+            )
             
             # Beta value
-            beta_present = 'beta' in cpu_metrics
-            if beta_present:
-                beta_plot_config = {
-                    'keys': ['beta'],
-                    'labels': ['Beta'],
-                    'colors': ['fessa3'],
-                    'linestyles': ['-'],
-                    'yscale': 'linear'
-                }
-                ax = plot_metrics(cpu_metrics, **beta_plot_config)
-                ax.figure.savefig(os.path.join(self.output_path, f'vae_beta.png'), dpi=300, bbox_inches='tight')
-                ax.figure.clf()
+            self._plot_metric(
+                metric_data=cpu_metrics,
+                metric_keys=['beta'],
+                labels=['Beta'],
+                colors=['fessa3'],
+                yscale='linear',
+                filepath=os.path.join(self.training_output_folder, 'vae_beta.png')
+            )
                
         except Exception as e:
             import traceback
             logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
-            
+
+        metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
+        zip_files(metrics_zip_file, *self.training_metrics_paths)
+        remove_files(*self.training_metrics_paths)
+        logger.info(f'Training metrics saved to {metrics_zip_file}')
+
 # Mappings
 cv_calculators_map = {
     'pca': PCACalculator,

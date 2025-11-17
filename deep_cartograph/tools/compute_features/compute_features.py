@@ -127,10 +127,10 @@ def compute_features(
     md.create_pdb(reference_topology, ref_plumed_topology)
     
     # Find list of features to compute from reference topology - user selection of features refers to this topology
-    ref_feature_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
+    ref_features_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
     
-    logger.debug(f"The reference feature list contains {len(ref_feature_list)} features:")
-    logger.debug(ref_feature_list)
+    logger.debug(f"The reference feature list contains {len(ref_features_list)} features:")
+    logger.debug(ref_features_list)
  
     # Find feature names for each topology
     features_lists = []
@@ -153,13 +153,13 @@ def compute_features(
         
         # Translate features to new topology
         logger.debug(f"Translating features from reference topology {Path(reference_topology).name} to topology {Path(topology).name}")
-        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_feature_list).run()
+        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_features_list).run()
         features_lists.append(features_list)
         
         if logger.isEnabledFor(logging.DEBUG):
             # Find indices of None values in feature list
             absent_features_idxs = [i for i, feature in enumerate(features_list) if feature is None]
-            absent_features = [ref_feature_list[i] for i in absent_features_idxs]
+            absent_features = [ref_features_list[i] for i in absent_features_idxs]
             if absent_features:
                 logger.debug(f"There are {len(absent_features)} absent features in {top_name}: {absent_features}")
             else:
@@ -177,7 +177,7 @@ def compute_features(
         
     if logger.isEnabledFor(logging.DEBUG):
         # Find list of discarded features
-        discarded_features = [ref_feature_list[i] for i in range(len(ref_feature_list)) if not mask[i]]
+        discarded_features = [ref_features_list[i] for i in range(len(ref_features_list)) if not mask[i]]
         if len(discarded_features) > 0:
             logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
             logger.debug(discarded_features)
@@ -211,13 +211,22 @@ def compute_features(
         if os.path.exists(colvars_path):
             logger.info(f"Skipping {top_name}. Colvars file already exists.")
             continue
+        
+        # If features contain coordinates, we need to fit the structure to the reference topology
+        need_fit_template = any(feat.startswith("coord") for feat in features_list)
+        if need_fit_template:
+            fit_template_path = os.path.join(traj_output_folder, "fit_template.pdb")
+            md.create_plumed_rmsd_template(reference_topology, fit_template_path)
+        else:
+            fit_template_path = None
 
         # Create the plumed input builder
         builder_args = {
-            'input_path': plumed_input_path,
+            'plumed_input_path': plumed_input_path,
             'topology_path': plumed_topology_path,
-            'feature_list': features_list,
-            'traj_stride': configuration['plumed_settings']['traj_stride']
+            'features_list': features_list,
+            'traj_stride': configuration['plumed_settings']['traj_stride'],
+            'fit_template_path': fit_template_path
         }
         plumed_builder = plumed.input.builder.ComputeFeaturesBuilder(**builder_args)
         plumed_builder.build(colvars_path)
@@ -293,7 +302,7 @@ def set_logger(verbose: bool, log_path: str):
     )
 
     logger = logging.getLogger("deep_cartograph")
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+    logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
     """Parses command-line arguments."""

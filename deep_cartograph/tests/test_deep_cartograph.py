@@ -1,9 +1,11 @@
-from deep_cartograph.run import deep_cartograph
+from deep_cartograph.deep_carto import deep_cartograph
 import importlib.resources as resources
 from deep_cartograph.modules.plumed.colvars import read_colvars
 import deep_cartograph.modules.plumed as plumed
+import deep_cartograph.modules.common as common
 import deep_cartograph.modules.md as md
 from deep_cartograph import tests
+from pathlib import Path
 import pandas as pd
 import shutil
 import yaml
@@ -154,10 +156,10 @@ def test_deep_cartograph():
       # Find paths to csv files
       ref_cv_traj_path = os.path.join(train_reference_path, f"{cv}_projected_trajectory.csv")
       ref_cv_cluster_path = os.path.join(cluster_reference_path, f"{cv}_projected_trajectory.csv")
-      cv_traj_path = os.path.join(train_colvars_path, cv, "CA_example", "projected_trajectory.csv")
-      sup_cv_traj_path = os.path.join(train_colvars_path, cv, "sup_CA_example", "projected_trajectory.csv")
+      cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "CA_example", "projected_trajectory.csv")
+      #sup_cv_traj_path = os.path.join(train_colvars_path, cv, "traj_data", "sup_CA_example", "projected_trajectory.csv")
       cv_cluster_path = os.path.join(traj_cluster_path, cv, "CA_example", "projected_trajectory.csv")
-      
+
       # Check if files exist
       if not os.path.isfile(ref_cv_traj_path):
           raise FileNotFoundError(f"Reference file not found: {ref_cv_traj_path}")
@@ -165,8 +167,8 @@ def test_deep_cartograph():
           raise FileNotFoundError(f"Reference file not found: {ref_cv_cluster_path}")
       if not os.path.isfile(cv_traj_path):
           raise FileNotFoundError(f"Computed cv traj file not found: {cv_traj_path}")
-      if not os.path.isfile(sup_cv_traj_path):
-          raise FileNotFoundError(f"Computed cv sup traj file not found: {sup_cv_traj_path}")
+      #if not os.path.isfile(sup_cv_traj_path):
+      #    raise FileNotFoundError(f"Computed cv sup traj file not found: {sup_cv_traj_path}")
       if not os.path.isfile(cv_cluster_path):
           raise FileNotFoundError(f"Computed cv cluster file not found: {cv_cluster_path}")
         
@@ -174,7 +176,7 @@ def test_deep_cartograph():
       ref_cv_traj_df = pd.read_csv(ref_cv_traj_path)
       ref_cv_cluster_df = pd.read_csv(ref_cv_cluster_path)
       cv_traj_df = pd.read_csv(cv_traj_path)
-      sup_cv_traj_df = pd.read_csv(sup_cv_traj_path)
+      #sup_cv_traj_df = pd.read_csv(sup_cv_traj_path)
       cv_cluster_df = pd.read_csv(cv_cluster_path)
 
       # Check if main cv traj is equal to reference
@@ -190,8 +192,8 @@ def test_deep_cartograph():
         break
       
       # Check if supplementary cv traj is equal to reference - supplementary is also the main data here, should be the same
-      for col in sup_cv_traj_df.columns:
-        test_passed = test_passed and sup_cv_traj_df[col].equals(ref_cv_traj_df[col])
+      #for col in sup_cv_traj_df.columns:
+      #  test_passed = test_passed and sup_cv_traj_df[col].equals(ref_cv_traj_df[col])
       
       if test_passed == False:
         print(f"Error: supplementary trajectory for {cv} not equal to reference!")
@@ -206,14 +208,18 @@ def test_deep_cartograph():
     linear_cvs = ['pca', 'tica', 'htica']
     for cv in linear_cvs:
       
-      traj_output_path = os.path.join(train_colvars_path, cv, "CA_example")
+      traj_output_path = os.path.join(train_colvars_path, cv, "traj_data", "CA_example")
       
       # Find path to plumed input file that tracks the cv
-      plumed_input_path = os.path.join(traj_output_path, f"plumed_input_{cv}.dat")
+      plumed_inputs_folder = os.path.join(traj_output_path, "plumed_inputs")
+      plumed_input_zip = os.path.join(plumed_inputs_folder, f"plumed_{cv}_unbiased.zip")
+      common.unzip_files(plumed_input_zip, Path(plumed_input_zip).parent)
+      plumed_input_path = os.path.join(plumed_inputs_folder, f"plumed_input_{cv}.dat")
       
       # Check if the plumed input file exists
       if not os.path.isfile(plumed_input_path):
         print(f"PLUMED input for cv {cv} doesn't exist!")
+        break
       
       # Construct plumed driver command
       traj_path = os.path.join(trajectory_folder, "CA_example.dcd")

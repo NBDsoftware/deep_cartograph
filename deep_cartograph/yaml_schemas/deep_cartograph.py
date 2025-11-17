@@ -4,6 +4,7 @@ from deep_cartograph.yaml_schemas.analyze_geometry import AnalyzeGeometrySchema
 from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
 from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
+from deep_cartograph.yaml_schemas.traj_projection import TrajProjectionSchema
 from deep_cartograph.yaml_schemas.traj_cluster import TrajClusterSchema
 
 class DeepCartograph(BaseModel):
@@ -20,5 +21,8 @@ class DeepCartograph(BaseModel):
     # Schema for the training of the colvars file
     train_colvars: TrainColvarsSchema = TrainColvarsSchema()
     
+    # Schema for the traj projection
+    traj_projection: TrajProjectionSchema = TrajProjectionSchema()
+
     # Schema for the trajectory clustering
     traj_cluster: TrajClusterSchema = TrajClusterSchema()

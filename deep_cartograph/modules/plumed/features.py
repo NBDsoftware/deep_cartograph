@@ -25,7 +25,11 @@ class FeatureTranslator:
         
     def run(self) -> List[str]:
         """ 
-        Create a topology mapper and translate the list of features from the reference topology to the target topology
+        Translate the list of features from the reference topology to the target topology respecting 
+        the original order of the features. This is done using a topology mapper that maps
+        residues from the reference topology to the target topology using a sequence alignment.
+        
+        If the feature is not present in the target topology, it is replaced by None.
         
         Returns
         -------
@@ -41,7 +45,8 @@ class FeatureTranslator:
     
     def translate_features(self) -> List[str]:
         """ 
-        Translate each feature from the reference topology to the target topology. 
+        Translate each feature from the reference topology to the target topology respecting the original
+        order of the features.
         """
         
         translated_features = []

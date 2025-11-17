@@ -1,7 +1,6 @@
 # Import necessary modules
 import os
 import sys
-import copy
 import logging
 import numpy as np
 import pandas as pd
@@ -202,29 +201,52 @@ class TrajClusterWorkflow:
             data.append(df)
         return pd.concat(data, ignore_index=True)
    
-    def assign_closest_cluster(self, sup_data: pd.DataFrame, original_data: pd.DataFrame) -> np.ndarray:
+    def assign_closest_cluster(self, new_data: pd.DataFrame, clusters_data: pd.DataFrame) -> np.ndarray:
         """
-        Assign cluster labels to supplementary data based on closest point in original data. Exclude the -1 noise cluster.
-        """
-        from sklearn.neighbors import NearestNeighbors
+        Assign cluster labels to new cv data based on closest point in cv space from clusters data.
+
+        Parameters
+        ----------
         
-        clusters_data = original_data[original_data['cluster'] != -1]
+        new_data : pd.DataFrame
+            DataFrame containing new samples to assign cluster labels to.
+            
+        clusters_data : pd.DataFrame
+            DataFrame containing original samples with cluster labels.
+        
+        Returns
+        -------
+        
+        np.ndarray
+            Array of cluster labels assigned to new_data samples.
+        """
+        
+        from sklearn.neighbors import NearestNeighbors
         
         # Fit NearestNeighbors on original data
         nbrs = NearestNeighbors(n_neighbors=1).fit(clusters_data[self.cv_labels].to_numpy())
         
-        # Find the nearest neighbor in clusters_data for each point in sup_data
-        distances, indices = nbrs.kneighbors(sup_data[self.cv_labels].to_numpy())
+        # Find the nearest neighbor in clusters_data for each point in new_data
+        distances, indices = nbrs.kneighbors(new_data[self.cv_labels].to_numpy())
         
         # Assign cluster labels based on nearest neighbor
         cluster_labels = clusters_data.iloc[indices.flatten()]['cluster'].values
 
         return cluster_labels
     
-    def run(self):
+    def run(self) -> Dict[str, List[str]]:
         """
         Run the traj_cluster workflow.
+        
+        Returns
+        -------
+        
+        Dict[str, List[str]]
+            A dictionary where keys are the names of the trajectories from cv_traj_paths and values are
+            lists of paths to the clustered trajectories in the CV space for each cv trajectory file.
         """
+        
+        output_paths: Dict[str, List[str]] = {}
         
         logger.info("Starting traj_cluster workflow...")
         
@@ -269,18 +291,20 @@ class TrajClusterWorkflow:
         # For each trajectory
         for traj_index in range(len(self.cv_traj_paths)):
             
-            # Create output folder for this trajectory -> /traj_cluster/cv_name/traj_stem
+            # Create output folder for this trajectory -> /traj_cluster/cv_name/traj_name
             if self.trajectories:
-                traj_stem = Path(self.trajectories[traj_index]).stem
+                traj_name = Path(self.trajectories[traj_index]).stem
             else:
-                traj_stem = f"traj_{traj_index}"
-            traj_output_folder = os.path.join(self.output_folder, traj_stem)
+                traj_name = f"traj_{traj_index}"
+            traj_output_folder = os.path.join(self.output_folder, traj_name)
             os.makedirs(traj_output_folder, exist_ok=True)
             
             # Save the cv trajectory with cluster labels
             traj_df = cv_data[cv_data['traj_label'] == traj_index]
-            traj_df.to_csv(os.path.join(traj_output_folder, "projected_trajectory.csv"), index=False)
-            logger.debug(f"Saved projected trajectory with cluster labels to {os.path.join(traj_output_folder, 'projected_trajectory.csv')}")
+            projected_traj_path = os.path.join(traj_output_folder, 'projected_trajectory.csv')
+            traj_df.to_csv(projected_traj_path, index=False)
+            logger.debug(f"Saved projected trajectory with cluster labels to {projected_traj_path}")
+            output_paths[traj_name] = [projected_traj_path]
             
             # Plot the cv trajectory coloring by cluster
             scatter_plot_path = os.path.join(traj_output_folder, "trajectory_clustered.png")
@@ -324,18 +348,20 @@ class TrajClusterWorkflow:
             # For each supplementary trajectory
             for traj_index in range(len(self.sup_cv_traj_paths)):
                 
-                # Create output folder for this trajectory -> /traj_cluster/cv_name/traj_stem
+                # Create output folder for this trajectory -> /traj_cluster/cv_name/traj_name
                 if self.sup_trajectories:
-                    traj_stem = f"sup_{Path(self.sup_trajectories[traj_index]).stem}"
+                    traj_name = f"sup_{Path(self.sup_trajectories[traj_index]).stem}"
                 else:
-                    traj_stem = f"sup_traj_{traj_index}"
-                traj_output_folder = os.path.join(self.output_folder, traj_stem)
+                    traj_name = f"sup_traj_{traj_index}"
+                traj_output_folder = os.path.join(self.output_folder, traj_name)
                 os.makedirs(traj_output_folder, exist_ok=True)
                 
                 # Save the supplementary cv trajectory with cluster labels
                 traj_df = sup_cv_data[sup_cv_data['traj_label'] == traj_index]
-                traj_df.to_csv(os.path.join(traj_output_folder, "projected_trajectory.csv"), index=False)
-                logger.debug(f"Saved projected supplementary trajectory with cluster labels to {os.path.join(traj_output_folder, 'projected_trajectory.csv')}")
+                projected_traj_path = os.path.join(traj_output_folder, 'projected_trajectory.csv')
+                traj_df.to_csv(projected_traj_path, index=False)
+                logger.debug(f"Saved projected supplementary trajectory with cluster labels to {projected_traj_path}")
+                output_paths[traj_name] = [projected_traj_path]
                 
                 # Plot the supplementary cv trajectory coloring by cluster
                 scatter_plot_path = os.path.join(traj_output_folder, "trajectory_clustered.png")
@@ -348,6 +374,5 @@ class TrajClusterWorkflow:
                     cluster_colors = cluster_colors       
                 )
                 logger.debug(f"Saved clustered supplementary trajectory plot to {scatter_plot_path}")
-            
- 
-            
+
+        return output_paths

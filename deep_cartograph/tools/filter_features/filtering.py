@@ -113,8 +113,6 @@ class Filter:
             
             # Find the feature names in this colvars file
             feature_names = read_column_names(colvars_path, features_only=True)
-            feature_names.sort() # NOTE: This sort here is just to maintain the old behavior, remove once the changes are tested, we want to keep same order of weights as in the colvars files - will make life easier for the user
-            
             logger.debug(f'There are {len(feature_names)} features in {Path(colvars_path).name}: {feature_names}')
             
             if self.topology_paths:
