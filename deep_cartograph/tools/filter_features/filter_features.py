@@ -190,7 +190,7 @@ def set_logger(verbose: bool, log_path: str):
     )
 
     logger = logging.getLogger("deep_cartograph")
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+    logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
     """Parses command-line arguments."""

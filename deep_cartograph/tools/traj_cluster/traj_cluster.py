@@ -67,8 +67,10 @@ def traj_cluster(
 
     Returns
     -------
-    None
-        This function does not return a value. It saves output files to the specified folder.
+
+    Dict[str, List[str]]
+        A dictionary where keys are the names of the trajectories from cv_traj_paths and values are lists of paths to
+        the clustered trajectories in the CV space for each cv trajectory file.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -155,7 +157,7 @@ def set_logger(verbose: bool, log_path: str):
     )
 
     logger = logging.getLogger("deep_cartograph")
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+    logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
     """Parses command-line arguments."""

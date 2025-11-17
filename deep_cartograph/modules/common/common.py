@@ -98,11 +98,11 @@ def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
                     # If it's a file, add it directly to the zip.
                     # The 'arcname' is the name it will have inside the zip.
                     arcname = os.path.basename(path)
-                    logger.info(f"Adding file: '{path}' as '{arcname}'")
+                    logger.debug(f"Adding file: '{path}' as '{arcname}'")
                     zipf.write(path, arcname=arcname)
 
                 elif os.path.isdir(path):
-                    logger.info(f"Adding directory: '{path}'")
+                    logger.debug(f"Adding directory: '{path}'")
                     # If it's a directory, walk through its contents.
                     for root, _, files in os.walk(path):
                         for file in files:
@@ -110,7 +110,7 @@ def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
                             # Create a relative path for the arcname to preserve structure.
                             # This makes 'my_folder/sub/file.txt' appear as such in the zip.
                             arcname = os.path.relpath(full_path, os.path.dirname(path))
-                            logger.info(f"Compressing: '{full_path}' as '{arcname}'")
+                            logger.debug(f"Compressing: '{full_path}' as '{arcname}'")
                             zipf.write(full_path, arcname=arcname)
 
     except FileNotFoundError:
