@@ -1,9 +1,11 @@
-from deep_cartograph.run import deep_cartograph
+from deep_cartograph.deep_carto import deep_cartograph
 import importlib.resources as resources
 from deep_cartograph.modules.plumed.colvars import read_colvars
 import deep_cartograph.modules.plumed as plumed
+import deep_cartograph.modules.common as common
 import deep_cartograph.modules.md as md
 from deep_cartograph import tests
+from pathlib import Path
 import pandas as pd
 import shutil
 import yaml
@@ -209,11 +211,15 @@ def test_deep_cartograph():
       traj_output_path = os.path.join(train_colvars_path, cv, "traj_data", "CA_example")
       
       # Find path to plumed input file that tracks the cv
-      plumed_input_path = os.path.join(traj_output_path, "plumed_inputs", f"plumed_input_{cv}.dat")
+      plumed_inputs_folder = os.path.join(traj_output_path, "plumed_inputs")
+      plumed_input_zip = os.path.join(plumed_inputs_folder, f"plumed_{cv}_unbiased.zip")
+      common.unzip_files(plumed_input_zip, Path(plumed_input_zip).parent)
+      plumed_input_path = os.path.join(plumed_inputs_folder, f"plumed_input_{cv}.dat")
       
       # Check if the plumed input file exists
       if not os.path.isfile(plumed_input_path):
         print(f"PLUMED input for cv {cv} doesn't exist!")
+        break
       
       # Construct plumed driver command
       traj_path = os.path.join(trajectory_folder, "CA_example.dcd")

@@ -110,14 +110,14 @@ def test_train_colvars():
         shutil.rmtree(output_path)
         
     # Call API
-    train_colvars(
-        configuration = get_config(),
-        train_colvars_paths = [colvars_path],
-        train_topologies = [topology_path],
-        trajectory_names = [Path(trajectory_path).stem],
-        features_list = filtered_features,
-        output_folder = output_path
-        )
+    trained_cvs_data = train_colvars(
+                        configuration = get_config(),
+                        train_colvars_paths = [colvars_path],
+                        train_topologies = [topology_path],
+                        trajectory_names = [Path(trajectory_path).stem],
+                        features_list = filtered_features,
+                        output_folder = output_path
+                        )
     
     test_passed = True
     for cv in get_config()['cvs']:
@@ -125,7 +125,7 @@ def test_train_colvars():
         print(f"Testing {cv}...")
         
         # Path to projected trajectory
-        projected_trajectory_path = os.path.join(output_path, cv, "traj_data", "CA_example", "projected_trajectory.csv")
+        projected_trajectory_path = trained_cvs_data[cv]['traj_paths'][0]
         
         # Path to the reference projected trajectory
         reference_projected_trajectory_path = os.path.join(data_path, "reference", "train_colvars", f"{cv}_projected_trajectory.csv")
