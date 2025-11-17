@@ -314,10 +314,10 @@ def load_dataframe(
 
 def create_dataframe_from_files(
     colvars_paths: Union[List[str], str],
-    topology_paths: Union[List[str], None] = None,
-    reference_topology: Union[str, None] = None,
+    topology_paths: Optional[Union[List[str], str]] = None,
+    reference_topology: Optional[str] = None,
     features_list: Optional[List[str]] = None,
-    file_label: str = "traj_label",
+    file_label: Optional[str] = None,
     **kwargs,
 ) -> pd.DataFrame:
     """
@@ -364,14 +364,17 @@ def create_dataframe_from_files(
     pd.DataFrame
         Pandas dataframe of all the given data
     """
+    
     from deep_cartograph.modules.plumed.features import FeatureTranslator
     
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
-    num_files = len(colvars_paths)
+
+    if isinstance(topology_paths, str):
+        topology_paths = [topology_paths]
             
     if topology_paths:
-        if (not isinstance(topology_paths, list)) or (num_files != len(topology_paths)):
+        if (len(colvars_paths) != len(topology_paths)):
             raise TypeError(
                 """topology_paths should be a list of paths of same length as colvars_paths."""
             )
@@ -382,7 +385,7 @@ def create_dataframe_from_files(
     all_dfs = []
 
     # load data, one colvars file at a time
-    for file_index in range(num_files):
+    for file_index in range(len(colvars_paths)):
         
         logger.debug(f"Reading colvars file: {colvars_paths[file_index]}")
         
@@ -430,8 +433,9 @@ def create_dataframe_from_files(
             # Select and reorder columns
             tmp_df = tmp_df[features_list]
         
-        # Add file label
-        tmp_df[file_label] = file_index
+        # Add file label if given
+        if file_label:
+            tmp_df[file_label] = file_index
         all_dfs.append(tmp_df)
         
     if not all_dfs:
