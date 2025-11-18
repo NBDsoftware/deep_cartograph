@@ -5,6 +5,8 @@ Deep Cartograph
 
 Deep cartograph is a package to analyze and enhance MD simulations.
 
+This software has been developed for the [European BioExcel](http://bioexcel.eu/), funded by the European Commission (EU Horizon Europe [101093290](https://cordis.europa.eu/project/id/101093290)).
+
 ---
 
 Deep cartograph can be used to train different collective variables from simulation data. Either to analyze existing trajectories or to use them to enhance the sampling in subsequent simulations. It leverages PLUMED to compute the features and the [mlcolvar](https://github.com/luigibonati/mlcolvar.git) library to train the different collective variables [1](https://pubs.aip.org/aip/jcp/article-abstract/159/1/014801/2901354/A-unified-framework-for-machine-learning?redirectedFrom=fulltext).
@@ -134,3 +136,5 @@ A full copy of the license is available in the [LICENSE](LICENSE) file in this r
 If you wish to use this software in a commercial product, for-profit service, or any other commercial context, you must obtain a separate commercial license.
 
 Please contact **it@nostrumbiodiscovery.com** to inquire about purchasing a commercial license.
+
+![](https://bioexcel.eu/wp-content/uploads/2019/04/Bioexcell_logo_1080px_transp.png "Bioexcel")
