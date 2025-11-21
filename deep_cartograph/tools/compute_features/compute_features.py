@@ -14,7 +14,6 @@ import deep_cartograph.modules.md as md
 from deep_cartograph.modules.common import ( 
     get_unique_path, 
     read_configuration,
-    create_output_folder, 
     validate_configuration, 
     files_exist
 )
@@ -28,6 +27,7 @@ def compute_features(
     trajectories: Union[List[str], str],
     topologies: Union[List[str], str],
     reference_topology: Optional[str] = None,
+    traj_stride: Optional[int] = None,   
     output_folder: str = "compute_features",
 ) -> List[str]:
     """
@@ -51,6 +51,11 @@ def compute_features(
             Used to extract features from user selections.
             Defaults to the first topology in `topologies`.
             Accepted format: `.pdb`.
+            
+        traj_stride (int, optional):
+            Stride for reading the trajectory. Default: 1 (read all frames).
+            Note: This parameter is also specified in the configuration file.
+            If both are provided, the function argument takes precedence.
         
         output_folder (str, optional): 
             Path to the output folder where computed features will be stored.
@@ -70,9 +75,20 @@ def compute_features(
 
     # Start timer
     start_time = time.time()
+    
+    # If the output exists already, skip the step
+    skip_step = True
+    colvars_paths = [os.path.join(os.path.join(output_folder, Path(traj).stem), 'colvars.dat') for traj in trajectories]
+    for colvars_path in colvars_paths:
+        if not os.path.exists(colvars_path):
+            skip_step = False
+            break
+    if skip_step:
+        logger.info(f"Colvars files already exist in {output_folder}. Skipping feature computation.")
+        return colvars_paths
 
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
@@ -102,15 +118,19 @@ def compute_features(
         logger.error(f"Reference topology file missing. Exiting...")
         sys.exit(1)
         
+    # Enforce trajectory stride from function argument
+    if traj_stride:
+        configuration['plumed_settings']['traj_stride'] = traj_stride
+        
     # Create a reference plumed topology file
     ref_plumed_topology = os.path.join(output_folder, 'ref_topology.pdb')
     md.create_pdb(reference_topology, ref_plumed_topology)
     
     # Find list of features to compute from reference topology - user selection of features refers to this topology
-    ref_feature_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
+    ref_features_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
     
-    logger.debug(f"The reference feature list contains {len(ref_feature_list)} features:")
-    logger.debug(ref_feature_list)
+    logger.debug(f"The reference feature list contains {len(ref_features_list)} features:")
+    logger.debug(ref_features_list)
  
     # Find feature names for each topology
     features_lists = []
@@ -125,21 +145,21 @@ def compute_features(
         
         # Create output folder
         traj_output_folder = os.path.join(output_folder, traj_name)
-        create_output_folder(traj_output_folder)
-        
+        os.makedirs(traj_output_folder, exist_ok=True)
+
         # Create new topology file
         plumed_topology = os.path.join(traj_output_folder, 'plumed_topology.pdb')
         md.create_pdb(topology, plumed_topology)
         
         # Translate features to new topology
         logger.debug(f"Translating features from reference topology {Path(reference_topology).name} to topology {Path(topology).name}")
-        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_feature_list).run()
+        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_features_list).run()
         features_lists.append(features_list)
         
         if logger.isEnabledFor(logging.DEBUG):
             # Find indices of None values in feature list
             absent_features_idxs = [i for i, feature in enumerate(features_list) if feature is None]
-            absent_features = [ref_feature_list[i] for i in absent_features_idxs]
+            absent_features = [ref_features_list[i] for i in absent_features_idxs]
             if absent_features:
                 logger.debug(f"There are {len(absent_features)} absent features in {top_name}: {absent_features}")
             else:
@@ -157,10 +177,13 @@ def compute_features(
         
     if logger.isEnabledFor(logging.DEBUG):
         # Find list of discarded features
-        discarded_features = [ref_feature_list[i] for i in range(len(ref_feature_list)) if not mask[i]]
-        logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
-        logger.debug(discarded_features)
-        logger.debug(f"{len(common_features_lists[0])} features were kept")
+        discarded_features = [ref_features_list[i] for i in range(len(ref_features_list)) if not mask[i]]
+        if len(discarded_features) > 0:
+            logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
+            logger.debug(discarded_features)
+            logger.debug(f"{len(common_features_lists[0])} features were kept")
+        else: 
+            logger.debug("No features were discarded. All reference features are present in all topologies.")
         
     # Compute the features for each traj and topology
     colvars_paths = []
@@ -188,13 +211,22 @@ def compute_features(
         if os.path.exists(colvars_path):
             logger.info(f"Skipping {top_name}. Colvars file already exists.")
             continue
+        
+        # If features contain coordinates, we need to fit the structure to the reference topology
+        need_fit_template = any(feat.startswith("coord") for feat in features_list)
+        if need_fit_template:
+            fit_template_path = os.path.join(traj_output_folder, "fit_template.pdb")
+            md.create_plumed_rmsd_template(reference_topology, fit_template_path)
+        else:
+            fit_template_path = None
 
         # Create the plumed input builder
         builder_args = {
-            'input_path': plumed_input_path,
+            'plumed_input_path': plumed_input_path,
             'topology_path': plumed_topology_path,
-            'feature_list': features_list,
-            'traj_stride': configuration['plumed_settings']['traj_stride']
+            'features_list': features_list,
+            'traj_stride': configuration['plumed_settings']['traj_stride'],
+            'fit_template_path': fit_template_path
         }
         plumed_builder = plumed.input.builder.ComputeFeaturesBuilder(**builder_args)
         plumed_builder.build(colvars_path)
@@ -225,15 +257,20 @@ def compute_features(
 
     return colvars_paths
 
-def set_logger(verbose: bool):
+def set_logger(verbose: bool, log_path: str):
     """
-    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
-    If verbose is False, it sets the logging level to INFO.
+    Configures logging for Deep Cartograph. 
+    
+    If `verbose` is `True`, sets the logging level to DEBUG.
+    Otherwise, sets it to INFO.
 
     Inputs
     ------
 
-        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
+    Args:
+        verbose (bool): If `True`, logging level is set to DEBUG. 
+                        If `False`, logging level is set to INFO.
+        log_path (str): Path to the log file where logs will be saved.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -253,19 +290,20 @@ def set_logger(verbose: bool):
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
         raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
-    
     if not os.path.exists(debug_config_path):
         raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
     
-    if verbose:
-        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
-    else:
-        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
+    # Pass the log_path to the fileConfig using the 'defaults' parameter
+    config_path = debug_config_path if verbose else info_config_path
+    logging.config.fileConfig(
+        config_path,
+        defaults={'log_path': log_path},
+        disable_existing_loggers=True
+    )
 
     logger = logging.getLogger("deep_cartograph")
-
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
-
+    logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
+    
 def parse_arguments():
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -293,6 +331,10 @@ def parse_arguments():
     
     # Optional arguments
     parser.add_argument(
+        '-traj_stride', dest='traj_stride', type=int, required=False,
+        help="Stride for reading the trajectory. Default: 1 (read all frames)."
+    )
+    parser.add_argument(
         '-output', dest='output_folder', type=str, required=False,
         help="Path to the output folder."
     )
@@ -311,31 +353,27 @@ def main():
 
     args = parse_arguments()
 
-    # Set logger
-    set_logger(verbose=args.verbose)
+    # Determine output folder, if restart is False, create a unique output folder
+    output_folder = args.output_folder if args.output_folder else 'compute_features'
+    if not args.restart:
+        output_folder = get_unique_path(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
     
-    # Give value to output_folder
-    if args.output_folder is None:
-        output_folder = 'compute_features'
-    else:
-        output_folder = args.output_folder
-        
-    # Create unique output directory
-    output_folder = get_unique_path(output_folder)
+    # Set logger
+    log_path = os.path.join(output_folder, 'deep_cartograph.log')
+    set_logger(verbose=args.verbose, log_path=log_path)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)
 
-    # Run tool
+    # Run Compute Features tool
     _ = compute_features(
         configuration = configuration, 
         trajectory = args.trajectory,
         topology = args.topology,
         colvars_path = args.colvars_path,
+        traj_stride = args.traj_stride,
         output_folder = output_folder)
-
-    # Move log file to output folder
-    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
 
 if __name__ == "__main__":
     main()

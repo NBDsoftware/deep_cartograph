@@ -31,7 +31,7 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
             (Optional) Path to the output folder
     """
 
-    from deep_cartograph.modules.common import create_output_folder, validate_configuration, save_data
+    from deep_cartograph.modules.common import validate_configuration, save_data
     from deep_cartograph.modules.figures import plot_data
     from deep_cartograph.modules.md import RMSD, RMSF
     
@@ -49,10 +49,14 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
     start_time = time.time()
 
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, AnalyzeGeometrySchema, output_folder)
+    
+    if not configuration['run']:
+        logger.info("Skipping Analyze Geometry step.")
+        return output_folder
     
     # Get time step per frame in ns
     dt_per_frame = float(configuration['dt_per_frame'])* 1e-3 
@@ -150,7 +154,7 @@ def set_logger(verbose: bool):
 
     logger = logging.getLogger("deep_cartograph")
 
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+    logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
 
 ########
 # MAIN #
@@ -173,33 +177,28 @@ def main():
 
     args = parser.parse_args()
 
-    # Set logger
-    set_logger(verbose=args.verbose)
-    
-    # Give value to output_folder
-    if args.output_folder is None:
-        output_folder = 'analyze_geometry'
-    else:
-        output_folder = args.output_folder
-        
-    # Create unique output directory
-    output_folder = get_unique_path(output_folder)
+    # Determine output folder, if restart is False, create a unique output folder
+    output_folder = args.output_folder if args.output_folder else 'analyze_geometry'
+    if not args.restart:
+        output_folder = get_unique_path(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
+    # Set logger
+    log_path = os.path.join(output_folder, 'deep_cartograph.log')
+    set_logger(verbose=args.verbose, log_path=log_path)
+    
     # Read configuration
     configuration = read_configuration(args.configuration_path)
     
     # Check main input folders
     trajectories, topologies = check_data(args.trajectory_data, args.topology_data)
 
-    # Run tool
+    # Run Analyze Geometry tool
     _ = analyze_geometry(
         configuration = configuration, 
         trajectories = trajectories,
         topologies = topologies,
         output_folder = output_folder)
-
-    # Move log file to output folder
-    shutil.move('deep_cartograph.log', os.path.join(output_folder, 'deep_cartograph.log'))
 
 if __name__ == "__main__":
 

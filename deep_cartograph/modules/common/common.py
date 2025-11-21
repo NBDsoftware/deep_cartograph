@@ -2,6 +2,7 @@ import os
 import sys
 import yaml
 import math
+import zipfile
 import logging
 import numpy as np
 import pandas as pd
@@ -13,10 +14,6 @@ from pydantic import BaseModel
 
 # Set logger
 logger = logging.getLogger(__name__)
-
-# Constants
-default_regex = "^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)"
-
 
 # General utils
 def package_is_installed(*package_name: str) -> bool:
@@ -42,30 +39,15 @@ def package_is_installed(*package_name: str) -> bool:
             return False
     return True
 
-def create_output_folder(output_path: str) -> None:
-    """
-    Creates the output path if it does not exist.
-
-    Parameters
-    ----------
-
-    output_path : str
-        Path of the output folder
-    """
-
-    # Create parent output directory if it does not exist
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-    
-    return
-
-def files_exist(*file_path):
+def files_exist(*file_path, verbose: bool = True) -> bool:
     '''
     Returns true if all files exist.
     Inputs
     ------
 
         file_path  (str): variable number of paths to files including filename
+        
+        verbose   (bool): if True, it logs an error message for each file that doesn't exist
     
     Output
     ------
@@ -81,10 +63,107 @@ def files_exist(*file_path):
         all_exist = all_exist and this_file_exist
         
         if not this_file_exist:
-            logger.error(f"File not found {path}")
+            if verbose:
+                logger.error(f"File not found {path}")
             
     return all_exist
 
+def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
+    """
+    Compresses one or more files and/or directories into a single ZIP file.
+
+    This function preserves the directory structure. For example, compressing a
+    directory named 'my_folder' will result in a 'my_folder' directory inside
+    the zip archive.
+
+    Parameters
+    ----------
+        output_zip_path: The full path for the output ZIP file (e.g., '/path/to/archive.zip').
+        *paths_to_compress: A variable number of paths to files or directories to compress.
+    """
+    if not paths_to_compress:
+        logger.warning("No input paths were provided to compress.")
+        return
+
+    logger.info(f"Starting compression to '{output_zip_path}'...")
+
+    try:
+        with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for path in paths_to_compress:
+                if not os.path.exists(path):
+                    logger.warning(f"Skipped: Path '{path}' does not exist.")
+                    continue
+
+                if os.path.isfile(path):
+                    # If it's a file, add it directly to the zip.
+                    # The 'arcname' is the name it will have inside the zip.
+                    arcname = os.path.basename(path)
+                    logger.debug(f"Adding file: '{path}' as '{arcname}'")
+                    zipf.write(path, arcname=arcname)
+
+                elif os.path.isdir(path):
+                    logger.debug(f"Adding directory: '{path}'")
+                    # If it's a directory, walk through its contents.
+                    for root, _, files in os.walk(path):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            # Create a relative path for the arcname to preserve structure.
+                            # This makes 'my_folder/sub/file.txt' appear as such in the zip.
+                            arcname = os.path.relpath(full_path, os.path.dirname(path))
+                            logger.debug(f"Compressing: '{full_path}' as '{arcname}'")
+                            zipf.write(full_path, arcname=arcname)
+
+    except FileNotFoundError:
+        logger.error(f"Could not create zip file. The directory for '{output_zip_path}' may not exist.")
+    except PermissionError:
+        logger.error("Permission denied. Check read permissions for source files and write permission for the destination.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+    else:
+        logger.info(f"Successfully created zip file: '{output_zip_path}'")
+
+def unzip_files(zip_path: str, output_folder: str) -> None:
+    """
+    Extracts the contents of a ZIP file to a specified output folder.
+
+    Parameters
+    ----------
+        zip_path: The full path to the ZIP file to be extracted (e.g., '/path/to/archive.zip').
+        output_folder: The directory where the contents will be extracted. 
+                       If it doesn't exist, it will be created.
+    """
+    if not os.path.isfile(zip_path):
+        logger.error(f"ZIP file '{zip_path}' does not exist.")
+        return
+
+    # Create the output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+
+    logger.info(f"Starting extraction of '{zip_path}' to '{output_folder}'...")
+
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            zipf.extractall(output_folder)
+    except zipfile.BadZipFile:
+        logger.error(f"The file '{zip_path}' is not a valid ZIP file or is corrupted.")
+    except PermissionError:
+        logger.error("Permission denied. Check read permissions for the ZIP file and write permission for the output folder.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+    else:
+        logger.info(f"Successfully extracted '{zip_path}' to '{output_folder}'")
+        
+def remove_files(*file_paths: str) -> None:
+    """ 
+    Safely remove a list of files.
+    
+    Parameters
+    ----------
+        *file_paths: Variable number of file paths to remove.
+    """
+    for file_path in file_paths:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
 # Related to configuration
 def read_configuration(configuration_path: str) -> Dict[str, Any]:
@@ -177,19 +256,15 @@ def merge_configurations(common_config: Dict, specific_config: Optional[Dict]) -
 
 
 # Features utils
-def read_feature_constraints(features_path: Union[str, None], features_regex: Union[str, None] = None) -> Union[List[str], str]:
+def read_features_list(features_path: Optional[str]) -> Union[List[str], str]:
     """
-    Read the feature constraints from the configuration file. Either a list of features or a regex.
-    If both are given, the list of features is used.
+    Read the feature list to use
 
     Parameters
     ----------
 
     features_path : str
         Path to the file with the list of features
-
-    features_regex : str
-        Regular expression to select the features
     
     Returns
     -------
@@ -209,15 +284,7 @@ def read_feature_constraints(features_path: Union[str, None], features_regex: Un
         
         return feature_constraints
     
-    if features_regex is not None:
-        # Regex is given, use it to select the features
-        logger.info(f' Using regex to select features: {features_regex}')
-        return features_regex
-    
-    # No features path or regex is given, use default filter
-    logger.info(' Using all features except time, *labels, *walker and *bias columns')
-    return default_regex
-
+    return None
 
 
 # Input validation

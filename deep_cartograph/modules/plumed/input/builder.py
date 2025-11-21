@@ -1,7 +1,7 @@
 # Import modules
 import sys
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Import local modules
 from deep_cartograph.modules.plumed.input.assembler import Assembler, CollectiveVariableAssembler, EnhancedSamplingAssembler
@@ -19,8 +19,12 @@ class ComputeFeaturesBuilder(Assembler):
     """
     Builder to create an input file that computes a collection of features during an MD simulation or trajectory.
     """           
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int):
-        return super().__init__(input_path, topology_path, feature_list, traj_stride)
+    def __init__(self, plumed_input_path: str, 
+                 topology_path: str, 
+                 features_list: List[str], 
+                 traj_stride: int,
+                 fit_template_path: Optional[str] = None):
+        return super().__init__(plumed_input_path, topology_path, features_list, traj_stride, fit_template_path)
     
     def build(self, colvars_path: str):
         """ 
@@ -29,8 +33,8 @@ class ComputeFeaturesBuilder(Assembler):
         super().build()
         
         # Add features to print arguments
-        self.print_args = self.feature_list
-        
+        self.print_args = self.features_list
+
         # Add the print command
         self.add_print_command(colvars_path, self.traj_stride)
         
@@ -41,32 +45,15 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
     """
     Builder to create an input file that computes a collective variable during an MD simulation or trajectory.
     """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict):
-        """
-        Class that builds a PLUMED input file to compute a collective variable.
-        
-        Parameters
-        ----------
-        
-            input_path (str):
-                Path to the PLUMED input file. The file that will be written.
-                
-            topology_path (str):
-                Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
-                
-            feature_list (list):
-                List of features to be tracked. Make sure the features are defined for this topoogy.
-            
-            traj_stride (int):
-                Stride to use when computing the features from a trajectory or MD simulation.
-                
-            cv_type (str):
-                Type of collective variable to compute. Can be 'linear' or 'non-linear'.
-                
-            cv_params (dict):
-                Parameters for the collective variable. The parameters depend on the CV type.
-        """
-        return super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params)
+    def __init__(self, plumed_input_path: str, 
+                 topology_path: str, 
+                 features_list: List[str], 
+                 traj_stride: int, 
+                 cv_type: str, 
+                 cv_params: Dict,
+                 fit_template_path: Optional[str] = None):
+        return super().__init__(plumed_input_path, topology_path, features_list, 
+                                traj_stride, cv_type, cv_params, fit_template_path)
     
     def build(self, colvars_path: str):
         """ 
@@ -93,8 +80,12 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
      Builder to create an input file to enhance sampling during an MD simulation or trajectory.
     """
     
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, sampling_params: Dict):
-        return super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params, sampling_method, sampling_params)
+    def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
+                 traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
+                 sampling_params: Dict, fit_template_path: Optional[str] = None):
+        return super().__init__(plumed_input_path, topology_path, features_list, traj_stride, 
+                                cv_type, cv_params, sampling_method, sampling_params,
+                                fit_template_path)
     
     def build(self, colvars_path: str):
         """ 

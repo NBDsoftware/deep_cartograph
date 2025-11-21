@@ -1,12 +1,53 @@
 # Import modules
+import os
 import logging
+import lightning as L
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import Callback
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Literal
+import torch
 
 # Set logger
 logger = logging.getLogger(__name__)
 
+class PostAnnealingCheckpoint(Callback):
+    """
+    Custom callback to save the best model based on validation loss,
+    but only after the beta-annealing phase is complete.
+    """
+    def __init__(self, monitor: str, dirpath: str, annealing_end_epoch: int):
+        super().__init__()
+        self.monitor = monitor
+        self.dirpath = dirpath
+        self.annealing_end_epoch = annealing_end_epoch
+        self.best_score = torch.inf
+        self.best_model_path = ""
+
+        # Ensure the directory exists
+        os.makedirs(self.dirpath, exist_ok=True)
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        # Only start monitoring after the annealing phase
+        if trainer.current_epoch < self.annealing_end_epoch:
+            return
+
+        # Get the metric to monitor
+        current_score = trainer.callback_metrics.get(self.monitor)
+        if current_score is None:
+            return
+
+        # Compare and save the best model checkpoint
+        if current_score < self.best_score:
+            self.best_score = current_score
+            filename = f"best-post-anneal-epoch={trainer.current_epoch}.ckpt"
+            # Erase previous best model if exists
+            if os.path.exists(self.best_model_path):
+                os.remove(self.best_model_path)
+            self.best_model_path = os.path.join(self.dirpath, filename)
+            trainer.save_checkpoint(self.best_model_path)
+            logger.debug(f"\nSaved new best post-annealing model with {self.monitor}={current_score:.4f} at epoch {trainer.current_epoch}")
+            
 class KLAAnnealing(Callback):
     """
     Callback to anneal the KL divergence weight (beta).
@@ -19,18 +60,18 @@ class KLAAnnealing(Callback):
     uninformative latent space.
     
     Two types of annealing are implemented:
-    - Linear annealing: linearly increases the beta value from 0 to max_beta
+    - Linear annealing: linearly increases the beta value from start_beta to max_beta
         over a specified number of epochs, starting from a given epoch.
-    - Cyclical annealing: cycles the beta value between 0 and max_beta
-        for a specified number of cycles, each with a given length.
-    
-    NOTE: linearly increasing max_beta with cyclical annealing would be nice to try :) 
+    - Sigmoid annealing: increases the beta value following a sigmoid curve
+        from start_beta to max_beta over a specified number of epochs, starting from a given epoch
+    - Cyclical annealing: cycles the beta value between start_beta and max_beta
+        for a specified number of cycles, each with a given length. 
     
     Inputs
     ------
     
     type:
-        Type of annealing ('linear' or 'cyclical'). Default is 'cyclical'.
+        Type of annealing ('linear', 'sigmoid' or 'cyclical'). Default is 'cyclical'.
         
     start_beta: 
         The initial beta value before annealing starts. Default is 0.0.
@@ -45,13 +86,14 @@ class KLAAnnealing(Callback):
         For 'cyclical' type: The number of full cycles to perform. Default is 4.
         
     n_epochs_anneal: 
-        'linear' type: The total number of epochs to monotonically increase beta to max_beta.
+        'linear' or 'sigmoid' types: The total number of epochs to increase beta 
+        from start_beta to max_beta.
         'cyclical' type: will be divided by n_cycles to determine cycle length.
         Default is 1000.
     """
     
     def __init__(self, 
-                 type: Literal['linear', 'cyclical'] = 'cyclical', 
+                 type: Literal['linear', 'sigmoid', 'cyclical'] = 'cyclical', 
                  start_beta: float = 0.0,
                  max_beta: float = 0.01, 
                  start_epoch: int = 1000, 
@@ -68,13 +110,16 @@ class KLAAnnealing(Callback):
         self.n_epochs_anneal = n_epochs_anneal
         self.cycle_length = n_epochs_anneal // n_cycles
         
-        if self.type not in ['linear', 'cyclical']:
+        if self.type not in ['linear', 'sigmoid', 'cyclical']:
             raise ValueError("Invalid type for KLAAnnealing. Must be 'linear' or 'cyclical'.")
     
         if self.type == 'cyclical':
             # n_epochs_anneal should be larger than n_cycles
             if n_epochs_anneal < n_cycles:
                 raise ValueError("n_epochs_anneal must be greater than or equal to n_cycles for cyclical annealing.")
+            
+        print(f"KLAAnnealing initialized with type={self.type}, start_beta={self.start_beta}, "
+              f"max_beta={self.max_beta})")
 
     def on_train_epoch_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
         
@@ -89,6 +134,8 @@ class KLAAnnealing(Callback):
             
             if self.type == 'linear':
                 beta = self.linear_anneal(annealing_epoch, self.n_epochs_anneal)
+            elif self.type == 'sigmoid':
+                beta = self.sigmoid_anneal(annealing_epoch, self.n_epochs_anneal)
             elif self.type == 'cyclical':
                 beta = self.cyclical_anneal(annealing_epoch, self.n_epochs_anneal)
         
@@ -157,3 +204,70 @@ class KLAAnnealing(Callback):
         cycle_progress = epoch % self.cycle_length
         
         return self.linear_anneal(cycle_progress, self.cycle_length // 2)
+
+    def sigmoid_anneal(self, epoch: int,
+                        n_epochs_anneal: int,
+                        ) -> float:
+            """
+            Sigmoid annealing of beta from start_beta to max_beta over n_epochs_anneal epochs.
+            
+            Parameters
+            ----------
+            epoch : int
+                The current epoch since the annealing started.
+            
+            n_epochs_anneal : int
+                The total number of epochs over which to anneal beta.
+            
+            Returns
+            -------
+            float
+                The annealed beta value.
+            """
+            
+            import numpy as np
+            
+            # Value of sigmoid at start (eps) and at end (1-eps)
+            eps = 1e-3         
+            
+            # Sigmoid parameters    
+            midpoint = self.start_epoch + n_epochs_anneal // 2
+            steepness = np.log(eps / (1-eps)) / (self.start_epoch - midpoint)
+            epoch += self.start_epoch
+            
+            # Sigmoid function
+            beta = self.start_beta + (self.max_beta - self.start_beta) / (1 + np.exp(-steepness * (epoch - midpoint)))
+            
+            return beta
+            
+class LROnPlateauManager(Callback):
+    """
+    Manages the ReduceLROnPlateau scheduler to start monitoring
+    only after a specified epoch.
+    """
+    def __init__(self, start_epoch: int):
+        super().__init__()
+        self.start_epoch = start_epoch
+        print(f"LROnPlateauManager initialized. Will start monitoring validation loss at epoch {self.start_epoch}.")
+
+    def on_validation_epoch_end(self, trainer: L.Trainer, _):
+        if trainer.current_epoch < self.start_epoch:
+            return
+
+        # Get the validation loss from the trainer's metrics
+        validation_loss = trainer.callback_metrics.get('valid_loss')
+        if validation_loss is None:
+            # Add a warning if the metric is not found after the start epoch
+            if trainer.current_epoch == self.start_epoch:
+                print(f"Warning: 'valid_loss' not found in callback_metrics. "
+                      f"Ensure you are logging it via self.log('valid_loss', ...).")
+            return
+
+        lr_schedulers = trainer.lightning_module.lr_schedulers()
+
+        if not isinstance(lr_schedulers, list):
+            lr_schedulers = [lr_schedulers]
+
+        for scheduler in lr_schedulers:
+            if isinstance(scheduler, ReduceLROnPlateau):
+                scheduler.step(validation_loss)

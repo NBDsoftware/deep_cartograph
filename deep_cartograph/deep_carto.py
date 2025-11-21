@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import shutil
 import argparse
 import logging.config
 from pathlib import Path
@@ -12,14 +11,15 @@ from deep_cartograph.tools import (
     analyze_geometry,
     compute_features,
     filter_features,
-    train_colvars
+    train_colvars,
+    traj_projection,
+    traj_cluster
 )
 from deep_cartograph.modules.common import (
     check_data,
-    create_output_folder,
     get_unique_path,
     validate_configuration,
-    read_feature_constraints,
+    read_features_list,
     read_configuration
 )
 
@@ -114,13 +114,14 @@ def deep_cartograph(
         output_folder = get_unique_path(output_folder)
             
     # Create output folder if it does not exist
-    create_output_folder(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
 
     # Validate configuration
     configuration = validate_configuration(configuration, DeepCartograph, output_folder)
     
     # Check main input folders
     trajectories, topologies = check_data(trajectory_data, topology_data)
+    trajectory_names = [Path(traj).stem for traj in trajectories]
     
     # Set reference topology
     if not reference_topology:
@@ -129,9 +130,8 @@ def deep_cartograph(
         logger.error(f"Reference topology file missing: {reference_topology}")
         sys.exit(1)
     
-    # Step 0: Analyze geometry
+    # STEP 0: Analyze geometry
     # ------------------------
-    
     args = {
         'configuration': configuration['analyze_geometry'],
         'trajectories': trajectories,
@@ -140,9 +140,8 @@ def deep_cartograph(
     }
     analyze_geometry(**args)
 
-    # Step 1: Compute features
+    # STEP 1: Compute features
     # ------------------------
-    
     # Compute features for all trajectories
     args = {
         'configuration': configuration['compute_features'], 
@@ -156,29 +155,23 @@ def deep_cartograph(
     # Compute features for supplementary data
     if supplementary_traj_data:
         supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
+        sup_trajectory_names = [Path(traj).stem for traj in supplementary_trajs]
         args = {
             'configuration': configuration['compute_features'], 
             'trajectories': supplementary_trajs, 
             'topologies': supplementary_tops, 
             'reference_topology': reference_topology,
+            'traj_stride': 1,  # Use all frames for supplementary data - typically smaller datasets
             'output_folder': os.path.join(output_folder, 'compute_ref_features')
         }
         supplementary_colvars_paths = compute_features(**args)
-        
-        # If there are less than 10 supplementary trajectories, use their names as labels
-        supplementary_labels = None
-        if len(supplementary_trajs) < 10: 
-            supplementary_labels = [Path(val_trajectory).stem for val_trajectory in supplementary_trajs]
     else:
         supplementary_trajs, supplementary_tops = None, None
+        sup_trajectory_names = None
         supplementary_colvars_paths = None
-        supplementary_labels = None
 
-    ## Step 2: Filter features
+    # STEP 2: Filter features
     # ------------------------
-    
-    # NOTE: Here we are assuming that MDAnalysis hasn't changed: resid, resname, atomnames of the topologies
-    #       Otherwise there would be a mismatch between the feature names in the colvars and the original topologies    
     args = {
         'configuration': configuration['filter_features'], 
         'colvars_paths': traj_colvars_paths,
@@ -189,34 +182,66 @@ def deep_cartograph(
     output_features_path = filter_features(**args)
 
     # Read filtered features
-    filtered_features = read_feature_constraints(output_features_path) 
+    filtered_features = read_features_list(output_features_path)
 
-    # Step 3: Train colvars
+    # STEP 3: Train colvars
     # ---------------------
     args = {
         'configuration': configuration['train_colvars'],
-        'colvars_paths': traj_colvars_paths,
-        'trajectories': trajectories,
-        'topologies': topologies,
+        'train_colvars_paths': traj_colvars_paths,
+        'train_topologies': topologies,
+        'trajectory_names': trajectory_names,
         'reference_topology': reference_topology,
-        'feature_constraints': filtered_features,
-        'sup_colvars_paths': supplementary_colvars_paths,
-        'sup_topology_paths': supplementary_tops,
-        'sup_labels': supplementary_labels,
+        'features_list': filtered_features,
         'dimension': dimension,
         'cvs': cvs,
-        'samples_per_frame': 1/configuration['compute_features']['plumed_settings']['traj_stride'],
+        'frames_per_sample': configuration['compute_features']['plumed_settings']['traj_stride'],
         'output_folder': os.path.join(output_folder, 'train_colvars')
     }
-    train_colvars(**args)
-            
+    trained_cvs_data = train_colvars(**args)
+    
+    # STEP 4: Trajectory projection
+    # -----------------------------
+    if supplementary_trajs:
+        args = { 
+            'configuration' : configuration['traj_projection'],
+            'colvars_paths': supplementary_colvars_paths,
+            'topologies': supplementary_tops,
+            'trajectory_names': sup_trajectory_names,
+            'model_paths': [trained_cvs_data[cv]['model_path'] for cv in trained_cvs_data.keys()],
+            'model_traj_paths': [trained_cvs_data[cv]['traj_paths'] for cv in trained_cvs_data.keys()],
+            'output_folder': os.path.join(output_folder, 'traj_projection')
+        }
+        sup_cvs_data = traj_projection(**args)
+    else:
+        sup_cvs_data = {}
+
+    # STEP 5: Trajectory clustering
+    # -----------------------------
+    for cv in trained_cvs_data.keys():
+
+        logger.info(f"Clustering trajectories in CV space: {cv}")
+
+        args = {
+            'configuration': configuration['traj_cluster'],
+            'cv_traj_paths': trained_cvs_data[cv]['traj_paths'],
+            'trajectories': trajectories,
+            'topologies': topologies,
+            'sup_cv_traj_paths': sup_cvs_data.get(cv, {}).get('traj_paths', None),
+            'sup_trajectories': supplementary_trajs,
+            'sup_topologies': supplementary_tops,
+            'frames_per_sample': configuration['compute_features']['plumed_settings']['traj_stride'],
+            'output_folder': os.path.join(output_folder, 'traj_cluster', cv)
+        }
+        traj_cluster(**args)
+    
     # End timer
     elapsed_time = time.time() - start_time
 
     # Write time to log in hours, minutes and seconds
     logger.info('Total elapsed time: %s', time.strftime("%H h %M min %S s", time.gmtime(elapsed_time)))   
 
-def set_logger(verbose: bool):
+def set_logger(verbose: bool, log_path: str):
     """
     Configures logging for Deep Cartograph. 
     
@@ -229,6 +254,7 @@ def set_logger(verbose: bool):
     Args:
         verbose (bool): If `True`, logging level is set to DEBUG. 
                         If `False`, logging level is set to INFO.
+        log_path (str): Path to the log file where logs will be saved.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -246,18 +272,19 @@ def set_logger(verbose: bool):
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
         raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
-    
     if not os.path.exists(debug_config_path):
         raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
     
-    if verbose:
-        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
-    else:
-        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
+    # Pass the log_path to the fileConfig using the 'defaults' parameter
+    config_path = debug_config_path if verbose else info_config_path
+    logging.config.fileConfig(
+        config_path,
+        defaults={'log_path': log_path},
+        disable_existing_loggers=True
+    )
 
     logger = logging.getLogger("deep_cartograph")
-
-    logger.info("Deep Cartograph: package for projecting and clustering trajectories using collective variables.")
+    logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
 
 def parse_arguments():
     """Parses command-line arguments."""
@@ -346,18 +373,18 @@ def main():
     
     args = parse_arguments()
 
+    # Determine output folder, if restart is False, create a unique output folder
+    output_folder = args.output_folder if args.output_folder else 'deep_cartograph'
+    if not args.restart:
+        output_folder = get_unique_path(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
+    
     # Set logger
-    set_logger(verbose=args.verbose)
+    log_path = os.path.join(output_folder, 'deep_cartograph.log')
+    set_logger(verbose=args.verbose, log_path=log_path)
 
     # Read configuration
     configuration = read_configuration(args.configuration_path)
-
-    # Determine output folder
-    output_folder = args.output_folder if args.output_folder else 'deep_cartograph'
-
-    # If restart is False, create a unique output folder
-    if not args.restart:
-        output_folder = get_unique_path(output_folder)
 
     # Run Deep Cartograph tool
     deep_cartograph(
@@ -372,10 +399,6 @@ def main():
         restart=args.restart,
         output_folder=output_folder
     )
-
-    # Move log file to output folder
-    log_path = os.path.join(output_folder, 'deep_cartograph.log')
-    shutil.move('deep_cartograph.log', log_path)
 
 
 if __name__ == "__main__":

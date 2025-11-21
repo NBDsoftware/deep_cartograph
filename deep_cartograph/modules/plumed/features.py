@@ -25,7 +25,11 @@ class FeatureTranslator:
         
     def run(self) -> List[str]:
         """ 
-        Create a topology mapper and translate the list of features from the reference topology to the target topology
+        Translate the list of features from the reference topology to the target topology respecting 
+        the original order of the features. This is done using a topology mapper that maps
+        residues from the reference topology to the target topology using a sequence alignment.
+        
+        If the feature is not present in the target topology, it is replaced by None.
         
         Returns
         -------
@@ -41,7 +45,8 @@ class FeatureTranslator:
     
     def translate_features(self) -> List[str]:
         """ 
-        Translate each feature from the reference topology to the target topology. 
+        Translate each feature from the reference topology to the target topology respecting the original
+        order of the features.
         """
         
         translated_features = []
@@ -56,16 +61,25 @@ class FeatureTranslator:
                 translated_features.append(feature)
                 continue
             
-            name = entities[0]
+            feature_name = entities[0]
             ref_atoms = entities[1:]
             
+            if feature_name == "coord":
+                # Remove the axis suffix from the last entity
+                atom, axis = ref_atoms[-1].split(".")
+                ref_atoms[-1] = atom
+
             # Translate each atom from the reference topology to the target topology
             atoms = [self.translate_atom(atom) for atom in ref_atoms]
 
             # If the target topology file has all the necessary atoms
             if None not in atoms:
                 # Recompose the feature in the target topology
-                translated_features.append(name + "-" + "-".join(atoms))
+                translated_features.append(feature_name + "-" + "-".join(atoms))
+                
+                if feature_name == "coord":
+                    # Add the axis suffix to the last entity
+                    translated_features[-1] += "." + axis
             else:
                 # Store None otherwise
                 translated_features.append(None)

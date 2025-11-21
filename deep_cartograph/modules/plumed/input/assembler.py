@@ -2,7 +2,7 @@
 import os
 import sys
 import logging
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 # Import local modules
 import deep_cartograph.modules.plumed as plumed
@@ -21,36 +21,56 @@ class Assembler:
     """
     Base class to assemble the contents of a PLUMED input file.
     """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int):
+    def __init__(self, plumed_input_path: str, 
+                 topology_path: str, 
+                 features_list: List[str], 
+                 traj_stride: int,
+                 fit_template_path: Optional[str] = None
+        ):
         """ 
         Minimal attributes to construct a PLUMED input file.
         
         Parameters
         ----------
         
-            input_path (str):
+            plumed_input_path (str):
                 Path to the PLUMED input file. The file that will be written.
                 
             topology_path (str):
                 Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
                 
-            feature_list (list):
+            features_list (list):
                 List of features to be tracked.
             
             traj_stride (int):
                 Stride to use when computing the features from a trajectory or MD simulation.
+                
+            fit_template_path (str, optional):
+                Path to the reference topology with beta and occupancy factors ready to use as RMSD template. 
+                If provided, it will be used for the FIT TO TEMPLATE command.
         """
         # Path to the contents of the input file
         self.input_content: str = ""
         
         # Path to the input file
-        self.input_path: str = input_path
+        self.plumed_input_path: str = plumed_input_path
         
         # Path to the topology file used by PLUMED (MOLINFO command)
         self.topology_path: str = topology_path
         
+        # Path to the reference topology file used by PLUMED (FIT TO TEMPLATE command)
+        self.fit_template_path: str = fit_template_path
+
         # List of features to be tracked
-        self.feature_list: List[str] = feature_list
+        self.features_list: List[str] = features_list
+        
+        # Asses the need for Fit to template (if there are coordinates in the feature list)
+        self.fit_to_template_needed: bool = any(feat.startswith("coord") for feat in features_list)
+        
+        if self.fit_to_template_needed and not self.fit_template_path:
+            logger.error("Features contain coordinates but no fit template path was provided.")
+            logger.error("Please provide a fit template path or remove coordinate features.")
+            sys.exit(1)
         
         # List of variables to be printed in a COLVAR file
         self.print_args: List[str] = []
@@ -75,6 +95,10 @@ class Assembler:
         # Write WHOLEMOLECULES command - to correct for periodic boundary conditions
         self.input_content += plumed.command.wholemolecules(whole_mol_indices)
         
+        # If needed, write FIT TO TEMPLATE command - to align the structure to a reference
+        if self.fit_to_template_needed:
+            self.input_content += plumed.command.fit_to_template(os.path.abspath(self.fit_template_path))
+            
         # Leave blank line
         self.input_content += "\n"
         
@@ -85,10 +109,10 @@ class Assembler:
         self.add_center_commands()
         
         # Write feature commands
-        for feature in self.feature_list:
+        for feature in self.features_list:
             self.input_content += self.get_feature_command(feature)
      
-    def get_feature_command(self, feature: str) -> str:
+    def get_feature_command(self, feature_label: str) -> str:
         """
         Get the PLUMED command to compute a feature from its definition.
         
@@ -97,16 +121,12 @@ class Assembler:
         The rest of the entities define the atoms that should be used to compute the feature and 
         the number of them will depend on the specific feature.
 
-            entity1  - entity2 - entity3
-
-            feat_name -  atom1  -  atom2   
+        Ex: dist-@CA_584-@CA_549 -> feat_name -  atom1  -  atom2   
             
-            Ex: dist-@CA_584-@CA_549
-
         Parameters
         ----------
         
-            feature (str):
+            feature_label (str):
                 Name (i.e. definition) of the feature to compute.
         
         Returns
@@ -117,7 +137,7 @@ class Assembler:
         """   
         
         # Divide the feature definition into entities
-        entities = feature.split("-")
+        entities = feature_label.split("-")
         
         # Get the feature name
         feat_name = entities[0]
@@ -127,47 +147,67 @@ class Assembler:
             
             # Distance
             if len(entities) != 3:
-                logger.error(f"Malformed distance feature label: {feature}")
+                logger.error(f"Malformed distance feature label: {feature_label}")
                 sys.exit(1)
                 
             for i in range(1,3):
                 if entities[i].startswith("center_"):
                     pass
                 else:
-                    entities[i] = plumed.utils.to_atomgroup(entities[i])
+                    entities[i] = entities[i].replace("_", "-")
             
-            return plumed.command.distance(feature, entities[1:])
+            return plumed.command.distance(feature_label, entities[1:])
+        
+        elif feat_name == "coord":
+            
+            # Coordinates of an atom
+            if len(entities) != 2:
+                logger.error(f"Malformed coord feature label: {feature_label}")
+                sys.exit(1)
+            
+            # Find the atom and axis
+            if "." not in entities[1]:
+                logger.error(f"Malformed coord feature label (missing axis): {feature_label}")
+                sys.exit(1)
+            
+            # Find atom and command label from feature label
+            atom, axis = entities[1].split(".")
+            command_label = 'coord' + '-' + atom
+            
+            # Include the command for the coordinates only once per atom
+            command = plumed.command.position(command_label, atom.replace("_", "-")) if axis == "x" else ""
+            return command
             
         elif feat_name == "sin":
             
             # Sinus of a dihedral angle
             if len(entities) != 5 and len(entities) != 2:
-                logger.error(f"Malformed sin feature label: {feature}")
+                logger.error(f"Malformed sin feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.sin(feature, [plumed.utils.to_atomgroup(entity) for entity in entities[1:]])
+            return plumed.command.sin(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
         
         elif feat_name == "cos":
             
             # Cosinus of a dihedral angle
             if len(entities) != 5 and len(entities) != 2:
-                logger.error(f"Malformed cos feature label: {feature}")
+                logger.error(f"Malformed cos feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.cos(feature, [plumed.utils.to_atomgroup(entity) for entity in entities[1:]])
+            return plumed.command.cos(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
         
         elif feat_name == "tor":
             
             # Dihedral angle
             if len(entities) != 5 and len(entities) != 2:
-                logger.error(f"Malformed tor feature label: {feature}")
+                logger.error(f"Malformed tor feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.torsion(feature, [plumed.utils.to_atomgroup(entity) for entity in entities[1:]])
-    
+            return plumed.command.torsion(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
+        
         else:
             
-            logger.error(f"Feature {feature} not recognized.")
+            logger.error(f"Feature {feature_label} not recognized.")
             sys.exit(1)
 
     def add_center_commands(self):
@@ -178,7 +218,7 @@ class Assembler:
         written_centers = []
         
         # Iterate over features
-        for feature in self.feature_list:
+        for feature in self.features_list:
             
             # Split into entities
             entities = feature.split("-")
@@ -207,45 +247,43 @@ class Assembler:
         self.input_content += "\n"
         
         self.input_content += plumed.command.print(self.print_args, colvars_path, stride)
-
+        
     def write(self):
         """
         Write the PLUMED input file. This method is not used by the Assembler classes but the Builder classes.
         """
-        with open(self.input_path, "w") as f:
+        with open(self.plumed_input_path, "w") as f:
             f.write(self.input_content)
             
 class CollectiveVariableAssembler(Assembler):
     """
     Assembler class to add the calculation of a collective variable to a PLUMED input file.
-    """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, 
-                 cv_type: str, cv_params: Dict):
-        """ 
-        Assembler to add the calculation of a collective variable to a PLUMED input file.
-        
-        Parameters
-        ----------
-        
-            input_path (str):
-                Path to the PLUMED input file. The file that will be written.
-                
-            topology_path (str):
-                Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
-                
-            feature_list (list):
-                List of features to be tracked. Make sure the features are defined for this topoogy.
+
+    Parameters
+    ----------
+    
+        plumed_input_path (str):
+            Path to the PLUMED input file. The file that will be written.
             
-            traj_stride (int):
-                Stride to use when computing the features from a trajectory or MD simulation.
-                
-            cv_type (str):
-                Type of collective variable to compute. Can be 'linear' or 'non-linear'.
-                
-            cv_params (dict):
-                Parameters for the collective variable. The parameters depend on the CV type.
-        """
-        super().__init__(input_path, topology_path, feature_list, traj_stride)
+        topology_path (str):
+            Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
+            
+        features_list (list):
+            List of features to be tracked. Make sure the features are defined for this topoogy.
+        
+        traj_stride (int):
+            Stride to use when computing the features from a trajectory or MD simulation.
+            
+        cv_type (str):
+            Type of collective variable to compute. Can be 'linear' or 'non-linear'.
+            
+        cv_params (dict):
+            Parameters for the collective variable. The parameters depend on the CV type.
+
+    """
+    def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], traj_stride: int, 
+                 cv_type: str, cv_params: Dict, fit_template_path: Optional[str] = None):
+        super().__init__(plumed_input_path, topology_path, features_list, traj_stride, fit_template_path)
         self.cv_type: Literal["linear", "non-linear"] = cv_type
         self.cv_params: Dict = cv_params
         self.cv_labels: List[str] = []
@@ -279,29 +317,20 @@ class CollectiveVariableAssembler(Assembler):
         self.validate_linear_cv()
         
         # Set up feature normalization
-        features_stats = self.cv_params['features_stats']
         features_norm_mode = self.cv_params['features_norm_mode']
-        if features_norm_mode == 'mean_std':
-            features_offset = features_stats['mean']
-            features_scale = 1/features_stats['std']
-        elif features_norm_mode == 'min_max':
-            features_offset = (features_stats['min'] + features_stats['max'])/2
-            features_scale = 2/(features_stats['max'] - features_stats['min'])
-        elif features_norm_mode == 'none':
-            pass
-        else:
-            raise ValueError(f"Features normalization mode {features_norm_mode} not recognized.")
+        features_mean = self.cv_params['features_norm_mean']
+        features_range = self.cv_params['features_norm_range']
         
         # Normalize the input features
         if features_norm_mode != 'none': 
             self.input_content += "\n# Normalized features\n"
             normalized_feature_labels = []
-            for index, feature in enumerate(self.feature_list):
+            for index, feature in enumerate(self.features_list):
                 normalized_feature = f"feat_{index}"
-                self.input_content += plumed.command.combine(normalized_feature, [feature], [features_scale[index]], [features_offset[index]])
+                self.input_content += plumed.command.combine(normalized_feature, [feature], [1/features_range[index]], [features_mean[index]])
                 normalized_feature_labels.append(normalized_feature)
         else:
-            normalized_feature_labels = self.feature_list
+            normalized_feature_labels = self.features_list
         
         # Compute the CV
         self.input_content += "\n# Collective variable\n"
@@ -334,12 +363,14 @@ class CollectiveVariableAssembler(Assembler):
         NOTE: migrate this to a pydantic model
         """
         
-        # Check if all required parameters are present
-        if 'features_stats' not in self.cv_params:
-            raise ValueError("Linear CV requires features statistics.")
-        
         if 'features_norm_mode' not in self.cv_params:
             raise ValueError("Linear CV requires features normalization mode.")
+        
+        if 'features_norm_mean' not in self.cv_params:
+            raise ValueError("Linear CV requires features normalization mean.")
+        
+        if 'features_norm_range' not in self.cv_params:
+            raise ValueError("Linear CV requires features normalization range.")
         
         if 'weights' not in self.cv_params:
             raise ValueError("Linear CV requires weights.")
@@ -354,8 +385,8 @@ class CollectiveVariableAssembler(Assembler):
             self.cv_params['cv_name'] = 'cv'
         
         # Check if the weights have the right shape
-        if self.cv_params['weights'].shape[0] != len(self.feature_list):
-            raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.feature_list)}")
+        if self.cv_params['weights'].shape[0] != len(self.features_list):
+            raise ValueError(f"CV weights shape {self.cv_params['weights'].shape} does not match the number of features {len(self.features_list)}")
 
         # Check that the CV dimension matches the number of components in the weights
         if self.cv_params['cv_dimension'] != self.cv_params['weights'].shape[1]:
@@ -372,7 +403,7 @@ class CollectiveVariableAssembler(Assembler):
     
         # Compute the CV
         self.input_content += "\n# Collective variable\n"
-        self.input_content += plumed.command.pytorch_model(self.cv_params['cv_name'], self.feature_list, os.path.abspath(self.cv_params['weights_path']))
+        self.input_content += plumed.command.pytorch_model(self.cv_params['cv_name'], self.features_list, os.path.abspath(self.cv_params['weights_path']))
             
         # Set the final CV labels
         self.cv_labels = [f"{self.cv_params['cv_name']}.node-{i}" for i in range(self.cv_params['cv_dimension'])]
@@ -397,8 +428,11 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
     Assembler class to add enhanced sampling to a PLUMED input file.
     """
-    def __init__(self, input_path: str, topology_path: str, feature_list: List[str], traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, sampling_params: Dict):
-        super().__init__(input_path, topology_path, feature_list, traj_stride, cv_type, cv_params)
+    def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
+                 traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
+                 sampling_params: Dict, fit_template_path: Optional[str] = None):
+        super().__init__(plumed_input_path, topology_path, features_list, traj_stride, 
+                         cv_type, cv_params, fit_template_path)
         self.sampling_method = sampling_method  # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
         self.sampling_params = sampling_params  # Parameters for the enhanced sampling method
         self.bias_labels = []  # Labels of the bias potentials

@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Literal
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, rgb2hex
 
@@ -612,4 +612,41 @@ def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: s
     plt.close()
 
     return
+
+def plot_sensitivity_results(results: Dict[str, np.array], 
+                             modes: Literal['barh', 'violin', 'scatter'], 
+                             output_folder: str):
+    """
+    Plot the sensitivity analysis results.
+
+    Inputs
+    ------
+
+        results:             dictionary with the sensitivity analysis results
+        modes:               list of modes to plot the sensitivity analysis results 
+        output_folder:       path to the output folder where the figures will be saved
+    """
     
+    from mlcolvar.explain import plot_sensitivity
+    
+    # Plot sensitivity with different modes
+    
+    for mode in modes:
+        fig,ax = plt.subplots(figsize=(5, 10))
+        plot_sensitivity(results, mode=mode, per_class=False, max_features=20, ax=ax)
+        ax.set_title(f'plot mode = {mode}')
+        plt.tight_layout()
+        fig.savefig(os.path.join(output_folder, f'top_features_{mode}.png'), dpi=300)
+        plt.close(fig)
+    
+    # Plot the histogram of the sensitivity values
+    fig, ax = plt.subplots(figsize=(10, 10))
+    sns.histplot(results['sensitivity'], bins=40, kde=True, ax=ax, log_scale=[True, False])
+    ax.set_title('Sensitivity histogram')
+    ax.set_xlabel('Sensitivity')
+    ax.set_ylabel('Frequency')
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_folder, 'sensitivity_histogram.png'), dpi=300)
+    plt.close(fig)
+    
+    return
