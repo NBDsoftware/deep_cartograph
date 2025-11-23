@@ -3,7 +3,7 @@ Deep Cartograph
 
 <img src="deep_cartograph/data/images/DeepCarto_logo.png" width="200">
 
-Deep cartograph is a package to analyze and enhance MD simulations.
+Deep cartograph is a package to analyze and enhance MD simulations. This software has been developed for the [European BioExcel](http://bioexcel.eu/), funded by the European Commission (EU Horizon Europe [101093290](https://cordis.europa.eu/project/id/101093290)).
 
 This software has been developed for the [European BioExcel](http://bioexcel.eu/), funded by the European Commission (EU Horizon Europe [101093290](https://cordis.europa.eu/project/id/101093290)).
 
@@ -19,7 +19,7 @@ Starting from a trajectory and topology files, Deep cartograph can be used to:
   4. Project and cluster the trajectory in the CV space.
   5. Produce a PLUMED input file to enhance the sampling.
 
-<img src="deep_cartograph/data/images/DeepCarto_summary.png" width="800">
+<img src="deep_cartograph/data/images/DeepCarto.png" width="800">
 
 ---
 
