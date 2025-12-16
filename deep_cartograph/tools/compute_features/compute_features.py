@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Union, List, Optional
 
 from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
+import deep_cartograph.modules.features as features
 import deep_cartograph.modules.plumed as plumed 
 import deep_cartograph.modules.md as md
 from deep_cartograph.modules.common import ( 
@@ -153,7 +154,7 @@ def compute_features(
         
         # Translate features to new topology
         logger.debug(f"Translating features from reference topology {Path(reference_topology).name} to topology {Path(topology).name}")
-        features_list = plumed.features.FeatureTranslator(ref_plumed_topology, plumed_topology, ref_features_list).run()
+        features_list = features.Translator(ref_plumed_topology, plumed_topology, ref_features_list).run()
         features_lists.append(features_list)
         
         if logger.isEnabledFor(logging.DEBUG):
@@ -172,7 +173,7 @@ def compute_features(
     
     # Check if all common feature lists have the same length
     if not all(len(lst) == len(common_features_lists[0]) for lst in common_features_lists):
-        logger.error("Feature lists are not the same length. Exiting...")
+        logger.error("Feature lists are not the same length, something went wrong when finding common features. Exiting...")
         sys.exit(1)
         
     if logger.isEnabledFor(logging.DEBUG):

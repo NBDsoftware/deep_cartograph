@@ -496,7 +496,7 @@ class CVCalculator:
             Path to the output folder where the files will be written
         """
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
-        from deep_cartograph.modules.plumed.features import FeatureTranslator
+        from deep_cartograph.modules.features import Translator as FeatureTranslator
         from deep_cartograph.modules.md import create_plumed_rmsd_template
         
         from deep_cartograph.modules.common import zip_files, remove_files

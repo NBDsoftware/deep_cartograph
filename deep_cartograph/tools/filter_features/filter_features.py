@@ -1,14 +1,13 @@
 import os
 import sys
 import time
-import shutil
 import argparse
 import logging.config
 from pathlib import Path
 from typing import Dict, List, Union, Optional
 
 from deep_cartograph.yaml_schemas.filter_features import FilterFeaturesSchema
-from deep_cartograph.tools.filter_features.filtering import Filter
+from deep_cartograph.modules.features import Filter
 from deep_cartograph.modules.common import (
     validate_configuration, 
     save_list,
@@ -23,8 +22,10 @@ from deep_cartograph.modules.common import (
 def filter_features(
     configuration: Dict,
     colvars_paths: Union[str, List[str]],
+    waypoint_colvars_paths: Optional[List[str]] = None,
     csv_summary: bool = True,
     topologies: Optional[List[str]] = None,
+    waypoint_topologies: Optional[List[str]] = None,
     reference_topology: Optional[str] = None,
     output_folder: str = "filter_features"
 ) -> str:
@@ -48,9 +49,17 @@ def filter_features(
     colvars_paths : str or List[str]
         Path or list of paths to colvars file(s) containing the time series of features to filter.  
         If multiple files are provided, they must have the same feature set.
-            
+    
+    waypoint_colvars_paths : List[str], optional (default: None)
+        List of paths to colvars files containing the value of the features for intermediate 
+        conformations that define the transition of interest.  
+        If given, features that do not change their value across these structures will be filtered out.
+
     csv_summary : bool, optional (default: True)
         If `True`, saves a CSV summary with filter values for each collective variable.
+
+    waypoint_topologies : List[str], optional (default: None)
+        List of topologies corresponding to the waypoint colvars files.
 
     topologies : List[str], optional (default: None)
         Topologies corresponding to the colvars files.  
@@ -99,10 +108,9 @@ def filter_features(
     # Validate configuration
     configuration = validate_configuration(configuration, FilterFeaturesSchema, output_folder)
     
+    # Check colvars files
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
-
-    # Check the colvars file exists
     check_colvars(colvars_paths)
 
     if topologies:
@@ -115,9 +123,11 @@ def filter_features(
     # Filter the features
     args = {
         'colvars_paths': colvars_paths,
-        'topologies': topologies,
-        'reference_topology': reference_topology,
         'settings': configuration['filter_settings'],
+        'waypoint_colvars_paths': waypoint_colvars_paths,
+        'topologies': topologies,
+        'waypoint_topologies': waypoint_topologies,
+        'reference_topology': reference_topology,
         'output_dir': output_folder
     }
     filtered_features = Filter(**args).run(csv_summary)
@@ -214,6 +224,24 @@ def parse_arguments():
     
     # Optional arguments
     parser.add_argument(
+        '-waypoint_colvars', dest='waypoint_colvars', type=List[str], nargs='+', required=False,
+        help="""List of paths to colvars files containing the value of the features for intermediate 
+        conformations that define the transition of interest. If given, features that do not change their value
+        across these structures will be filtered out."""
+    )
+    parser.add_argument(
+        '-topologies', dest='topologies', type=List[str], nargs='+', required=False,
+        help="List of topologies corresponding to the colvars files."
+    )
+    parser.add_argument(
+        '-waypoint_topologies', dest='waypoint_topologies', type=List[str], nargs='+', required=False,
+        help="List of topologies corresponding to the waypoint colvars files."
+    )
+    parser.add_argument(
+        '-ref_topology', dest='reference_topology', type=str, required=False,
+        help="Path to the reference topology for feature name translation."
+    )
+    parser.add_argument(
         '-output', dest='output_folder', type=str, required=False,
         help="Path to the output folder."
     )
@@ -253,6 +281,10 @@ def main():
     _ = filter_features(
         configuration = configuration,
         colvars_paths = args.colvars_paths,
+        waypoint_colvars_paths = args.waypoint_colvars,
+        topologies = args.topologies,
+        waypoint_topologies = args.waypoint_topologies,
+        reference_topology = args.reference_topology,
         csv_summary = args.csv_summary,
         output_folder = output_folder)
     

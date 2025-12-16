@@ -8,7 +8,7 @@ import time
 import logging
 import pandas as pd
 from pathlib import Path
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 
 # Local imports
 from deep_cartograph.modules.plumed.colvars import read_features
@@ -18,11 +18,18 @@ logger = logging.getLogger(__name__)
 
 class Filter:
 
-    def __init__(self, colvars_paths: List[str], settings: Dict, topologies: Union[List[str], None] = None, 
-                 reference_topology: Union[str, None] = None, output_dir: str = 'filter_features') -> None:
+    def __init__(self, 
+                 colvars_paths: List[str], 
+                 settings: Dict, 
+                 waypoint_colvars_paths: Optional[List[str]] = None,
+                 topologies: Optional[List[str]] = None,
+                 waypoint_topologies: Optional[List[str]] = None,
+                 reference_topology: Optional[str] = None,
+                 output_dir: Optional[str] = 'filter_features') -> None:
         """ 
         Class that reads a series of colvars files with feature time series and filters the 
-        features based on the entropy, standard deviation, and Hartigan's Dip Test. 
+        features based on the entropy, standard deviation, Hartigan's Dip Test or their values across 
+        a set of metastable structures. 
         
         * NOTE: Here we could add autocorrelation or kinetic variance filters
         
@@ -34,9 +41,17 @@ class Filter:
                 
             settings
                 Filtering options
+            
+            waypoint_colvars_paths (Optional)
+                List of paths to colvars files containing the value of the features for intermediate 
+                conformations that define the transition of interest.  
+                If given, features that do not change their value across these structures will be filtered out.
                 
             topologies (Optional)
                 Paths to topology files corresponding to the different colvars files
+                
+            waypoint_topologies (Optional)
+                Paths to topology files corresponding to the waypoint colvars files
                 
             reference_topology (Optional)
                 Path to reference topology that will be used to define the filtered list of features. If no reference topology 
@@ -49,8 +64,8 @@ class Filter:
         
         logger.info("Initializing Filter")
         
-        # Paths
         self.colvars_paths = colvars_paths
+        self.waypoint_colvars_paths = waypoint_colvars_paths
         self.output_dir = output_dir
         
         if topologies:
@@ -58,8 +73,10 @@ class Filter:
                 reference_topology = topologies[0]
         
         self.topology_paths = topologies
+        self.waypoint_topologies = waypoint_topologies
         self.ref_topology_path = reference_topology
         
+        # Check number of colvars and topology files
         if self.topology_paths:
             if len(self.colvars_paths) != len(self.topology_paths):
                 logger.error('The number of colvars files must be equal to the number of topology files.')
@@ -71,11 +88,11 @@ class Filter:
         logger.info(f'Initial size of features set (only common features): {len(self.common_ref_features)}.')
         save_list(self.common_ref_features, os.path.join(self.output_dir, 'all_features.txt'))
 
-        # Configuration 
+        # Conditions to filter features
         self.compute_diptest = settings['compute_diptest']
         self.compute_entropy = settings['compute_entropy']
         self.compute_std = settings['compute_std']
-        self.filter_features = self.compute_diptest or self.compute_entropy or self.compute_std
+        self.filter_features = self.compute_diptest or self.compute_entropy or self.compute_std or (self.waypoint_colvars_paths is not None)
 
         # Thresholds
         self.diptest_significance_level = settings['diptest_significance_level']
@@ -96,6 +113,10 @@ class Filter:
         # Add dip test column if needed
         if self.compute_diptest:
             self.features_data['hdtp'] = 1.0
+            
+        # Add waypoint variation column if needed
+        if self.waypoint_colvars_paths is not None:
+            self.features_data['waypoint_variation'] = True
 
     def find_common_features(self) -> List[str]:
         """
@@ -103,7 +124,7 @@ class Filter:
         translate the feature names of each colvars file to the reference topology before comparing them.
         """
         from deep_cartograph.modules.plumed.colvars import read_column_names
-        from deep_cartograph.modules.plumed.features import FeatureTranslator
+        from deep_cartograph.modules.features import Translator as FeatureTranslator
         
         # For each colvars and topology file
         common_features = None
@@ -140,67 +161,76 @@ class Filter:
 
     def run(self, csv_summary: bool = False) -> list:
         """
-        Filter the features based on the selected metrics.
+        Filter the features.
 
         Inputs
         ------
 
-            csv_summary (bool): If True, saves the summary of the filtering to a csv file.
+            csv_summary (bool): If True, saves the summary with the filtering results to a csv file.
         """
-        
+
+        # Log the estimated time remaining every log_interval features
         total_num_features = len(self.common_ref_features)
-        log_interval = max(1, total_num_features // 10)  # Avoid division by zero
-        start_time = time.time()  # Start timer
+        log_interval = max(1, total_num_features // 10)
         
         # Iterate over features
+        start_time = time.time()
         if self.filter_features:
-            for i, reference_feature in enumerate(self.common_ref_features, start=1):
+            for feature_num, feature_name in enumerate(self.common_ref_features, start=1):
                 
-                logger.debug(f"Analyzing feature: {reference_feature}")
+                logger.debug(f"Analyzing feature: {feature_name}")
                 
-                # Read all the data for this feature
+                # Read time series data for this feature
                 args = {
                     'colvars_paths': self.colvars_paths,
-                    'ref_feature_names': [reference_feature],
+                    'ref_feature_names': [feature_name],
                     'topology_paths': self.topology_paths,
                     'reference_topology': self.ref_topology_path
                 }
-                feature_df = read_features(**args)
+                feature_timeseries_df = read_features(**args)
                     
                 # Entropy
                 if self.compute_entropy:
-                    
-                    from deep_cartograph.modules.statistics import shannon_entropy
-
                     # Compute and update the entropy of the feature
-                    feature_entropy = shannon_entropy(feature_df)
-                    self.features_data.loc[(self.features_data['name'] == reference_feature), 'entropy'] = feature_entropy
+                    from deep_cartograph.modules.statistics import shannon_entropy
+                    feature_entropy = shannon_entropy(feature_timeseries_df)
+                    self.features_data.loc[(self.features_data['name'] == feature_name), 'entropy'] = feature_entropy
 
                 # Standard deviation
                 if self.compute_std:
-                    
-                    from deep_cartograph.modules.statistics import standard_deviation
-
                     # Compute and update the standard deviation of the feature
-                    feature_std = standard_deviation(feature_df)
-                    self.features_data.loc[(self.features_data['name'] == reference_feature), 'std'] = feature_std
+                    from deep_cartograph.modules.statistics import standard_deviation
+                    feature_std = standard_deviation(feature_timeseries_df)
+                    self.features_data.loc[(self.features_data['name'] == feature_name), 'std'] = feature_std
                 
                 # Dip test
                 if self.compute_diptest:
-                    
-                    from deep_cartograph.modules.statistics import dip_test
-
                     # Compute and update the p-value of the Hartigan's Dip Test of the feature
-                    feature_hdt_pvalues = dip_test(feature_df)
-                    self.features_data.loc[(self.features_data['name'] == reference_feature), 'hdtp'] = feature_hdt_pvalues[0]
+                    from deep_cartograph.modules.statistics import dip_test
+                    feature_hdt_pvalues = dip_test(feature_timeseries_df)
+                    self.features_data.loc[(self.features_data['name'] == feature_name), 'hdtp'] = feature_hdt_pvalues[0]
             
                 # Estimate remaining time every log_interval iterations
-                if i % log_interval == 0 or i == total_num_features:
+                if feature_num % log_interval == 0 or feature_num == total_num_features:
                     elapsed_time = time.time() - start_time
-                    avg_time_per_feature = elapsed_time / i
-                    estimated_remaining = avg_time_per_feature * (total_num_features - i)
-                    logger.info(f'Processed {i}/{total_num_features} features. Estimated time left: {estimated_remaining:.2f} seconds.')
-        
+                    avg_time_per_feature = elapsed_time / feature_num
+                    estimated_remaining = avg_time_per_feature * (total_num_features - feature_num)
+                    logger.info(f'Processed {feature_num}/{total_num_features} features. Estimated time left: {estimated_remaining:.2f} seconds.')
+
+            # Read waypoint data for this feature
+            if self.waypoint_colvars_paths is not None:
+                waypoint_args = {
+                    'colvars_paths': self.waypoint_colvars_paths,
+                    'ref_feature_names': self.common_ref_features,
+                    'topology_paths': self.waypoint_topologies,
+                    'reference_topology': self.ref_topology_path
+                }
+                waypoint_features_df = read_features(**waypoint_args)
+                
+                # Check if the features changes across waypoints
+                from deep_cartograph.modules.statistics import variance_threshold
+                self.features_data['waypoint_variation'] = variance_threshold(waypoint_features_df)
+                
         if self.compute_entropy and self.entropy_quantile > 0:
             # Filter according to the entropy, those features with entropy below the threshold don't pass the filter
             entropy_threshold = self.features_data['entropy'].quantile(q = self.entropy_quantile)
@@ -217,6 +247,10 @@ class Filter:
         if self.compute_diptest and self.diptest_significance_level > 0:
             self.features_data.loc[(self.features_data['hdtp'] > self.diptest_significance_level), 'pass'] = False
                     
+        # Filter according to the waypoint variation
+        if self.waypoint_colvars_paths is not None:
+            self.features_data.loc[(self.features_data['waypoint_variation'] == False), 'pass'] = False
+
         if csv_summary:
             # Save the dataframe to a csv file
             self.features_data.to_csv(os.path.join(self.output_dir, "filter_summary.csv"), index=False)

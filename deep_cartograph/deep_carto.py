@@ -17,6 +17,7 @@ from deep_cartograph.tools import (
 )
 from deep_cartograph.modules.common import (
     check_data,
+    find_files,
     get_unique_path,
     validate_configuration,
     read_features_list,
@@ -34,6 +35,7 @@ def deep_cartograph(
     supplementary_traj_data: Optional[str] = None,
     supplementary_top_data: Optional[str] = None,
     reference_topology: Optional[str] = None,
+    waypoints_data: Optional[str] = None,
     dimension: Optional[int] = None,
     cvs: Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]] = None,
     restart: bool = False,
@@ -75,6 +77,11 @@ def deep_cartograph(
             Path to a reference topology file used to determine features from user selections.
             Default: first topology file in `topology_data`.
             Accepted format: `.pdb`.
+            
+        waypoints_data (Optional[str]):
+            Path to the folder containing intermediate conformations that define the transition of interest.
+            If given, features that do not change their value across these structures will be filtered out.
+            Default: `None`.
         
         dimension (Optional[int]): 
             Number of dimensions for the collective variables.
@@ -129,7 +136,7 @@ def deep_cartograph(
     elif not os.path.exists(reference_topology):
         logger.error(f"Reference topology file missing: {reference_topology}")
         sys.exit(1)
-    
+
     # STEP 0: Analyze geometry
     # ------------------------
     args = {
@@ -169,13 +176,31 @@ def deep_cartograph(
         supplementary_trajs, supplementary_tops = None, None
         sup_trajectory_names = None
         supplementary_colvars_paths = None
-
+        
+    # Compute features for waypoints data
+    if waypoints_data:
+        transition_waypoints = find_files(waypoints_data) # NOTE: we should only read files with a certain extension
+        waypoint_names = [Path(top).stem for top in transition_waypoints]
+        args = {
+            'configuration': configuration['compute_features'],
+            'trajectories': transition_waypoints,
+            'topologies': transition_waypoints,
+            'reference_topology': reference_topology,
+            'traj_stride': 1,  # Use all frames for waypoints data
+            'output_folder': os.path.join(output_folder, 'compute_waypoint_features')
+        }
+        waypoint_colvars_paths = compute_features(**args)
+    else:
+        waypoint_colvars_paths = None
+        
     # STEP 2: Filter features
     # ------------------------
     args = {
         'configuration': configuration['filter_features'], 
         'colvars_paths': traj_colvars_paths,
+        'waypoint_colvars_paths': waypoint_colvars_paths,
         'topologies': topologies,
+        'waypoint_topologies': transition_waypoints if waypoints_data else None,
         'reference_topology': reference_topology,
         'output_folder': os.path.join(output_folder, 'filter_features')
     }
@@ -337,6 +362,11 @@ def parse_arguments():
             "Defaults to the first topology in topology_data. Accepted format: .pdb."
         )
     )
+    parser.add_argument(
+        '-waypoints_data', dest='waypoints_data', type=str, required=False,
+        help="""Path to the folder containing intermediate conformations that define the transition of interest. If given,
+        features that do not change their value across these structures will be filtered out."""
+    )
 
     # Options
     parser.add_argument(
@@ -394,6 +424,7 @@ def main():
         supplementary_traj_data=args.supplementary_traj_data,
         supplementary_top_data=args.supplementary_top_data,
         reference_topology=args.reference_topology,
+        waypoints_data=args.waypoints_data,
         dimension=args.dimension,
         cvs=args.cvs,
         restart=args.restart,

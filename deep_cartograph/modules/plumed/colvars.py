@@ -97,8 +97,13 @@ def read_column_names(colvars_path: str, features_only: bool = False) -> List[st
 
     return column_names
 
-def read_features(colvars_paths: Union[List[str], str], ref_feature_names: List[str], topology_paths: Union[List[str], None] = None,
-         reference_topology: Union[str, None] = None, stratified_samples: Union[List[int], None] = None ) -> pd.DataFrame:
+def read_features(
+    colvars_paths: Union[List[str], str], 
+    ref_feature_names: List[str], 
+    topology_paths: Union[List[str], None] = None,
+    reference_topology: Union[str, None] = None, 
+    stratified_samples: Union[List[int], None] = None
+    ) -> pd.DataFrame:
     """ 
     Read the time series data of the features from the colvars files.
     If topologies and reference_topology are given, translate the feature names of each colvars file to the reference topology.
@@ -130,11 +135,11 @@ def read_features(colvars_paths: Union[List[str], str], ref_feature_names: List[
 
         features_df:            Dataframe with the time series data of the features
     """
-    from deep_cartograph.modules.plumed.features import FeatureTranslator
-    
+    from deep_cartograph.modules.features import Translator as FeatureTranslator
+
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
-        
+
     if topology_paths:
         # Set reference topology
         if not reference_topology:
@@ -143,47 +148,47 @@ def read_features(colvars_paths: Union[List[str], str], ref_feature_names: List[
         if len(colvars_paths) != len(topology_paths):
             logger.error(f"Number of topology files does not match the number of colvars files.")
             sys.exit(1)
-    
+
     merged_df = pd.DataFrame()
-    for i in range(len(colvars_paths)):
-        
+    for colvars_index in range(len(colvars_paths)):
+
         # Check if the file exists
-        if not os.path.exists(colvars_paths[i]):
-            logger.error(f"Colvars file not found: {colvars_paths[i]}")
+        if not os.path.exists(colvars_paths[colvars_index]):
+            logger.error(f"Colvars file not found: {colvars_paths[colvars_index]}")
             sys.exit(1)
 
         # Read feature names from the colvars file
-        all_feature_names = read_column_names(colvars_paths[i])
-            
+        all_feature_names = read_column_names(colvars_paths[colvars_index])
+
         # Check if there are any features
         if len(all_feature_names) == 0:
-            logger.error(f'No features found in the colvars file: {colvars_paths[i]}')
+            logger.error(f'No features found in the colvars file: {colvars_paths[colvars_index]}')
             sys.exit(1)
-        
+
         if topology_paths:
             # Translate the reference feature names to this topology
-            selected_feature_names = FeatureTranslator(reference_topology, topology_paths[i], ref_feature_names).run()
+            selected_feature_names = FeatureTranslator(reference_topology, topology_paths[colvars_index], ref_feature_names).run()
         else:
             selected_feature_names = ref_feature_names
-        
-        for i in range(len(selected_feature_names)):
-            feature_name = selected_feature_names[i]
+
+        for feature_index in range(len(selected_feature_names)):
+            feature_name = selected_feature_names[feature_index]
             # Check all reference features have a translation for this topology
             if feature_name:
                 # Check if the feature is in the colvars file
                 if feature_name not in all_feature_names:
-                    logger.error(f'Feature {feature_name} not found in the colvars file: {colvars_paths[i]}')
+                    logger.error(f'Feature {feature_name} not found in the colvars file: {colvars_paths[colvars_index]}')
                     sys.exit(1)
             else:
-                logger.error(f'Feature {ref_feature_names[i]} not found in the reference topology.')
+                logger.error(f'Feature {ref_feature_names[feature_index]} not found in the reference topology.')
                 sys.exit(1)
 
         if stratified_samples is None:
             # Read the requested features from the colvar file using pandas
-            colvars_df = pd.read_csv(colvars_paths[i], sep='\s+', dtype=np.float32, comment='#', header=0, usecols=selected_feature_names, names=all_feature_names)
+            colvars_df = pd.read_csv(colvars_paths[colvars_index], sep='\s+', dtype=np.float32, comment='#', usecols=selected_feature_names, names=all_feature_names)
         else:
             # Read the requested features and samples from the colvar file using pandas
-            colvars_df = pd.read_csv(colvars_paths[i], sep='\s+', dtype=np.float32, comment='#', header=0, usecols=selected_feature_names, skiprows= lambda x: x not in stratified_samples, names=all_feature_names)
+            colvars_df = pd.read_csv(colvars_paths[colvars_index], sep='\s+', dtype=np.float32, comment='#', usecols=selected_feature_names, skiprows= lambda x: x not in stratified_samples, names=all_feature_names)
 
         # Change the column names to the reference names before concatenating
         colvars_df.columns = ref_feature_names
@@ -365,7 +370,7 @@ def create_dataframe_from_files(
         Pandas dataframe of all the given data
     """
     
-    from deep_cartograph.modules.plumed.features import FeatureTranslator
+    from deep_cartograph.modules.features import Translator as FeatureTranslator
     
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
