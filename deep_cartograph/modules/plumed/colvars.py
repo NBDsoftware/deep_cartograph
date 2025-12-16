@@ -130,8 +130,8 @@ def read_features(colvars_paths: Union[List[str], str], ref_feature_names: List[
 
         features_df:            Dataframe with the time series data of the features
     """
-    from deep_cartograph.modules.plumed.features import FeatureTranslator
-    
+    from deep_cartograph.modules.features import Translator as FeatureTranslator
+
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
         
@@ -365,7 +365,7 @@ def create_dataframe_from_files(
         Pandas dataframe of all the given data
     """
     
-    from deep_cartograph.modules.plumed.features import FeatureTranslator
+    from deep_cartograph.modules.features import Translator as FeatureTranslator
     
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
