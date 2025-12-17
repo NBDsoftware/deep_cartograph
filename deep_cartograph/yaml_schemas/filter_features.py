@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Union
+from typing import Union, List
 
 class FilterSettings(BaseModel):
     
@@ -12,9 +12,9 @@ class FilterSettings(BaseModel):
     # Hartigan's dip test significance level
     diptest_significance_level: float = 0.05
     # Entropy quantile to use for filtering (0 to skip filter)
-    entropy_quantile: float = 0
+    entropy_quantile: float = 0.0
     # Standard deviation quantile to use for filtering (0 to skip filter)
-    std_quantile: float = 0
+    std_quantile: float = 0.0
 
 class SamplingSettings(BaseModel):
     

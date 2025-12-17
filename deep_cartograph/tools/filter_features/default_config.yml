@@ -6,6 +6,7 @@
 #     diptest_significance_level: Significance level for the dip test (0 to skip filter, reduce to filter out more features)
 #     entropy_quantile:           Entropy quantile to use for filtering (0 to skip filter, reduce to filter out more features)
 #     std_quantile:               Standard deviation quantile to use for filtering (0 to skip filter, reduce to filter out more features)
+#     metastable_structures:      List of metastable structures to use as reference points for filtering (only features that change its value across these structures are kept)
 
 filter_settings:
   compute_diptest: True              
@@ -13,4 +14,5 @@ filter_settings:
   compute_std: True                  
   diptest_significance_level: 0.05   
   entropy_quantile: 0                
-  std_quantile: 0                   
+  std_quantile: 0 
+  metastable_structures: []                  

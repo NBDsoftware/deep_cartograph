@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # *       - target topology
 # *       - list of features
 
-class FeatureTranslator:
+class Translator:
     """
     Class that uses a topology mapper to translate a list of features from a reference topology to another topology.
     """

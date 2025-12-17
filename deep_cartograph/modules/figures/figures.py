@@ -15,6 +15,12 @@ from deep_cartograph.modules.common import package_is_installed
 # Set logger
 logger = logging.getLogger(__name__)
 
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import List, Dict, Optional
+# Assuming other necessary imports (logger, package_is_installed, FesFigure, get_ranges) exist in your environment
+
 def plot_fes(
     data: np.ndarray, 
     cv_labels: List[str],  
@@ -22,14 +28,15 @@ def plot_fes(
     output_path: str, 
     num_blocks: int = 1,
     sup_data: Optional[List[np.ndarray]] = None, 
-    sup_data_labels: Optional[List[str]] = None
+    sup_data_labels: Optional[List[str]] = None,
+    legend_cutoff: int = 10
     ):
     """
     Creates a figure of the free energy surface and saves it to a file.
+    If len(sup_data) > legend_cutoff, the legend is saved to a separate 'fes_legend.png' file.
 
     Parameters
     ----------
-
         data:             data with time series of the variables along which the FES is computed (1D or 2D)
         cv_labels:        labels of the variables along which the FES is computed
         settings:         dictionary with the settings of the FES plot
@@ -37,13 +44,14 @@ def plot_fes(
         num_blocks:       number of blocks to use for the FES computation
         sup_data:         supplementary data to plot alongside the main data
         sup_data_labels:  labels of the supplementary data
+        legend_cutoff:    maximum number of items allowed in the main plot legend before splitting
     """
     
     if not package_is_installed('mlcolvar', 'torch'):
         logger.debug('mlcolvar and torch are not installed. Skipping FES plot.')
         return
     
-    import mlcolvar.utils.plot # NOTE: Defines fessa colormap - issue in mlcolvar
+    import mlcolvar.utils.plot 
     from mlcolvar.utils.fes import compute_fes
 
     # Find settings
@@ -99,7 +107,7 @@ def plot_fes(
         if sup_data is not None:
             
             markers = ['o', 's', 'D', '^', 'v', '<', '>', 'p', 
-                    'P', '*', 'h', 'H', '+', 'x', 'data', '|', '_'] 
+                    'P', '*', 'h', 'H',"D","d", '8'] 
             
             for i, sup_data_i in enumerate(sup_data):
 
@@ -114,7 +122,7 @@ def plot_fes(
                 # If the reference data is 2D -> scatter plot
                 else: 
                     if sup_data_i.shape[1] == 2:
-                        ax.scatter(sup_data_i[:,0], sup_data_i[:,1], s=8, label=label, marker=marker, alpha=0.5)
+                        ax.scatter(sup_data_i[:,0], sup_data_i[:,1], s=8, label=label, marker=marker, alpha=1)
                     else:
                         logger.warning(f"Supplementary data {i} has {sup_data_i.shape[1]} dimensions > 2 dimensions. Skipping scatter plot of this data.")
                         continue
@@ -140,16 +148,45 @@ def plot_fes(
             ax.set_ylim(min(data_range[1][0], -1), max(data_range[1][1], 1))
 
         if sup_data_labels:
-            ax.legend(fontsize = font_size, framealpha=0.5)
+            num_items = len(sup_data) if sup_data else 0
+            
+            # Case 1: Few items, plot legend inside the main figure
+            if num_items <= legend_cutoff:
+                ax.legend(fontsize = font_size, framealpha=0.5)
+            
+            # Case 2: Many items, save legend to separate file
+            else:
+                logger.info(f"Sup_data count ({num_items}) exceeds cutoff ({legend_cutoff}). Saving legend to separate file.")
+                
+                # Extract handles and labels from the main plot
+                handles, labels = ax.get_legend_handles_labels()
+                
+                if handles:
+                    # Create a new figure just for the legend
+                    # Dynamic height based on number of items
+                    fig_leg = plt.figure(figsize=(4, 0.3 * num_items + 1)) 
+                    
+                    # Add legend to the new figure
+                    fig_leg.legend(handles, labels, loc='center', fontsize=font_size, frameon=False)
+                    
+                    # Turn off axes so only the legend text/symbols appear
+                    plt.axis('off') 
+                    
+                    # Save the legend figure
+                    fig_leg.savefig(os.path.join(output_path, 'fes_legend.png'), bbox_inches='tight', dpi=300)
+                    
+                    # Close the legend figure to free memory
+                    plt.close(fig_leg)
 
         # Set tick size
         ax.tick_params(axis='both', which='major', labelsize=tick_size)
 
-        # Save figure
+        # Save main figure
         fig.savefig(os.path.join(output_path, 'fes.png'), dpi=300)
 
         # Close figure
         fig.clf()
+        plt.close(fig) # Ensure matplotlib figure is fully closed
 
     return
 

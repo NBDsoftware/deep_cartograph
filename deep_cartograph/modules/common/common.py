@@ -288,6 +288,42 @@ def read_features_list(features_path: Optional[str]) -> Union[List[str], str]:
 
 
 # Input validation
+def find_files(path: str) -> List[str]:
+    """
+    Function that finds all files in a folder.
+
+    Inputs
+    ------
+
+        path: Path to the folder
+
+    Returns
+    -------
+
+        file_paths: List of file paths
+    """
+
+    if os.path.isdir(path):
+        # List the files in the folder
+        file_paths = [os.path.join(path, f) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    elif os.path.isfile(path):
+        # Single file
+        file_paths = [path]
+    elif not os.path.exists(path):
+        logger.error(f"Path not found: {path}")
+        sys.exit(1)
+    else:
+        logger.error(f"Path should be a file or a folder: {path}")
+        sys.exit(1)
+
+    # Remove any hidden files
+    file_paths = [f for f in file_paths if not Path(f).name.startswith('.')]
+
+    # Sort them alphabetically 
+    file_paths.sort()
+
+    return file_paths
+
 def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], List[str]]:
     """
     Function that checks the existence of the necessary input data files.
@@ -315,48 +351,14 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     
     logger = logging.getLogger("deep_cartograph")
     
-    if os.path.isdir(trajectory_data):
-        # List the files in the trajectory folder
-        traj_file_paths = [os.path.join(trajectory_data, f) for f in os.listdir(trajectory_data) if os.path.isfile(os.path.join(trajectory_data, f))]
-    elif os.path.isfile(trajectory_data):
-        # Single trajectory file
-        traj_file_paths = [trajectory_data]
-    elif not os.path.exists(trajectory_data):
-        logger.error(f"Trajectory data not found: {trajectory_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Trajectory data should be a path to a file or a folder: {trajectory_data}")
-        sys.exit(1)
-        
-    # Remove any hidden files
-    traj_file_paths = [f for f in traj_file_paths if not Path(f).name.startswith('.')]
-    
-    # Sort them alphabetically 
-    traj_file_paths.sort()
+    traj_file_paths = find_files(trajectory_data)
     
     # Check if there are any
     if len(traj_file_paths) == 0:
         logger.error(f"Trajectory data folder is empty: {trajectory_data}")
         sys.exit(1)
     
-    if os.path.isdir(topology_data):
-        # List the files in the topology folder
-        top_file_paths = [os.path.join(topology_data, f) for f in os.listdir(topology_data) if os.path.isfile(os.path.join(topology_data, f))]
-    elif os.path.isfile(topology_data):
-        # Single topology file
-        top_file_paths = [topology_data]
-    elif not os.path.exists(topology_data):
-        logger.error(f"Topology data not found: {topology_data}")
-        sys.exit(1)
-    else:
-        logger.error(f"Topology data should be a file or a folder: {topology_data}")
-        sys.exit(1)
-        
-    # Remove any hidden files
-    top_file_paths = [f for f in top_file_paths if not Path(f).name.startswith('.')]
-        
-    # Sort them alphabetically
-    top_file_paths.sort()
+    top_file_paths = find_files(topology_data)
     
     # Check if there are any
     if len(top_file_paths) == 0:

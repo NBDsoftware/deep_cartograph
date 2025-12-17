@@ -369,7 +369,64 @@ def find_centroids(data: pd.DataFrame, centroids: np.array, clustering_features:
 
     return data
 
-# Entropy
+# Feature statistics
+def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
+    """
+    Function that checks if the variation of each feature between different samples
+    is above a certain threshold. The threshold is fixed and depends on the feature type.
+    
+    For sinusoidal features, both the sine and cosine components are considered together to compute the variation.
+    """
+    angle_threshold = np.pi / 8  # 22.5 degrees
+    distance_threshold = 0.5     # 0.5 nm or 5 Angstroms
+    
+    # Check the dataframe is not empty
+    if features_df.empty:
+        logger.warning("Features dataframe is empty. Returning empty list.")
+        return []
+    
+    feature_names = list(features_df.columns)
+    results = pd.DataFrame(columns=['name', 'above_threshold'])
+    results['name'] = feature_names
+    for name in feature_names:
+        
+        if 'sin_' in name:
+            # Deal here with sin/cosine features
+            cosine_name = name.replace('sin_', 'cos_')
+            if cosine_name in feature_names:
+                # Get the samples for the sine and cosine components
+                sine_timeseries = features_df[name].to_numpy()
+                cosine_timeseries = features_df[cosine_name].to_numpy()
+                
+                # Compute the angle for each sample
+                angles = np.arctan2(sine_timeseries, cosine_timeseries)
+                
+                # Get the maximum difference between all samples in radians
+                delta = np.max(angles) - np.min(angles)
+            else:
+                logger.warning(f"Cosine component {cosine_name} not found for sine component {name}. Skipping this feature.")
+                delta = 10  # Large difference to skip this feature
+
+            results.loc[results['name'] == name, 'above_threshold'] = delta >= angle_threshold
+            results.loc[results['name'] == cosine_name, 'above_threshold'] = delta >= angle_threshold
+
+        elif 'cos_' in name:
+            continue  # Skip cosine components, they are handled with the sine components 
+        
+        elif 'tor' in name:
+            # Deal here with torsion angles
+            torsion_timeseries = features_df[name].to_numpy()
+            delta = np.max(torsion_timeseries) - np.min(torsion_timeseries)
+            results.loc[results['name'] == name, 'above_threshold'] = delta >= angle_threshold
+        else:
+            # Deal with other features
+            feature_timeseries = features_df[name].to_numpy()
+            delta = np.abs(np.max(feature_timeseries) - np.min(feature_timeseries))
+            results.loc[results['name'] == name, 'above_threshold'] = delta >= distance_threshold 
+            
+    return results['above_threshold'].tolist()
+    
+
 def shannon_entropy(features_df: pd.DataFrame) -> List[float]:
     """
     Function that computes the Shannon entropy of the distribution of each feature.
