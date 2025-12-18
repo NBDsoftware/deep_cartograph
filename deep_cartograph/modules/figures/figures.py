@@ -72,6 +72,7 @@ def plot_fes(
         max_fes = settings['max_fes']
         num_bins = settings['num_bins']
         bandwidth = settings['bandwidth']
+        num_fes_levels = settings['num_fes_levels']
         min_block_size = 100
 
         # Number of samples for the FES
@@ -93,7 +94,7 @@ def plot_fes(
         # Compute and plot the 1D or 2D FES along the given variables
         fes, fes_grid, fes_bounds, fes_error = compute_fes(data, temp = temperature, ax = ax, plot = True, 
                                             plot_max_fes = max_fes, backend = "KDEpy",
-                                            num_samples = num_bins, bandwidth = bandwidth,
+                                            num_samples = num_bins, bandwidth = bandwidth, plot_levels = num_fes_levels,
                                             blocks = num_blocks, eps = 1e-10, bounds = get_ranges(data))
         
         # Save the FE values, the grid, the bounds and the error

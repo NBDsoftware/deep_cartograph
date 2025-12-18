@@ -177,6 +177,8 @@ class FesFigure(BaseModel):
     temperature: int = 300
     # Bandwidth for the Kernel Density Estimation of the Free Energy Surface
     bandwidth: float = 0.05
+    # Number of levels to plot in the Free Energy Surface
+    num_fes_levels: int = 10
     # Number of bins for the Kernel Density Estimation of the Free Energy Surface
     num_bins: int = 150
     # Maximum value for the Free Energy Surface (above which the value is set to NaN)
