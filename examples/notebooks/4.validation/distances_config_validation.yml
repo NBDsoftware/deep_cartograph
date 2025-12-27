@@ -18,9 +18,7 @@ filter_features:
     compute_std: False                
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
-    std_quantile: 0                      
-  sampling_settings:
-    relaxation_time: 1                                   
+    std_quantile: 0                                                      
 
 train_colvars:
   cvs: ['pca', 'deep_tica', 'tica', 'ae']
@@ -28,12 +26,9 @@ train_colvars:
     dimension: 2
     lag_time: 1 
     features_normalization: 'mean_std'
-    input_colvars: 
-      start: 0
-      stop: null
-      stride: 1 
     architecture:
-      encoder: [5, 3]                       
+      encoder:
+        layers: [5, 3]
     training: 
       general:
         max_tries: 1
@@ -56,30 +51,24 @@ train_colvars:
           weight_decay: 0
       save_loss: True
       plot_loss: True
+
+traj_projection:  
   figures:
     fes:
       compute: True  
       save: True  
       temperature: 300
-      bandwidth: 0.025
-      num_bins: 200
-      num_blocks: 1
-      max_fes: 18
+      bandwidth: 0.015
+      num_fes_levels: 20
+      num_bins: 250
+      max_fes: 30
     traj_projection:
-      plot: True
-      num_bins: 100
+      alpha: 1
       bandwidth: 0.25
-      alpha: 0.6
       cmap: turbo
-      marker_size: 12
-  clustering:                        
-    run: False                        
-    algorithm: hierarchical               
-    opt_num_clusters: True          
-    search_interval: [5, 15]          
-    num_clusters: 3                  
-    linkage: complete                
-    n_init: 20                       
-    min_cluster_size: 50             
-    min_samples: 5                  
-    cluster_selection_epsilon: 0
+      marker_size: 5
+      num_bins: 100
+      plot: true
+
+traj_cluster:                      
+  run: False
