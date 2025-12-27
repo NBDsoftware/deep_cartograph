@@ -73,11 +73,11 @@ class EarlyStopping(BaseModel):
 
 class KLAnnealing(BaseModel):
     # Type of KL annealing ('linear' or 'cyclical')
-    type: Literal['linear', 'sigmoid', 'cyclical'] = 'cyclical'
-    # Sart value for beta (KL divergence weight)
-    start_beta: float = 0.0
+    type: Literal['linear', 'sigmoid', 'cyclical'] = 'linear'
+    # Start value for beta (KL divergence weight)
+    start_beta: float = 1.0
     # Maximum value of the KL divergence weight (beta)
-    max_beta: float = 0.01
+    max_beta: float = 1.0
     # Start epoch for the annealing
     start_epoch: int = 1000
     # Number of cycles for cyclical annealing
@@ -94,11 +94,11 @@ class Trainings(BaseModel):
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
     # Learning rate scheduler settings
-    lr_scheduler: Optional[RLScheduler] = RLScheduler()
+    lr_scheduler: Optional[RLScheduler] = None
     # Learning rate scheduler configuration 
     lr_scheduler_config: Optional[dict] = {'interval': 'epoch', 'monitor': 'valid_loss', 'frequency': 1}
     # KL Annealing settings (used only with VAE)
-    kl_annealing: KLAnnealing = KLAnnealing()
+    kl_annealing: Optional[KLAnnealing] = None
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training
