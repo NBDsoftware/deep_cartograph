@@ -1,0 +1,73 @@
+compute_features:
+  plumed_settings:
+    traj_stride: 1
+    features:
+      dihedral_groups:
+        backbone_tor:
+          selection: "not name H* and backbone and not name O"
+          periodic_encoding: True
+          search_mode: real
+
+filter_features:       
+  filter_settings:
+    compute_diptest: False              
+    compute_entropy: False             
+    compute_std: False                                                                     
+
+train_colvars:
+  cvs: ['deep_tica']
+  common:
+    dimension: 1
+    lag_time: 1
+    features_normalization: 'mean_std'
+    architecture:
+      encoder: 
+        layers: [4, 4, 2]
+        dropout: [null, null, null]
+        activation: [leaky_relu, leaky_relu, leaky_relu]
+        batchnorm: False
+      decoder: 
+        layers: [2, 4, 4]
+        dropout: [null, null, null]
+        activation: [leaky_relu, leaky_relu, leaky_relu]
+        batchnorm: False
+    training: 
+      general:
+        max_tries: 1
+        seed: 42
+        lengths: [0.8, 0.2]
+        batch_size: 128
+        max_epochs: 50    
+        shuffle: True
+        random_split: True
+        check_val_every_n_epoch: 1
+        save_check_every_n_epoch: 1
+      early_stopping:
+        patience: 50
+        min_delta: 1.0e-05
+      optimizer:
+        name: Adam
+        kwargs: 
+          lr: 1.0e-03
+          weight_decay: 0.0
+      save_loss: True
+      plot_loss: True
+  figures:
+    fes:
+      compute: False  
+      save: False  
+      temperature: 300
+      bandwidth: 0.025
+      num_bins: 200
+      num_blocks: 1
+      max_fes: 18
+    traj_projection:
+      plot: True
+      num_bins: 100
+      bandwidth: 0.25
+      alpha: 0.6
+      cmap: turbo
+      marker_size: 12
+
+clustering:                        
+  run: False                        
