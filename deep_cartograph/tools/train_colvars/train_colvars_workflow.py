@@ -30,7 +30,7 @@ class TrainColvarsWorkflow:
                  ref_topology_path: Optional[str] = None,           
                  features_list: Optional[List[str]] = None,
                  cv_dimension: Optional[int] = None,
-                 cvs: Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]] = None,
+                 cvs: Optional[List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']]] = None,
                  frames_per_sample: Optional[int] = 1,
                  output_folder: Optional[str] = 'train_colvars'):
         """
@@ -88,7 +88,7 @@ class TrainColvarsWorkflow:
         self._validate_files()
 
         # CV related attributes
-        self.cvs_list: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
+        self.cvs_list: List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
         self.cv_dimension: int = cv_dimension
         self.cv_labels: List[str] = None
         self.cv_type: str = None
@@ -111,9 +111,6 @@ class TrainColvarsWorkflow:
                     if not files_exist(self.ref_topology_path):
                         logger.error(f"Reference topology file {self.ref_topology_path} does not exist. Exiting...")
                         sys.exit(1)
-            else:
-                logger.error("Trajectory file provided but no topology file. Exiting...")
-                sys.exit(1)
          
     def create_fes_plots(self, 
                          data: pd.DataFrame, 
@@ -307,9 +304,6 @@ class TrainColvarsWorkflow:
             
             # Run the CV calculator - obtain a dataframe with the projected training data
             projected_train_df = cv_calculator.run(self.cv_dimension)
-            
-            # Return file labels to the projected training data
-            projected_train_df['traj_label'] = cv_calculator.training_data_labels
 
             # Update CV info
             self.cv_dimension = cv_calculator.get_cv_dimension()
@@ -317,6 +311,9 @@ class TrainColvarsWorkflow:
             self.cv_type = cv_calculator.get_cv_type()
                 
             if projected_train_df is not None:
+                
+                # Return file labels to the projected training data
+                projected_train_df['traj_label'] = cv_calculator.training_data_labels
                 
                 # Iterate over the trajectories used for training
                 for traj_index in range(len(self.train_colvars_paths)):

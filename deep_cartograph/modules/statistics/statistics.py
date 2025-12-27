@@ -4,7 +4,7 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Union, Literal, List
+from typing import Dict, Optional, Tuple, Literal, List
 from sklearn.cluster import HDBSCAN
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -109,7 +109,10 @@ def optimize_clustering(features: np.ndarray, settings: Dict):
 
     return cluster_labels, centroids
 
-def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.ndarray = None) -> np.ndarray:
+def cluster_data(features: np.ndarray, 
+                 settings: Dict, 
+                 initial_centroids: np.ndarray = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Cluster the data in features using the clustering settings provided in the settings dictionary.
 
@@ -135,6 +138,8 @@ def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.nda
     settings['min_samples'] = settings.get('min_samples',  max(int(0.001 * features.shape[0]), 1)) # 0.1% of the number of samples, at least 1
     settings['cluster_selection_epsilon'] = settings.get('cluster_selection_epsilon', 0)
     settings['linkage'] = settings.get('linkage', 'complete')
+    settings['max_cluster_size'] = settings.get('max_cluster_size')
+    settings['cluster_selection_method'] = settings.get('cluster_selection_method', 'eom')
 
     if settings['algorithm'] == 'kmeans':
         cluster_labels, centroids = kmeans_clustering(features, settings['num_clusters'], settings['n_init'], initial_centroids)
@@ -191,8 +196,12 @@ def kmeans_clustering(feature_matrix: np.ndarray, num_clusters: int, n_init: int
 
     return clusters, centroids
 
-def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, max_cluster_size: Union[None, int], 
-                       min_samples: int, cluster_selection_epsilon: float, cluster_selection_method: Literal["eom", "leaf"]
+def hdbscan_clustering(feature_matrix: np.array, 
+                       min_cluster_size: Optional[int] = 5, 
+                       max_cluster_size: Optional[int] = None, 
+                       min_samples: Optional[int] = None, 
+                       cluster_selection_epsilon: Optional[float] = None, 
+                       cluster_selection_method: Literal["eom", "leaf"] = "eom"
                        ) -> Tuple[np.array, np.array]:
     """
     Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed

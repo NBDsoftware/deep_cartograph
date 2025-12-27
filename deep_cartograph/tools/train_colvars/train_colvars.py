@@ -25,7 +25,7 @@ def train_colvars(
     reference_topology: Optional[str] = None,
     features_list: Optional[List[str]] = None,
     dimension: Optional[int] = None,
-    cvs: Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]] = None,
+    cvs: Optional[List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']]] = None,
     frames_per_sample: Optional[int] = 1,
     output_folder: str = 'train_colvars'
 ) -> Dict[str, List[str]]:
