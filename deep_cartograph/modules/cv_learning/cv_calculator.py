@@ -106,6 +106,10 @@ class CVCalculator:
         from deep_cartograph.modules.common import unzip_files
         import json
 
+        # Check the model path exists
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f'Model file not found: {model_path}')
+        
         # Define a path to unzip the model temporarily
         temp_model_path = os.path.join(output_path, "model")
         unzip_files(model_path, output_path)
@@ -114,6 +118,7 @@ class CVCalculator:
         metadata_path = os.path.join(temp_model_path, 'metadata.json')
         if not os.path.exists(metadata_path):
             logger.error(f'Metadata file not found in the model: {metadata_path}')
+            cv_name = None
         else:
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
@@ -345,6 +350,7 @@ class CVCalculator:
         self.set_labels()
        
         # If the CV was computed successfully
+        projected_training_data = None
         if self.cv is not None:
             
             self.normalize_cv()
@@ -481,20 +487,26 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def write_plumed_files(self, topology: str, output_folder: str) -> None:
+    def write_plumed_files(self, topology: Optional[str], output_folder: str) -> None:
         """
         Creates all files needed to compute the collective variable from the features
-        for the given topology using plumed.
+        for the given topology using plumed. If the topology is not given, the creation
+        of the plumed input is skipped.
         
         Parameters
         ----------
         
-        topology : str
+        topology : Optional[str]
             Path to the topology file of the system (used to translate the features)
             
         output_folder : str
             Path to the output folder where the files will be written
         """
+
+        if topology is None:
+            logger.warning('Topology not provided. Skipping PLUMED files creation.')
+            return
+
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
         from deep_cartograph.modules.features import Translator as FeatureTranslator
         from deep_cartograph.modules.md import create_plumed_rmsd_template
@@ -1567,8 +1579,8 @@ class NonLinear(CVCalculator):
                 logger.debug('Model device not found, defaulting to CPU.')
                 self.cv.device = torch.device('cpu')
                 
-            # Move data to the device of the model (GPU or CPU)
-            data_on_model_device = torch.tensor(data.values).to(self.cv.device)
+            # Move data to the device of the model (GPU or CPU) - make sure the data type matches the model
+            data_on_model_device = torch.tensor(data.values, dtype=torch.float32).to(self.cv.device)
             # Project the data onto the CV space
             projected_tensor = self.cv(data_on_model_device)
             
@@ -1753,12 +1765,15 @@ class HTICACalculator(LinearCalculator):
         data_tensor = self.training_input_dtset['data']
         data_lag_tensor = self.training_input_dtset['data_lag'] 
         
-        # Split the data tensor into 10 tensors using torch_split
-        data_tensors = torch.split(data_tensor, self.num_features//self.num_subspaces, dim=1)
-        
-        # Split the data lag tensor into 10 tensors using torch_split
-        data_lag_tensors = torch.split(data_lag_tensor, self.num_features//self.num_subspaces, dim=1)
-        
+        # Split the data and data lag tensor into num_subspaces tensors
+        split_size = self.num_features // self.num_subspaces
+        if split_size != 0:
+            data_tensors = torch.split(data_tensor, split_size, dim=1)
+            data_lag_tensors = torch.split(data_lag_tensor, split_size, dim=1)
+        else:
+            logger.error(f'Number of subspaces {self.num_subspaces} is larger than number of features {self.num_features}. Exiting...')
+            return
+
         # Initialize the eigenvectors and eigenvalues
         level_1_eigvecs = []     
         
@@ -2065,13 +2080,21 @@ class VAECalculator(NonLinear):
             output_path)
         
         # VAE-specific settings
-        self.kl_annealing_config = self.training_config.get('kl_annealing', {})
-        self.type = self.kl_annealing_config.get('type')
-        self.start_beta = self.kl_annealing_config.get('start_beta')
-        self.max_beta = self.kl_annealing_config.get('max_beta')
-        self.start_epoch = self.kl_annealing_config.get('start_epoch')
-        self.n_cycles = self.kl_annealing_config.get('n_cycles')
-        self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal')
+        self.kl_annealing_config = self.training_config.get('kl_annealing')
+        if self.kl_annealing_config is not None:
+            self.type = self.kl_annealing_config.get('type')
+            self.start_beta = self.kl_annealing_config.get('start_beta')
+            self.max_beta = self.kl_annealing_config.get('max_beta')
+            self.start_epoch = self.kl_annealing_config.get('start_epoch')
+            self.n_cycles = self.kl_annealing_config.get('n_cycles')
+            self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal')
+        else:
+            self.type = 'linear'
+            self.start_beta = 1.0
+            self.max_beta = 1.0
+            self.start_epoch = 0
+            self.n_cycles = 1
+            self.n_epochs_anneal = 0
 
         self.cv_name = 'vae'
 
@@ -2164,6 +2187,7 @@ class VAECalculator(NonLinear):
             n_cvs=self.cv_dimension,
             encoder_layers=self.encoder_layers, 
             decoder_layers=self.decoder_layers,
+            beta=self.start_beta,
             options=self.cv_options)
          
         return model
@@ -2184,6 +2208,7 @@ class VAECalculator(NonLinear):
         
         general_callbacks = super().get_callbacks()
         
+        # KL annealing callback
         kl_annealing_args = {
             'type': self.type,
             'start_beta': self.start_beta,
@@ -2197,6 +2222,7 @@ class VAECalculator(NonLinear):
         
         # If ReduceLROnPlateau is the scheduler, add our custom manager
         if self.lr_scheduler and self.lr_scheduler.get('name') == 'ReduceLROnPlateau':
+
             # The start epoch should be when the kl annealing finishes + 1/4 of the remaining epochs
             start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal + (self.max_epochs - self.start_epoch - self.n_epochs_anneal)//4
         

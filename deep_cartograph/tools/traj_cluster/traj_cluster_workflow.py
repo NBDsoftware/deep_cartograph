@@ -308,15 +308,16 @@ class TrajClusterWorkflow:
             
             # Plot the cv trajectory coloring by cluster
             scatter_plot_path = os.path.join(traj_output_folder, "trajectory_clustered.png")
-            figures.clusters_scatter_plot(
-                data = traj_df,
-                column_labels=self.cv_labels,
-                cluster_label = 'cluster',
-                settings = self.figures_configuration,
-                file_path = scatter_plot_path,
-                cluster_colors = cluster_colors       
-            )
-            logger.debug(f"Saved clustered trajectory plot to {scatter_plot_path}")
+            if self.cv_dimension == 2:
+                figures.clusters_scatter_plot(
+                    data = traj_df,
+                    column_labels=self.cv_labels,
+                    cluster_label = 'cluster',
+                    settings = self.figures_configuration,
+                    file_path = scatter_plot_path,
+                    cluster_colors = cluster_colors       
+                )
+                logger.debug(f"Saved clustered trajectory plot to {scatter_plot_path}")
             
             # If the user requested output structures = all, extract all frames from the trajectory for each cluster
             if self.configuration['output_structures'] == 'all':
@@ -365,14 +366,15 @@ class TrajClusterWorkflow:
                 
                 # Plot the supplementary cv trajectory coloring by cluster
                 scatter_plot_path = os.path.join(traj_output_folder, "trajectory_clustered.png")
-                figures.clusters_scatter_plot(
-                    data = traj_df,
-                    column_labels=self.cv_labels,
-                    cluster_label = 'cluster',
-                    settings = self.figures_configuration,
-                    file_path = scatter_plot_path,
-                    cluster_colors = cluster_colors       
-                )
-                logger.debug(f"Saved clustered supplementary trajectory plot to {scatter_plot_path}")
+                if self.cv_dimension == 2:
+                    figures.clusters_scatter_plot(
+                        data = traj_df,
+                        column_labels=self.cv_labels,
+                        cluster_label = 'cluster',
+                        settings = self.figures_configuration,
+                        file_path = scatter_plot_path,
+                        cluster_colors = cluster_colors       
+                    )
+                    logger.debug(f"Saved clustered supplementary trajectory plot to {scatter_plot_path}")
 
         return output_paths
