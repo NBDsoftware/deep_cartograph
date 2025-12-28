@@ -2082,6 +2082,7 @@ class VAECalculator(NonLinear):
         # VAE-specific settings
         self.kl_annealing_config = self.training_config.get('kl_annealing')
         if self.kl_annealing_config is not None:
+            # User-defined KL annealing settings
             self.type = self.kl_annealing_config.get('type')
             self.start_beta = self.kl_annealing_config.get('start_beta')
             self.max_beta = self.kl_annealing_config.get('max_beta')
@@ -2089,12 +2090,13 @@ class VAECalculator(NonLinear):
             self.n_cycles = self.kl_annealing_config.get('n_cycles')
             self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal')
         else:
-            self.type = 'linear'
-            self.start_beta = 1.0
-            self.max_beta = 1.0
-            self.start_epoch = 0
-            self.n_cycles = 1
-            self.n_epochs_anneal = 0
+            # Reasonable default KL annealing settings
+            self.type = 'sigmoid'
+            self.start_beta = 1e-06                       # Low value to concentrate on reconstruction at the beginning
+            self.max_beta = 0.01                          # Max value that should be adjusted
+            self.start_epoch = self.max_epochs // 2       # Start annealing after 50 % of the total epochs
+            self.n_cycles = 1                             # Won't be used
+            self.n_epochs_anneal = self.max_epochs // 4   # Anneal during 25 % of the total epochs
 
         self.cv_name = 'vae'
 
