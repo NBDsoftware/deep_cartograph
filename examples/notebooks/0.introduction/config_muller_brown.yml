@@ -33,10 +33,6 @@ common:
       kwargs: 
         lr: 1.0e-03
         weight_decay: 0.0
-    kl_annealing:
-      type: linear
-      start_beta: 0.01
-      max_beta: 0.01
     save_loss: True
     plot_loss: True
 figures:

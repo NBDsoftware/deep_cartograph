@@ -4,8 +4,8 @@ compute_features:
     features:
       distance_groups:
         dist:
-          first_selection: "not name H*"
-          second_selection: "not name H*"
+          first_selection: "name O and resid 1"
+          second_selection: "(name CH3 and resid 3) or (name CB and resid 2)"
           first_stride: 1
           second_stride: 1
           skip_neigh_residues: False
@@ -13,7 +13,7 @@ compute_features:
 
 filter_features:       
   filter_settings:
-    compute_diptest: False              
+    compute_diptest: True              
     compute_entropy: False             
     compute_std: False                                                                     
 
@@ -25,28 +25,28 @@ train_colvars:
     features_normalization: 'mean_std'
     architecture:
       encoder: 
-        layers: [8, 4]
-        dropout: [null, null]
-        activation: [leaky_relu, leaky_relu]
+        layers: [4, 20, 20, 2]
+        dropout: [null, null, null, null]
+        activation: [leaky_relu, leaky_relu, leaky_relu, leaky_relu]
         batchnorm: False
       decoder: 
-        layers: [4, 8]
-        dropout: [null, null]
-        activation: [leaky_relu, leaky_relu]
+        layers: [2, 20, 20, 4]
+        dropout: [null, null, null, null]
+        activation: [leaky_relu, leaky_relu, leaky_relu, leaky_relu]
         batchnorm: False
     training: 
       general:
         max_tries: 1
         seed: 42
         lengths: [0.8, 0.2]
-        batch_size: 264
-        max_epochs: 100    
+        batch_size: 128
+        max_epochs: 200    
         shuffle: True
         random_split: True
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 100
+        patience: 200
         min_delta: 1.0e-05
       optimizer:
         name: Adam
