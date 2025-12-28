@@ -1601,7 +1601,7 @@ class NonLinear(CVCalculator):
         
         # Compute the sensitivity analysis
         results = sensitivity_analysis(self.cv, self.training_input_dtset, metric="mean_abs_val", 
-                                       feature_names=None, per_class=False, plot_mode=None)
+                                       feature_names=self.features_ref_labels, per_class=False, plot_mode=None)
         
         # Save the sensitivities to a file
         sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
