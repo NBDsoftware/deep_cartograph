@@ -75,9 +75,9 @@ class KLAnnealing(BaseModel):
     # Type of KL annealing ('linear' or 'cyclical')
     type: Literal['linear', 'sigmoid', 'cyclical'] = 'linear'
     # Start value for beta (KL divergence weight)
-    start_beta: float = 1.0
+    start_beta: float = 1e-06
     # Maximum value of the KL divergence weight (beta)
-    max_beta: float = 1.0
+    max_beta: float = 0.01
     # Start epoch for the annealing
     start_epoch: int = 1000
     # Number of cycles for cyclical annealing

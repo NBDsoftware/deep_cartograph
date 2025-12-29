@@ -36,20 +36,23 @@ train_colvars:
         max_tries: 1
         seed: 42
         lengths: [0.8, 0.2]
-        batch_size: 128
-        max_epochs: 100    
+        batch_size: 64
+        max_epochs: 500    
         shuffle: True
         random_split: True
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 100
+        patience: 500
         min_delta: 1.0e-05
       optimizer:
         name: Adam
         kwargs: 
-          lr: 1.0e-03
+          lr: 1.0e-04
           weight_decay: 0.0
+      kl_annealing:
+        type: linear
+        max_beta: 0.02
       save_loss: True
       plot_loss: True
   figures:

@@ -2086,9 +2086,9 @@ class VAECalculator(NonLinear):
             self.type = self.kl_annealing_config.get('type')
             self.start_beta = self.kl_annealing_config.get('start_beta')
             self.max_beta = self.kl_annealing_config.get('max_beta')
-            self.start_epoch = self.kl_annealing_config.get('start_epoch')
+            self.start_epoch = self.kl_annealing_config.get('start_epoch', self.max_epochs // 2)
             self.n_cycles = self.kl_annealing_config.get('n_cycles')
-            self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal')
+            self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal', self.max_epochs // 4)
         else:
             # Reasonable default KL annealing settings
             self.type = 'sigmoid'
