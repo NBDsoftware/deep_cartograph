@@ -185,7 +185,16 @@ class Assembler:
                 logger.error(f"Malformed sin feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.sin(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
+            # Build the commands to compute the sinus
+            torsion_label = feature_label.replace("sin", "tor")
+            sinus_commands = plumed.command.torsion(command_label=torsion_label, 
+                                                    atoms=[entity.replace("_", "-") for entity in entities[1:]])
+            sinus_commands += plumed.command.custom(command_label=feature_label, 
+                                                    expression="sin(x)", 
+                                                    arguments=[torsion_label], 
+                                                    periodic=False)
+            
+            return sinus_commands
         
         elif feat_name == "cos":
             
@@ -194,7 +203,15 @@ class Assembler:
                 logger.error(f"Malformed cos feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.cos(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
+            # Build the commands to compute the cosinus
+            # Torsion command was aleady created when computing the sinus if needed
+            torsion_label = feature_label.replace("cos", "tor")
+            cosinus_commands = plumed.command.custom(command_label=feature_label, 
+                                                    expression="cos(x)", 
+                                                    arguments=[torsion_label], 
+                                                    periodic=False)
+            
+            return cosinus_commands
         
         elif feat_name == "tor":
             
