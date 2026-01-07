@@ -1,4 +1,4 @@
-# analysis:
+# analyze_geometry:
 #   RMSD:                                       Root mean square deviation analysis
 #     analysis_name:                            Name of the analysis
 #       title: 'Backbone RMSD'                  Title of the plot
@@ -11,22 +11,30 @@
 #       fit_selection: 'protein and name CA'    Selection of atoms to fit the trajectory before computing the RMSF
 # dt_per_frame: 40                              Time in picoseconds per frame in the trajectory
 
-analysis:
-  RMSD:
-    backbone_rmsd:
-      title: 'Backbone RMSD'
-      selection: 'protein and name CA'
-      fit_selection: 'protein and name CA'
-    peptide_rmsd:
-      title: 'Peptide RMSD'
-      selection: 'resid 625:634 and name CA'
-      fit_selection: 'protein and name CA'
-  RMSF:
-    backbone_rmsf:
-      title: 'Backbone RMSF'
-      selection: 'protein and name CA'
-      fit_selection: 'protein and name CA'
-dt_per_frame: 40         
+analyze_geometry:
+  run: True
+  dt_per_frame: 40
+  analysis:
+    RMSD:
+      backbone_rmsd:
+        title: 'Backbone RMSD'
+        selection: 'protein and name CA'
+        fit_selection: 'protein and name CA'
+      peptide_rmsd:
+        title: 'Peptide RMSD'
+        selection: 'resid 625:634 and name CA'
+        fit_selection: 'protein and name CA'
+    RMSF:
+      backbone_rmsf:
+        title: 'Backbone RMSF'
+        selection: 'protein and name CA'
+        fit_selection: 'protein and name CA'         
+
+traj_augmentation:
+  num_frames: 1000
+  interpolation_method: 'pchip'
+  atom_selection: "all"
+  traj_format: 'xtc'
 
 # compute_features:
 #   plumed_settings:
@@ -100,7 +108,6 @@ filter_features:
     diptest_significance_level: 0.05   
     entropy_quantile: 0                
     std_quantile: 0                                                     
-
 
 # train_colvars:
 #   cvs:                           List of Collective Variables to calculate: pca, ae, tica, deep_tica or htica

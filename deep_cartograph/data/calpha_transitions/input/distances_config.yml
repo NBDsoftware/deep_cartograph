@@ -1,3 +1,9 @@
+traj_augmentation:
+  num_frames: 1000
+  interpolation_method: 'pchip'
+  atom_selection: "all"
+  traj_format: 'xtc'
+
 compute_features:
   plumed_settings:
     traj_stride: 1
@@ -23,7 +29,7 @@ filter_features:
     relaxation_time: 1                                   
 
 train_colvars:
-  cvs: ['pca', 'deep_tica', 'tica', 'ae']
+  cvs: ['pca', 'deep_tica', 'tica', 'ae', 'vae']
   common:
     dimension: 2
     lag_time: 1

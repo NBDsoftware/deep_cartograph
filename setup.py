@@ -30,10 +30,13 @@ setup(name='deep_cartograph',
     entry_points={
         "console_scripts": [
             "deep_carto=deep_cartograph.deep_carto:main",
+            "analyze_geometry=deep_cartograph.tools.analyze_geometry.analyze_geometry:main",
             "compute_features=deep_cartograph.tools.compute_features.compute_features:main",
             "filter_features=deep_cartograph.tools.filter_features.filter_features:main",
             "train_colvars=deep_cartograph.tools.train_colvars.train_colvars:main",
-            "analyze_geometry=deep_cartograph.tools.analyze_geometry.analyze_geometry:main",
+            "traj_augmentation=deep_cartograph.tools.traj_augmentation.traj_augmentation:main",
+            "traj_cluster=deep_cartograph.tools.traj_cluster.traj_cluster:main",
+            "traj_projection=deep_cartograph.tools.traj_projection.traj_projection:main"
         ]
     },
     include_package_data=True)

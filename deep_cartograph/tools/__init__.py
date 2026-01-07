@@ -4,5 +4,6 @@ from .filter_features import filter_features
 from .train_colvars import train_colvars
 from .traj_projection import traj_projection
 from .traj_cluster import traj_cluster
+from .traj_augmentation import traj_augmentation
 
-__all__ = ['analyze_geometry','compute_features', 'filter_features', 'train_colvars', 'traj_projection', 'traj_cluster']
+__all__ = ['analyze_geometry','compute_features', 'filter_features', 'train_colvars', 'traj_projection', 'traj_cluster', 'traj_augmentation']

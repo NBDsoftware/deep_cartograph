@@ -4,16 +4,14 @@ import sys
 import glob
 import logging
 import numpy as np
-import pandas as pd
-from typing import List, Dict, Union, Literal
 from pathlib import Path
+from typing import List, Dict, Union, Literal, Tuple
 
 import MDAnalysis as mda
 import MDAnalysis.analysis.rms
 import MDAnalysis.analysis.align
 from MDAnalysis.lib.distances import calc_bonds
-
-import deep_cartograph.modules.plumed as plumed
+from MDAnalysis import transformations as trans
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -883,7 +881,200 @@ def get_indices(topology: str, selection: Union[str, None] = None) -> list:
 
     return indices
 
+def load_coordinates(
+    topology_file, 
+    trajectory_file, 
+    selection="all", 
+    start=None,
+    stop=None,
+    step=None
+):
+    """
+    Loads a trajectory and returns time and coordinates arrays.
+    
+    Parameters
+    ----------
+    topology_file : str
+        Path to the topology file (pdb, gro, tpr, etc.)
+    trajectory_file : str
+        Path to the trajectory file (xtc, dcd, trr, etc.)
+    selection : str, optional
+        MDAnalysis atom selection string (default "all").
+        Use "name CA" for coarse grain/backbone analysis.
+    start, stop, step : int, optional
+        Slicing parameters for reading the trajectory.
 
+    Returns
+    -------
+    tuple (time_array, coords_array)
+        time_array : np.ndarray
+            Shape (n_frames,). The simulation time for each frame.
+        coords_array : np.ndarray
+            Shape (n_frames, n_atoms, 3). The coordinates array.
+    """
+    
+    # Load Universe
+    u = load_universe(topology_file, trajectory_file, selection)
+
+    # Pre-allocate Arrays
+    # We define the slice of frames we want to read
+    atom_group = u.select_atoms(selection)
+    trajectory_slice = u.trajectory[start:stop:step]
+    n_frames = len(trajectory_slice)
+    n_atoms = len(atom_group)
+        
+    # Shape: (Time, Atoms, Coordinates) -> (N, M, 3)
+    coords_array = np.zeros((n_frames, n_atoms, 3), dtype=np.float32)
+    frame_array = np.zeros(n_frames, dtype=np.float32)
+
+    # Read coordinates
+    for i, _ in enumerate(trajectory_slice):
+        coords_array[i] = atom_group.positions
+        frame_array[i] = float(i)
+
+    return frame_array, coords_array
+
+def load_universe(topology_file: str, trajectory_file: str, selection: str = "all") -> mda.Universe:
+    """
+    Loads a MDAnalysis Universe from topology and trajectory files. Applies
+    unwrapping and centering transformations if applicable.
+    
+    Parameters
+    ----------
+    topology_file : str
+        Path to the topology file (pdb, gro, tpr, etc.)
+    trajectory_file : str
+        Path to the trajectory file (xtc, dcd, trr, etc.)
+
+    Returns
+    -------
+    MDAnalysis.Universe
+        The loaded Universe object.
+    """
+    
+    # Load the Universe
+    try:
+        u = mda.Universe(topology_file, trajectory_file, guess_bonds=True)
+    except Exception as e:
+        logger.error(f"Could not load universe with provided files. Error: {e}")
+    
+    # Select Atoms
+    selected_atom_group = u.select_atoms(selection)
+    if len(selected_atom_group) == 0:
+        logger.error(f"Selection '{selection}' matched 0 atoms.")
+        sys.exit(1)
+        
+    logger.info(f"Loading {len(selected_atom_group)} atoms from {u.trajectory.n_frames} frames.")
+
+    # Trajectory preparation
+    preparation_steps = []
+    
+    # Unwrap trajectory if bonds are present
+    if len(u.bonds) == 0:
+        logger.warning("Topology does not contain bonds. Cannot unwrap trajectory.")
+    else:
+        logger.debug("Topology contains bonds. Unwrapping trajectory.")
+        try:
+            preparation_steps.append(trans.unwrap(selected_atom_group))
+        except Exception as e:
+            logger.warning(f"Could not unwrap trajectory. Error: {e}")
+            logger.warning("Make sure your trajectory has been unwrapped properly.")
+    
+    # Center trajectory if box dimensions are present
+    if u.dimensions is not None:
+        logger.debug("Trajectory contains box dimensions. Centering trajectory.")
+        try:
+            preparation_steps.append(trans.center_in_box(selected_atom_group, wrap=True))
+        except Exception as e:
+            logger.warning(f"Could not center trajectory. Error: {e}")
+            logger.warning("Make sure your trajectory has been centered properly.")
+
+    if preparation_steps:
+        u.trajectory.add_transformations(*preparation_steps)
+    
+    return u
+
+def interpolate_trajectory(
+    topology_file: str,         
+    trajectory_file: str,
+    num_frames: int,
+    interpolation_method: Literal['akima', 'pchip'] = 'pchip',
+    atom_selection: str = 'all',
+    traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc',
+    output_path: str = None,
+    ) -> Tuple[str, str]:
+    """
+    Interpolates a trajectory to a specified number of frames using the given interpolation method.
+    
+    Parameters
+    ----------
+    
+    topology_file : str
+        Path to the topology file (pdb, gro, tpr, etc.)
+    trajectory_file : str
+        Path to the trajectory file (xtc, dcd, trr, etc.)
+    num_frames : int
+        Desired number of frames in the interpolated trajectory.
+    interpolation_method : str, optional
+        Interpolation method to use ('akima' or 'pchip'). Default is 'pchip'.
+        Akima looks smoother but pchip avoids oscillations better 
+        when there are abrupt changes in the trajectory.
+    atom_selection : str, optional
+        MDAnalysis atom selection string (default "all").
+    traj_format : str, optional
+        Format of the output trajectory ('xtc', 'dcd', 'nc', 'pdb'). Default is 'xtc'.
+    output_path : str, optional
+        Path to save the interpolated trajectory. If None, saves in the current directory.
+
+    Returns
+    -------
+    
+    tuple (new_trajectory_path, new_topology_path)
+        new_trajectory_path : str
+            Path to the interpolated trajectory file.
+        new_topology_path : str
+            Path to the topology file for the interpolated trajectory.
+    """ 
+    
+    from scipy.interpolate import Akima1DInterpolator, PchipInterpolator
+    from MDAnalysis.coordinates.memory import MemoryReader
+    
+    # Get the trajectory name without extension
+    traj_name = Path(trajectory_file).stem
+    new_traj_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.{traj_format}")
+    new_top_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.pdb")
+
+    # Load the trajectory using MDAnalysis
+    frames, coords = load_coordinates(topology_file, trajectory_file, atom_selection)
+    
+    # Define new frames
+    new_frames = np.linspace(frames[0], frames[-1], num_frames)
+    
+    # Interpolate coordinates
+    if interpolation_method == 'akima':
+        interpolator = Akima1DInterpolator(x=frames, y=coords, axis=0, method='makima')
+    elif interpolation_method == 'pchip':
+        interpolator = PchipInterpolator(x=frames, y=coords, axis=0)
+    else:
+        logger.error(f"Interpolation method '{interpolation_method}' not supported. Use 'akima' or 'pchip'.")
+    new_coords = interpolator(new_frames)
+    
+    # Create a matching topology for the selection
+    # Load the original universe to grab the atom information
+    u_orig = mda.Universe(topology_file)
+    selected_atoms = u_orig.select_atoms(atom_selection)
+    # Write just the selected atoms to the new topology PDB
+    selected_atoms.write(new_top_path)
+    
+    # Create a new trajectory file
+    u = mda.Universe(new_top_path)
+    u.load_new(new_coords, format=MemoryReader)
+    with mda.Writer(new_traj_path, n_atoms=u.atoms.n_atoms) as Writer:
+        for ts in u.trajectory:
+            Writer.write(u)
+    
+    return new_traj_path, new_top_path
+    
 # I/O functions
 def find_supported_traj(parent_path, filename = None):
     """

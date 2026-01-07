@@ -1,0 +1,4 @@
+atom_selection: all
+interpolation_method: pchip
+num_frames: 1000
+traj_format: xtc

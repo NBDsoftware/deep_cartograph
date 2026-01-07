@@ -9,6 +9,7 @@ from typing import Dict, List, Literal, Optional
 from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 from deep_cartograph.tools import (
     analyze_geometry,
+    traj_augmentation,
     compute_features,
     filter_features,
     train_colvars,
@@ -32,6 +33,8 @@ def deep_cartograph(
     configuration: Dict,
     trajectory_data: str,
     topology_data: str,
+    seed_trajectory_data: str,
+    seed_topology_data: str,
     supplementary_traj_data: Optional[str] = None,
     supplementary_top_data: Optional[str] = None,
     reference_topology: Optional[str] = None,
@@ -57,6 +60,17 @@ def deep_cartograph(
             Path to a topology file or directory with topology files for trajectories.
             - If a single topology file is provided, it is used for all trajectories.
             - If a directory is provided, each topology file must match a trajectory filename.
+            Accepted format: `.pdb`.
+            
+        seed_trajectory_data (str):
+            Path to a trajectory file or directory containing multiple trajectories
+            to augment using the trajectory augmentation tool.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
+        
+        seed_topology_data (str):
+            Path to a topology file or directory with topology files for seed trajectories.
+            - If a single topology file is provided, it is used for all seed trajectories.
+            - If a directory is provided, each topology file must match a seed trajectory filename.
             Accepted format: `.pdb`.
         
         supplementary_traj_data (Optional[str]): 
@@ -126,10 +140,18 @@ def deep_cartograph(
     # Validate configuration
     configuration = validate_configuration(configuration, DeepCartograph, output_folder)
     
-    # Check main input folders
+    # Check main data
     trajectories, topologies = check_data(trajectory_data, topology_data)
     trajectory_names = [Path(traj).stem for traj in trajectories]
     
+    # Check seed data
+    seed_trajectories, seed_topologies = check_data(seed_trajectory_data, seed_topology_data)
+    trajectory_seed_names = [Path(traj).stem for traj in seed_trajectories]
+    
+    if len(trajectories)+len(seed_trajectories) == 0:
+        logger.error("No trajectory files found in the provided trajectory data paths.")
+        sys.exit(1)
+
     # Set reference topology
     if not reference_topology:
         reference_topology = topologies[0]
@@ -146,8 +168,23 @@ def deep_cartograph(
         'output_folder': os.path.join(output_folder, 'analyze_geometry')
     }
     analyze_geometry(**args)
+    
+    # STEP 1: Augment trajectories
+    # ----------------------------
+    args = {
+        'configuration': configuration['traj_augmentation'],
+        'seed_trajectories': seed_trajectories,
+        'seed_topologies': seed_topologies,
+        'output_folder': os.path.join(output_folder, 'traj_augmentation')
+    }
+    augmented_trajs, augmented_tops = traj_augmentation(**args)
 
-    # STEP 1: Compute features
+    # Combine original and augmented trajectories
+    trajectories.extend(augmented_trajs)
+    topologies.extend(augmented_tops)
+    trajectory_names.extend(trajectory_seed_names)
+    
+    # STEP 2: Compute features
     # ------------------------
     # Compute features for all trajectories
     args = {
@@ -193,7 +230,7 @@ def deep_cartograph(
     else:
         waypoint_colvars_paths = None
         
-    # STEP 2: Filter features
+    # STEP 3: Filter features
     # ------------------------
     args = {
         'configuration': configuration['filter_features'], 
@@ -209,7 +246,7 @@ def deep_cartograph(
     # Read filtered features
     filtered_features = read_features_list(output_features_path)
 
-    # STEP 3: Train colvars
+    # STEP 4: Train colvars
     # ---------------------
     args = {
         'configuration': configuration['train_colvars'],
@@ -225,7 +262,7 @@ def deep_cartograph(
     }
     trained_cvs_data = train_colvars(**args)
     
-    # STEP 4: Trajectory projection
+    # STEP 5: Trajectory projection
     # -----------------------------
     if supplementary_trajs:
         args = { 
@@ -241,7 +278,7 @@ def deep_cartograph(
     else:
         sup_cvs_data = {}
 
-    # STEP 5: Trajectory clustering
+    # STEP 6: Trajectory clustering
     # -----------------------------
     for cv in trained_cvs_data.keys():
 
@@ -324,9 +361,10 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-traj_data', dest='trajectory_data', required=True,
+        '-traj_data', dest='trajectory_data', required=True,    # NOTE: do they have to be aligned? Specify here
         help=(
-            "Path to trajectory or folder with trajectories to analyze. "
+            "Path to trajectory or folder with trajectories with data to train CVs. "
+            "These trajectories will not be modified before using them to train CVs. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
@@ -338,13 +376,29 @@ def parse_arguments():
             "corresponding trajectory in -traj_data. Accepted format: .pdb."
         )
     )
+    parser.add_argument(
+        '-seed_traj_data', dest='seed_trajectory_data', required=True,
+        help=(
+            "Path to trajectory or folder with trajectories with data to augment using the trajectory augmentation tool. "
+            "These trajectories will be augmented through interpolation before using them to train CVs. "
+            "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
+        )
+    )
+    parser.add_argument(
+        '-seed_top_data', dest='seed_topology_data', required=True,
+        help=(
+            "Path to topology or folder with topology files for the seed trajectories. "
+            "If a folder is provided, each topology should have the same name as the "
+            "corresponding trajectory in -seed_traj_data. Accepted format: .pdb."
+        )
+    )
 
     # Optional input files
     parser.add_argument(
         '-sup_traj_data', dest='supplementary_traj_data', required=False,
         help=(
             "Path to supplementary trajectory or folder with supplementary trajectories. "
-            "Used to project onto the CV alongside 'trajectory_data' but not used for computing CVs."
+            "Used to project onto the CV alongside the training data but not used for computing CVs."
         )
     )
     parser.add_argument(
@@ -421,6 +475,8 @@ def main():
         configuration=configuration,
         trajectory_data=args.trajectory_data,
         topology_data=args.topology_data,
+        seed_trajectory_data=args.seed_trajectory_data,
+        seed_topology_data=args.seed_topology_data,
         supplementary_traj_data=args.supplementary_traj_data,
         supplementary_top_data=args.supplementary_top_data,
         reference_topology=args.reference_topology,

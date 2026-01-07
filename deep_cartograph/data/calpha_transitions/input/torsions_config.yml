@@ -1,3 +1,9 @@
+traj_augmentation:
+  num_frames: 1000
+  interpolation_method: 'pchip'
+  atom_selection: "all"
+  traj_format: 'xtc'
+
 compute_features:
   plumed_settings:
     traj_stride: 1
@@ -20,34 +26,59 @@ filter_features:
     relaxation_time: 1                                   
 
 train_colvars:
-  cvs: ['pca', 'deep_tica', 'tica', 'ae']
+  cvs: ['pca', 'deep_tica', 'tica', 'ae', 'vae']
   common:
     dimension: 2
+    features_normalization: 'none'
     lag_time: 1 
     architecture:
-      encoder: [5, 3]                       
-    training: 
+      encoder: 
+        layers: [16, 8, 4]  
+        last_layer_activation: false
+      decoder:
+        layers: [4, 8, 16] 
+        last_layer_activation: false 
+    training:
       general:
         max_tries: 10
         seed: 42
         lengths: [0.8, 0.2]
-        batch_size: 256
-        max_epochs: 10000
-        dropout: 0.1
-        shuffle: False
+        batch_size: 128
+        max_epochs: 1000
+        shuffle: True
         random_split: True
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 100
+        patience: 500
         min_delta: 1.0e-05
+      optimizer:
+        kwargs:
+          lr: 0.001
+          weight_decay: 0
+        name: Adam
+      save_loss: True
+      plot_loss: True
+  deep_tica:
+    features_normalization: 'none'
+    architecture:
+      encoder: 
+        layers: [16, 8, 4]  
+        last_layer_activation: true
+      decoder:
+        layers: [4, 8, 16] 
+        last_layer_activation: true 
+    training:
+      general:
+        batch_size: 128
+        max_epochs: 500
       optimizer:
         name: Adam
         kwargs: 
-          lr: 1.0e-02
-          weight_decay: 0
-      save_loss: True
-      plot_loss: True
+          lr: 0.0001
+      early_stopping:
+        patience: 500
+        min_delta: 1.0e-03
   figures:
     fes:
       compute: True  
@@ -65,7 +96,7 @@ train_colvars:
       cmap: turbo
       marker_size: 12
   clustering:                        
-    run: True                        
+    run: False                        
     algorithm: hierarchical               
     opt_num_clusters: True          
     search_interval: [5, 15]          

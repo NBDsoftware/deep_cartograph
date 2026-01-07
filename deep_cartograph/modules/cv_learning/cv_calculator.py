@@ -917,7 +917,7 @@ class NonLinear(CVCalculator):
         }
         
         # Main attributes
-        self.cv: Optional[lightning.LightningModule] = None
+        self.cv: Optional[LightningModule] = None
         self.checkpoint: Optional[ModelCheckpoint] = None
         self.metrics: Optional[MetricsCallback] = None
         self.weights_path: Optional[str] = None
@@ -1412,6 +1412,11 @@ class NonLinear(CVCalculator):
                     'linestyles': ['-', '-'],
                     'yscale': 'log'
                 }
+                
+                # Deep TICA needs linear yscale as loss is negative
+                if self.cv_name == 'deep_tica':
+                    loss_plot_config['yscale'] = 'linear'
+
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
                 ax.figure.savefig(os.path.join(self.training_output_folder, f'loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()

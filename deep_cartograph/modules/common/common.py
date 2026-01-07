@@ -353,17 +353,7 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     
     traj_file_paths = find_files(trajectory_data)
     
-    # Check if there are any
-    if len(traj_file_paths) == 0:
-        logger.error(f"Trajectory data folder is empty: {trajectory_data}")
-        sys.exit(1)
-    
     top_file_paths = find_files(topology_data)
-    
-    # Check if there are any
-    if len(top_file_paths) == 0:
-        logger.error(f"Topology folder is empty: {topology_data}")
-        sys.exit(1)
     
     if len(top_file_paths) > 1:
         
