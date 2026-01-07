@@ -204,9 +204,14 @@ class Assembler:
                 sys.exit(1)
             
             # Build the commands to compute the cosinus
-            # Torsion command was aleady created when computing the sinus if needed
+            # Check if torsion command is needed - if there is the equivalent sin feature, it has been already defined
             torsion_label = feature_label.replace("cos", "tor")
-            cosinus_commands = plumed.command.custom(command_label=feature_label, 
+            if feature_label.replace("cos", "sin") in self.features_list:
+                cosinus_commands = ""
+            else:
+                cosinus_commands = plumed.command.torsion(command_label=torsion_label, 
+                                                         atoms=[entity.replace("_", "-") for entity in entities[1:]])
+            cosinus_commands += plumed.command.custom(command_label=feature_label, 
                                                     expression="cos(x)", 
                                                     arguments=[torsion_label], 
                                                     periodic=False)
