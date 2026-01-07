@@ -147,6 +147,44 @@ def distance(
 
     return distance_command
 
+def custom(
+    command_label: str, 
+    expression: str, 
+    arguments: List[str],
+    periodic: bool = False
+    ) -> str:
+    '''
+    Function that creates a PLUMED CUSTOM command.
+
+    Inputs
+    ------
+
+        command_label   :       command label
+        expression      :       expression
+        arguments       :       arguments
+
+    Outputs
+    -------
+
+        custom_command  (str):              PLUMED CUSTOM command
+    '''
+    
+    # Create CUSTOM command
+    custom_command = command_label + ": CUSTOM ARG=" + ",".join(arguments)
+
+    # Add expression
+    custom_command += " FUNC=" + expression
+    
+    if periodic:
+        custom_command += " PERIODIC=YES"
+    else:
+        custom_command += " PERIODIC=NO"
+
+    # Add newline
+    custom_command += "\n"
+
+    return custom_command
+
 def torsion(
     command_label: str, 
     atoms: Union[List[str], str]
@@ -187,8 +225,8 @@ def torsion(
     torsion_command += "\n"
 
     return torsion_command
-
-def sin(
+  
+def sin_old(
     command_label: str, 
     atoms: Union[List[str], str]
     ) -> str:
@@ -212,7 +250,7 @@ def sin(
     """
     return alphabeta(command_label, atoms, reference = -round(math.pi/2,4))
 
-def cos(
+def cos_old(
     command_label: str, 
     atoms: Union[List[str], str]
     ) -> str:
