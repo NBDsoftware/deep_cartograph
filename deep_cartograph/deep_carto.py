@@ -31,10 +31,10 @@ from deep_cartograph.modules.common import (
 
 def deep_cartograph(
     configuration: Dict,
-    trajectory_data: str,
-    topology_data: str,
-    seed_trajectory_data: str,
-    seed_topology_data: str,
+    trajectory_data: Optional[str] = None,
+    topology_data: Optional[str] = None,
+    seed_trajectory_data: Optional[str] = None,
+    seed_topology_data: Optional[str] = None,
     supplementary_traj_data: Optional[str] = None,
     supplementary_top_data: Optional[str] = None,
     reference_topology: Optional[str] = None,
@@ -154,7 +154,13 @@ def deep_cartograph(
 
     # Set reference topology
     if not reference_topology:
-        reference_topology = topologies[0]
+        if len(topologies) > 0:
+            reference_topology = topologies[0]
+        elif len(seed_topologies) > 0:
+            reference_topology = seed_topologies[0]
+        else:
+            logger.error("No topology files found to set as reference topology.")
+            sys.exit(1)
     elif not os.path.exists(reference_topology):
         logger.error(f"Reference topology file missing: {reference_topology}")
         sys.exit(1)
@@ -173,8 +179,8 @@ def deep_cartograph(
     # ----------------------------
     args = {
         'configuration': configuration['traj_augmentation'],
-        'seed_trajectories': seed_trajectories,
-        'seed_topologies': seed_topologies,
+        'trajectories': seed_trajectories,
+        'topologies': seed_topologies,
         'output_folder': os.path.join(output_folder, 'traj_augmentation')
     }
     augmented_trajs, augmented_tops = traj_augmentation(**args)

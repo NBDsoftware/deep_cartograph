@@ -324,7 +324,9 @@ def find_files(path: str) -> List[str]:
 
     return file_paths
 
-def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], List[str]]:
+def check_data(trajectory_data: Optional[str], 
+               topology_data: Optional[str]
+    ) -> Tuple[List[str], List[str]]:
     """
     Function that checks the existence of the necessary input data files.
     
@@ -351,9 +353,9 @@ def check_data(trajectory_data: str, topology_data: str) -> Tuple[List[str], Lis
     
     logger = logging.getLogger("deep_cartograph")
     
-    traj_file_paths = find_files(trajectory_data)
+    traj_file_paths = find_files(trajectory_data) if trajectory_data is not None else []
     
-    top_file_paths = find_files(topology_data)
+    top_file_paths = find_files(topology_data) if topology_data is not None else []
     
     if len(top_file_paths) > 1:
         
