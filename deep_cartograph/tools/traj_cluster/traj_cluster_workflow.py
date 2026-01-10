@@ -50,6 +50,9 @@ class TrajClusterWorkflow:
         self.configuration: Dict = validate_configuration(configuration, TrajClusterSchema, output_folder)
         self.figures_configuration: Dict = self.configuration['figures']
         
+        self.extract_centroids_condition: bool = self.configuration['output_structures'] in ['centroids', 'all']
+        self.extract_ensembles_condition: bool = self.configuration['output_structures'] == 'all'
+        
         # Input related attributes
         self.cv_traj_paths: List[str] = cv_traj_paths
         self.trajectories: Union[str, None] = trajectories
@@ -282,7 +285,7 @@ class TrajClusterWorkflow:
         figures.plot_clusters_size(cluster_labels, cluster_colors, self.output_folder)
         
         # If the user requested output structures = centroids or all, extract centroids from the trajectories
-        if self.configuration['output_structures'] in ['centroids', 'all']:
+        if self.extract_centroids_condition:
             if self.trajectories and self.topologies:
                 self.extract_centroids(cv_data)
             else:
@@ -320,7 +323,7 @@ class TrajClusterWorkflow:
                 logger.debug(f"Saved clustered trajectory plot to {scatter_plot_path}")
             
             # If the user requested output structures = all, extract all frames from the trajectory for each cluster
-            if self.configuration['output_structures'] == 'all':
+            if self.extract_ensembles_condition:
                 if self.trajectories and self.topologies:
                     self.extract_cluster_ensembles(traj_df, traj_output_folder)
                 else:
