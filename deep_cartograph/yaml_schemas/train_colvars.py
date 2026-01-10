@@ -19,14 +19,18 @@ class NeuralNetwork(BaseModel):
     # Fully connected hidden layers
     layers: List[int] = [64, 32, 16]
     # Activation function
-    activation: Union[str, List[str]] = "leaky_relu"
+    activation: List[Optional[Literal['relu', 'elu', 'tanh', 'softplus', 'shifted_softplus', 'custom_sigmoid', 'leaky_relu', 'linear']]] = ['leaky_relu', 'leaky_relu', 'leaky_relu']
     # Whether to use batch normalization
-    batchnorm: Union[bool, List[bool]] = False
+    batchnorm: List[bool] = [False, False, False]
     # Value for dropout (if 0.0, no dropout is applied)
-    dropout: Union[Optional[float], List[Optional[float]]] = 0.0
-    # Whether to use activation functions for the last layer
-    last_layer_activation: bool = True
-    
+    dropout: List[Optional[float]] = [None, None, None]
+    # Activation function for the last layer before the output
+    last_layer_activation: Optional[Literal['relu', 'elu', 'tanh', 'softplus', 'shifted_softplus', 'custom_sigmoid', 'leaky_relu', 'linear']] = None
+    # Whether to use batch normalization for the last layer before the output
+    last_layer_batchnorm: bool = False
+    # Value for dropout for the last layer before the output (if 0.0, no dropout is applied)
+    last_layer_dropout: Optional[float] = None
+
 class Architecture(BaseModel):
 
     # Fully connected hidden layers between the input and latent space

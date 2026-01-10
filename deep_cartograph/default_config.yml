@@ -173,7 +173,7 @@ train_colvars:
     architecture:
       encoder: 
         layers: [15, 15] # Increase the complexity if needed: [100, 50, 20]
-        dropout: 0.1
+        dropout: [0.1, 0.1]
     training: 
       general:
         max_tries: 10
@@ -211,7 +211,7 @@ train_colvars:
 
 # clustering:                        Settings for the clustering
 #   run:                              (bool) Whether to run the clustering or not
-#   output_structures:                (str) Output mode for the clustering results ('centroids', 'all', 'none')
+#   output_structures:                (str) Output mode for the clustering results ('centroids', 'all', null)
 #   algorithm:                        (str) Clustering algorithm to use ('kmeans', 'hdbscan', 'hierarchical')
 #   opt_num_clusters:                 (bool) Whether to search for the optimal number of clusters inside the search_interval or not (only for hierarchical and kmeans)
 #   search_interval:                  (list) Range of number of clusters to search for the optimal number of clusters (only for hierarchical and kmeans)

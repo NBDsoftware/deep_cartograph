@@ -19,7 +19,7 @@ train_colvars:
   common:
     dimension: 1
     lag_time: 1
-    features_normalization: 'mean_std'
+    features_normalization: null
     architecture:
       encoder: 
         layers: [4, 4, 2]

@@ -33,7 +33,7 @@ common:
     general:
       batch_size: 256
       check_val_every_n_epoch: 1
-      dropout: 0.1
+      dropout: [0.1, 0.1]
       lag_time: 30
       lengths:
       - 0.8

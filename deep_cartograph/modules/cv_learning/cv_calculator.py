@@ -989,38 +989,72 @@ class NonLinear(CVCalculator):
         self.cv = torch.jit.load(weights_path)
         self.cv.eval()
 
-    def set_up_last_layer(self):
+    def set_up_encoder_last_layer(self):
+        """ 
+        Sets up the last layer of the encoder based on the user-provided configuration.
         """
-        Sets up the last layer of the decoder based on the normalization of the features.
+    
+        # If CV is VAE, less layers are built using feedforward and the last 
+        # layer is built using a linear mean and variance, see mlcolvar classes
+        if self.cv_name != 'vae':
+
+            # Add dropout to the last layer of the encoder - user defined or default None
+            self.encoder_options['dropout'].append(self.encoder_options['last_layer_dropout'])
+
+            # Add activation function to the last layer of the encoder - user defined or default None
+            self.encoder_options['activation'].append(self.encoder_options['last_layer_activation'])
+            
+            # Add batch normalization to the last layer of the encoder - user defined or default False
+            self.encoder_options['batchnorm'].append(self.encoder_options['last_layer_batchnorm'])
+            
+            # NOTE: We should check which model we are using and if the choices make sense
+        
+        # Remove extra keys that are not part of the arguments of the feedforward class of mlcolvars
+        self.encoder_options.pop('last_layer_activation')
+        self.encoder_options.pop('last_layer_dropout')
+        self.encoder_options.pop('last_layer_batchnorm')
+            
+    def set_up_decoder_last_layer(self):
         """
-        # Add activation function to the last layer of the decoder based on the normalization of the features
-        if isinstance(self.decoder_options.get('activation'), list):
-            # Normalized using min max with range [0, 1] -> use sigmoid activation
-            if self.feats_norm_mode == 'min_max_range1':
-                self.decoder_options['activation'].append('custom_sigmoid')
-            # Normalized using min max with range [-1, 1] -> use tanh activation
-            elif self.feats_norm_mode == 'min_max_range2':
-                self.decoder_options['activation'].append('tanh')
-            # In other cases (mean_std or none), avoid adding an activation function
-            else:
-                self.decoder_options['activation'].append(None)
-        else:
-            logger.warning('''Decoder activation function is a single value, the same activation will be used for all layers. 
-                           Make sure the chosen activation function matches the normalization of the features when doing regression
-                           or choose last_layer_activation = False.''')
+        Sets up the last layer of the decoder based on the user-provided configuration and the features normalization.
+        """
+        # Add activation function to the last layer of the decoder - user defined or default None
+        self.decoder_options['activation'].append(self.decoder_options['last_layer_activation'])
+        self.decoder_options.pop('last_layer_activation')
         
-        # We add a layer to the decoder
+        # Warn the user and correct, if the range of the last activation function 
+        # does not match the normalization of the features
         
-        # No dropout for the last layer of the decoder
-        if isinstance(self.decoder_options['dropout'], list):
-            self.decoder_options['dropout'].append(None)
-        # No batch norm for the last layer of the decoder 
-        if isinstance(self.decoder_options['batchnorm'], list):
-            self.decoder_options['batchnorm'].append(False)
-        elif self.decoder_options['batchnorm'] is True:
-            logger.warning('''Batch normalization is set to True for all layers of the decoder, 
-                           including the last layer. Make sure this is intended or provide a list for batchnorm.''')
-                       
+        # Normalized using min max with range [0, 1] -> should use sigmoid activation
+        if self.feats_norm_mode == 'min_max_range1':
+            if self.decoder_options['activation'][-1] != 'custom_sigmoid':
+                logger.warning(f"""The last layer activation function of the decoder is set to 
+                               {self.decoder_options['activation'][-1]}, but the features are 
+                               normalized using min max with range [0, 1]. Changing the activation 
+                               function to 'sigmoid'.""")
+                self.decoder_options['activation'][-1] = 'custom_sigmoid'
+                
+        # Normalized using min max with range [-1, 1] -> should use tanh activation
+        elif self.feats_norm_mode == 'min_max_range2':
+            if self.decoder_options['activation'][-1] != 'tanh':
+                logger.warning(f"""The last layer activation function of the decoder is set to 
+                               {self.decoder_options['activation'][-1]}, but the features are 
+                               normalized using min max with range [-1, 1]. Changing the activation 
+                               function to 'tanh'.""")
+                self.decoder_options['activation'][-1] = 'tanh'
+        
+        # Add dropout to the last layer of the decoder - should be None in general
+        self.decoder_options['dropout'].append(self.decoder_options['last_layer_dropout'])
+        self.decoder_options.pop('last_layer_dropout')
+        if self.decoder_options['dropout'][-1] is not None:
+            logger.warning("Dropout in the last layer of the decoder is not recommended.")
+    
+        # Add batch normalization to the last layer of the decoder - should be False in general
+        self.decoder_options['batchnorm'].append(self.decoder_options['last_layer_batchnorm'])
+        self.decoder_options.pop('last_layer_batchnorm')
+        if self.decoder_options['batchnorm'][-1]:
+            logger.warning("Batch normalization in the last layer of the decoder is not recommended.")
+
     def _adjust_lr_scheduler(self, datamodule):
         """
         Adjusts LR scheduler parameters based on the training configuration.
@@ -1126,8 +1160,9 @@ class NonLinear(CVCalculator):
         """
         import torch 
         
-        # Set up the last layer of the decoder
-        self.set_up_last_layer()
+        # Set up the last layer for the encoder and decoders
+        self.set_up_encoder_last_layer()
+        self.set_up_decoder_last_layer()
         
         # Normalization of features in the Non-linear models
         if self.feats_norm_mode == 'none':
@@ -1847,12 +1882,6 @@ class AECalculator(NonLinear):
         self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-        
-        # Add encoder activation and dropout option for last layer if these are lists
-        if isinstance(self.encoder_options.get('dropout'), list):
-            self.encoder_options['dropout'].append(None)
-        if isinstance(self.encoder_options.get('activation'), list):
-            self.encoder_options['activation'].append(None)
 
     def set_up_cv_options(self):
         """ 
@@ -1965,16 +1994,6 @@ class DeepTICACalculator(NonLinear):
         self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-            
-        # NOTE: In the future we might want to allow for a custom last layer before the latent space
-        # Currently it will be the same as the one for the hidden layers - if not a list
-        # or no activation/dropout is applied to the last layer
-        
-        # Add encoder activation and dropout option for last layer if these are lists
-        if isinstance(self.encoder_options.get('dropout'), list):
-            self.encoder_options['dropout'].append(None)
-        if isinstance(self.encoder_options.get('activation'), list):
-            self.encoder_options['activation'].append(None)
 
     def set_up_cv_options(self):
         """ 

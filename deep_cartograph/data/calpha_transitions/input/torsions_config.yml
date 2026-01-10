@@ -29,15 +29,21 @@ train_colvars:
   cvs: ['pca', 'deep_tica', 'tica', 'ae', 'vae']
   common:
     dimension: 2
-    features_normalization: 'none'
-    lag_time: 1 
+    features_normalization: null
+    lag_time: 5 
     architecture:
       encoder: 
-        layers: [16, 8, 4]  
-        last_layer_activation: false
+        layers: [8, 4]  
+        activation: ['leaky_relu', 'leaky_relu']
+        batchnorm: [False, False]
+        dropout: [null, null]
+        last_layer_activation: null
       decoder:
-        layers: [4, 8, 16] 
-        last_layer_activation: false 
+        layers: [4, 8]      
+        activation: ['leaky_relu', 'leaky_relu']
+        batchnorm: [False, False]
+        dropout: [null, null]
+        last_layer_activation: null
     training:
       general:
         max_tries: 10
@@ -60,25 +66,23 @@ train_colvars:
       save_loss: True
       plot_loss: True
   deep_tica:
-    features_normalization: 'none'
+    features_normalization: null
     architecture:
       encoder: 
-        layers: [16, 8, 4]  
-        last_layer_activation: true
-      decoder:
-        layers: [4, 8, 16] 
-        last_layer_activation: true 
+        layers: [16, 4]  
+        activation: ['leaky_relu', 'leaky_relu']
+        last_layer_activation: leaky_relu 
     training:
       general:
         batch_size: 128
-        max_epochs: 500
+        max_epochs: 1000
       optimizer:
         name: Adam
         kwargs: 
           lr: 0.0001
       early_stopping:
-        patience: 500
-        min_delta: 1.0e-03
+        patience: 25
+        min_delta: 1.0e-04
   figures:
     fes:
       compute: True  
