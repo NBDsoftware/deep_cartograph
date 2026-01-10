@@ -41,7 +41,7 @@ class CVCalculator:
         self.configuration: Dict = copy.deepcopy(configuration) if configuration is not None else {}
         self.architecture_config: Dict = self.configuration.get('architecture', {})
         self.training_reading_settings: Dict = self.configuration.get('input_colvars', {})
-        self.feats_norm_mode: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = self.configuration.get('features_normalization', 'none')
+        self.feats_norm_mode: Optional[Literal['mean_std', 'min_max_range1', 'min_max_range2']] = self.configuration.get('features_normalization', None)
         self.bias: Dict = self.configuration.get('bias', {})
 
         # Topologies
@@ -299,7 +299,7 @@ class CVCalculator:
             
         # Set the mean and range for the normalization
         # No normalization of input features (not recommended)
-        if self.feats_norm_mode == 'none':
+        if self.feats_norm_mode is None:
             means = np.zeros(len(self.features_stats["mean"]))
             ranges = np.ones(len(self.features_stats["mean"]))
         # Normalized data will have mean 0 and std 1, non-defined range.
@@ -1166,7 +1166,7 @@ class NonLinear(CVCalculator):
         self.set_up_decoder_last_layer()
         
         # Normalization of features in the Non-linear models
-        if self.feats_norm_mode == 'none':
+        if self.feats_norm_mode is None:
             self.cv_options = {'norm_in' : None}
         else:
             self.cv_options = {'norm_in' : {'mode' : 'mean_std',

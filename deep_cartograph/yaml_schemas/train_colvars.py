@@ -157,7 +157,7 @@ class CommonCollectiveVariable(BaseModel):
     # Lag time for TICA and DeepTICA
     lag_time: int = 1
     # Features normalization
-    features_normalization: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = 'min_max_range2'
+    features_normalization: Optional[Literal['mean_std', 'min_max_range1', 'min_max_range2']] = None
     # Input colvars
     input_colvars: InputColvars = InputColvars()
     # Architecture settings (used only with NN-based Collective Variables)

@@ -344,7 +344,7 @@ class CollectiveVariableAssembler(Assembler):
         features_range = self.cv_params['features_norm_range']
         
         # Normalize the input features
-        if features_norm_mode != 'none': 
+        if features_norm_mode is not None: 
             self.input_content += "\n# Normalized features\n"
             normalized_feature_labels = []
             for index, feature in enumerate(self.features_list):
