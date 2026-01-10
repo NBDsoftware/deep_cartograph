@@ -255,7 +255,7 @@ def test_deep_cartograph():
       assert test_passed
     
     # If the test passed, clean the output folder
-    if False:
+    if test_passed:
       try:
         shutil.rmtree(output_path)
       except:
