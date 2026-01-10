@@ -1,7 +1,6 @@
 # Import necessary modules
 import os
 import sys
-import copy
 import logging
 import numpy as np
 import pandas as pd
@@ -288,7 +287,7 @@ class TrainColvarsWorkflow:
             
             # Construct the corresponding CV calculator
             args = {
-                'configuration': copy.deepcopy(merged_configuration),
+                'configuration': merged_configuration,
                 'output_path': self.output_folder
             }
             cv_calculator = cv_calculators_map[cv_name](**args)

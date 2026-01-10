@@ -1,4 +1,5 @@
 import os
+import copy
 import shutil
 import logging
 import numpy as np
@@ -37,7 +38,7 @@ class CVCalculator:
         """
         
         # Configuration
-        self.configuration: Dict = configuration if configuration is not None else {}
+        self.configuration: Dict = copy.deepcopy(configuration) if configuration is not None else {}
         self.architecture_config: Dict = self.configuration.get('architecture', {})
         self.training_reading_settings: Dict = self.configuration.get('input_colvars', {})
         self.feats_norm_mode: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = self.configuration.get('features_normalization', 'none')
