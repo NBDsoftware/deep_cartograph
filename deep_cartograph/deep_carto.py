@@ -268,8 +268,8 @@ def deep_cartograph(
     }
     trained_cvs_data = train_colvars(**args)
     
-    # STEP 5: Trajectory projection
-    # -----------------------------
+    # STEP 5: Supplementary trajectory projection
+    # -------------------------------------------
     if supplementary_trajs:
         args = { 
             'configuration' : configuration['traj_projection'],
