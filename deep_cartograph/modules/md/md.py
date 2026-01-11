@@ -1044,6 +1044,11 @@ def interpolate_trajectory(
     new_traj_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.{traj_format}")
     new_top_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.pdb")
 
+    # Check if the output files already exist
+    if os.path.exists(new_traj_path) and os.path.exists(new_top_path):
+        logger.info(f"Interpolated trajectory and topology already exist at {new_traj_path} and {new_top_path}. Skipping interpolation.")
+        return new_traj_path, new_top_path
+        
     # Load the trajectory using MDAnalysis
     frames, coords = load_coordinates(topology_file, trajectory_file, atom_selection)
     
