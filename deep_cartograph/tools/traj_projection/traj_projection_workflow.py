@@ -42,15 +42,9 @@ class TrajProjectionWorkflow:
         
         traj_projection/
             cv_name_1/                          # e.g. pca/
-                traj_data/                      # data related to the input trajectories 
-                    trajectory_1/               # trajectory folder
-                        fes/                    # FES plots and arrays                           
-                            component_1_2
-                        plumed_inputs/
-                            unbiased_md.zip
-                            biased_md.zip
-                        projected_trajectory.csv
-                        trajectory.png      
+                trajectory_1/                   # trajectory folder
+                    projected_trajectory.csv
+                    trajectory.png      
 
         Parameters
         ----------
