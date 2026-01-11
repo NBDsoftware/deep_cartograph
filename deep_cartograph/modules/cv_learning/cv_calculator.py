@@ -341,6 +341,8 @@ class CVCalculator:
             Projected training data or None if the CV computation failed
         """
         
+        self.create_output_folders()
+        
         # Overwrite the dimension from the configuration if provided
         if cv_dimension:
             self.cv_dimension = cv_dimension
@@ -1672,8 +1674,6 @@ class PCACalculator(LinearCalculator):
             output_path)
         
         self.cv_name = 'pca'
-
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
 
@@ -1713,8 +1713,6 @@ class TICACalculator(LinearCalculator):
             output_path)
         
         self.cv_name = 'tica'
-        
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
     
@@ -1772,8 +1770,6 @@ class HTICACalculator(LinearCalculator):
         
         self.num_subspaces = self.configuration.get('num_subspaces')
         self.subspaces_dimension = self.configuration.get('subspaces_dimension')
-        
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
     
@@ -1879,8 +1875,6 @@ class AECalculator(NonLinear):
             output_path)
         
         self.cv_name = 'ae'
-        
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
 
@@ -1991,8 +1985,6 @@ class DeepTICACalculator(NonLinear):
             output_path)
         
         self.cv_name = 'deep_tica'
-
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
 
@@ -2124,8 +2116,6 @@ class VAECalculator(NonLinear):
             self.n_epochs_anneal = self.max_epochs // 4   # Anneal during 25 % of the total epochs
 
         self.cv_name = 'vae'
-
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
         
