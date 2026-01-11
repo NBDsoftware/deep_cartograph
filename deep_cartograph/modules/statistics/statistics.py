@@ -407,15 +407,16 @@ def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
                 sine_timeseries = features_df[name].to_numpy()
                 cosine_timeseries = features_df[cosine_name].to_numpy()
                 
-                # Compute the angle for each sample
-                angles = np.arctan2(sine_timeseries, cosine_timeseries)
+                # Compute the angle for each sample between 0 and 2pi
+                angles = np.arctan2(sine_timeseries, cosine_timeseries) + np.pi  # Shift to [0, 2pi]
                 
                 # Get the maximum difference between all samples in radians
-                delta = np.max(angles) - np.min(angles)
+                delta = np.abs(np.max(angles) - np.min(angles))
             else:
-                logger.warning(f"Cosine component {cosine_name} not found for sine component {name}. Skipping this feature.")
+                logger.warning(f"Cosine component {cosine_name} not found for sine component {name}. Check the compute features step. Skipping this feature.")
                 delta = 10  # Large difference to skip this feature
 
+            # Check if the angle difference is big enough
             results.loc[results['name'] == name, 'above_threshold'] = delta >= angle_threshold
             results.loc[results['name'] == cosine_name, 'above_threshold'] = delta >= angle_threshold
 
