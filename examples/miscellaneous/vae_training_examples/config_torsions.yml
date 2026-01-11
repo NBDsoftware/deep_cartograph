@@ -14,8 +14,6 @@ dt_per_frame: 40
 compute_features:
   plumed_settings:
     traj_stride: 1
-    moltype: protein
-    input_name: combined_features
     whole_molecule_selection: all
     features:
       dihedral_groups:         
