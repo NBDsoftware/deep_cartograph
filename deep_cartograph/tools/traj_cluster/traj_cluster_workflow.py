@@ -249,6 +249,10 @@ class TrajClusterWorkflow:
             lists of paths to the clustered trajectories in the CV space for each cv trajectory file.
         """
         
+        if self.configuration['run'] is False:
+            logger.info("traj_cluster workflow set to not run. Exiting...")
+            return {}
+
         output_paths: Dict[str, List[str]] = {}
         
         logger.info("Starting traj_cluster workflow...")
