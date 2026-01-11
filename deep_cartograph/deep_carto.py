@@ -367,7 +367,7 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-traj_data', dest='trajectory_data', required=True,    # NOTE: do they have to be aligned? Specify here
+        '-traj_data', dest='trajectory_data', required=False,    # NOTE: do they have to be aligned? Specify here
         help=(
             "Path to trajectory or folder with trajectories with data to train CVs. "
             "These trajectories will not be modified before using them to train CVs. "
@@ -375,7 +375,7 @@ def parse_arguments():
         )
     )
     parser.add_argument(
-        '-top_data', dest='topology_data', required=True,
+        '-top_data', dest='topology_data', required=False,
         help=(
             "Path to topology or folder with topology files for the trajectories. "
             "If a folder is provided, each topology should have the same name as the "
@@ -383,7 +383,7 @@ def parse_arguments():
         )
     )
     parser.add_argument(
-        '-seed_traj_data', dest='seed_trajectory_data', required=True,
+        '-seed_traj_data', dest='seed_trajectory_data', required=False,
         help=(
             "Path to trajectory or folder with trajectories with data to augment using the trajectory augmentation tool. "
             "These trajectories will be augmented through interpolation before using them to train CVs. "
@@ -391,7 +391,7 @@ def parse_arguments():
         )
     )
     parser.add_argument(
-        '-seed_top_data', dest='seed_topology_data', required=True,
+        '-seed_top_data', dest='seed_topology_data', required=False,
         help=(
             "Path to topology or folder with topology files for the seed trajectories. "
             "If a folder is provided, each topology should have the same name as the "
