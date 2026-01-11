@@ -99,7 +99,7 @@ class Filter:
         self.entropy_quantile = settings['entropy_quantile']
         self.std_quantile = settings['std_quantile']
         
-        # features to analyze
+        # features to analyze, all pass initially
         self.features_data = pd.DataFrame({'name': self.common_ref_features, 'pass': True})
         
         # Add entropy column if needed
