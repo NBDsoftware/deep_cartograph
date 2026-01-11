@@ -238,6 +238,7 @@ class TrajProjectionWorkflow:
                 continue
             
             # Project the input colvars file onto the CV space
+            logger.debug(f"Projecting colvars files onto CV space defined by model {model_path}...")
             projected_data = cv_calculator.project_colvars(
                 colvars_paths = self.colvars_paths,
                 topology_paths = self.topologies
@@ -250,18 +251,18 @@ class TrajProjectionWorkflow:
             projected_data_list = [projected_data[projected_data['traj_label'] == file_index] for file_index in range(len(self.colvars_paths))]
             projected_data_list = [data.drop(columns=['traj_label']) for data in projected_data_list]
             
-            # Scatter plots for each colvars
-            if self.cv_dimension == 2:
+            # For each trajectory, save projected data and create scatter plots 
+            for index in range(len(self.colvars_paths)):
+                projected_data_i = projected_data_list[index]
+                projected_data_i['frame'] = np.arange(len(projected_data_i))
+                trajectory_name = self.trajectory_names[index]
                 
-                for index in range(len(self.colvars_paths)):
-                    projected_data_i = projected_data_list[index]
-                    projected_data_i['frame'] = np.arange(len(projected_data_i))
-                    trajectory_name = self.trajectory_names[index]
-                    
-                    traj_output_folder = os.path.join(cv_output_folder, trajectory_name)
-                    os.makedirs(traj_output_folder, exist_ok=True)
-                    
-                    # Plot scatter of projected data colored by frame number
+                traj_output_folder = os.path.join(cv_output_folder, trajectory_name)
+                os.makedirs(traj_output_folder, exist_ok=True)
+                
+                # Plot scatter of projected data colored by frame number
+                if self.cv_dimension == 2:
+                    logger.debug(f"Creating scatter plot for trajectory {trajectory_name} in CV space {self.cv_name}...")
                     figures.gradient_scatter_plot(
                         data = projected_data_i,
                         column_labels = self.cv_labels,
@@ -269,17 +270,19 @@ class TrajProjectionWorkflow:
                         settings = self.figures_configuration['traj_projection'],
                         file_path = os.path.join(traj_output_folder, f'trajectory.png')
                     )
-                    
-                    # Erase the frame column
-                    projected_data_i = projected_data_i.drop(columns=['frame'])
-                    
-                    # Save projected data
-                    projected_data_i.to_csv(os.path.join(traj_output_folder, f'projected_trajectory.csv'), index=False, float_format='%.4f')
+                
+                # Erase the frame column
+                projected_data_i = projected_data_i.drop(columns=['frame'])
+                
+                # Save projected data
+                file_path = os.path.join(traj_output_folder, f'projected_trajectory.csv')
+                logger.debug(f"Saving projected trajectory data to {file_path}")
+                projected_data_i.to_csv(file_path, index=False, float_format='%.4f')
 
             projected_data_list = [data.to_numpy() for data in projected_data_list] 
             
-            
             if self.model_traj_paths is not None:
+                logger.debug(f"Traj data used to train CV model given, creating FES plots...")
                 # Load training data for FES
                 main_data = create_dataframe_from_files(self.model_traj_paths[model_index])
                 # Plot FES of training data + scatter of all projected data
@@ -289,6 +292,8 @@ class TrajProjectionWorkflow:
                     sup_data = projected_data_list,
                     sup_data_labels = self.trajectory_names
                 )
+            else:
+                logger.debug(f"No traj data used to train CV model given, skipping FES plots...")
             
         return output_cv_data
                 
