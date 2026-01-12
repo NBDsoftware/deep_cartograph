@@ -1,5 +1,6 @@
 traj_augmentation:
   num_frames: 1000
+  keep_original_frames: False
   interpolation_method: 'pchip'
   atom_selection: "all"
   traj_format: 'xtc'
@@ -10,10 +11,10 @@ compute_features:
     features:
       distance_groups:
         dist:
-          first_selection: "all"
-          second_selection: "all"
-          first_stride: 1
-          second_stride: 1
+          first_selection: "name CA and not (resid 110 or resid 109 or resid 111 or resid 455 or resid 456 or resid 487 or resid 488 or resid 494 or resid 495 or resid 496 or resid 498 or resid 499 or resid 500 or resid 501)"
+          second_selection: "name CA and not (resid 110 or resid 109 or resid 111 or resid 455 or resid 456 or resid 487 or resid 488 or resid 494 or resid 495 or resid 496 or resid 498 or resid 499 or resid 500 or resid 501)"
+          first_stride: 3
+          second_stride: 40
           skip_neigh_residues: True
           skip_bonded_atoms: True
 

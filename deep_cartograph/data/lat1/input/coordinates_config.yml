@@ -11,7 +11,7 @@ compute_features:
     features:
       coordinate_groups:
         ca_coord:
-          selection: "name CA"
+          selection: "name CA and not (resid 110 or resid 109 or resid 111 or resid 455 or resid 456 or resid 487 or resid 488 or resid 494 or resid 495 or resid 496 or resid 498 or resid 499 or resid 500 or resid 501)"
           stride: 1
 
 filter_features:       
