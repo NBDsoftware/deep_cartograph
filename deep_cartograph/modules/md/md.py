@@ -5,7 +5,7 @@ import glob
 import logging
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Union, Literal, Tuple
+from typing import List, Dict, Union, Literal, Tuple, Optional
 
 import MDAnalysis as mda
 import MDAnalysis.analysis.rms
@@ -998,7 +998,9 @@ def interpolate_trajectory(
     topology_file: str,         
     trajectory_file: str,
     num_frames: int,
+    keep_original_frames: bool = True,
     interpolation_method: Literal['akima', 'pchip'] = 'pchip',
+    noise_std: Optional[float] = None,
     atom_selection: str = 'all',
     traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc',
     output_path: str = None,
@@ -1053,7 +1055,11 @@ def interpolate_trajectory(
     frames, coords = load_coordinates(topology_file, trajectory_file, atom_selection)
     
     # Define new frames
-    new_frames = np.linspace(frames[0], frames[-1], num_frames)
+    if keep_original_frames:
+        additional_frames = np.linspace(frames[0], frames[-1], num_frames - len(frames) + 2)[1:-1]
+        new_frames = np.sort(np.concatenate((frames, additional_frames)))
+    else:
+        new_frames = np.linspace(frames[0], frames[-1], num_frames)
     
     # Interpolate coordinates
     if interpolation_method == 'akima':
@@ -1063,6 +1069,11 @@ def interpolate_trajectory(
     else:
         logger.error(f"Interpolation method '{interpolation_method}' not supported. Use 'akima' or 'pchip'.")
     new_coords = interpolator(new_frames)
+    
+    # Add noise if specified
+    if noise_std is not None:
+        noise = np.random.normal(0, noise_std, new_coords.shape)
+        new_coords += noise
     
     # Create a matching topology for the selection
     # Load the original universe to grab the atom information

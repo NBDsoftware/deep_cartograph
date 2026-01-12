@@ -96,7 +96,9 @@ def traj_augmentation(
                                         topology_file=top_path,
                                         trajectory_file=traj_path,
                                         num_frames=configuration['num_frames'],
+                                        keep_original_frames=configuration['keep_original_frames'],
                                         interpolation_method=configuration['interpolation_method'],
+                                        noise_std=configuration['noise_std'],
                                         atom_selection=configuration['atom_selection'],
                                         traj_format=configuration['traj_format'],
                                         output_path=output_folder)
