@@ -22,10 +22,12 @@ def get_config():
         encoder: 
           layers: [16, 8]
           activation: [leaky_relu, leaky_relu]
+          batchnorm: [False, False]
           dropout: [0, 0]
         decoder: 
           layers: [4, 8]
           activation: [leaky_relu, leaky_relu]
+          batchnorm: [False, False]
           dropout: [0, 0]
       num_subspaces: 10
       subspaces_dimension: 5
