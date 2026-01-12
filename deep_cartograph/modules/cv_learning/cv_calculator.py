@@ -1159,11 +1159,11 @@ class NonLinear(CVCalculator):
         
         if self.validation_input_dtset is not None: 
             # Validation data given separately
-            self.num_validation_samples = len(self.validation_input_dtset)
-            self.num_training_samples = len(self.training_input_dtset)
+            self.num_validation_samples = len(self.validation_data)
+            self.num_training_samples = len(self.training_data)
         else:
             # We extract validation from training data
-            total_samples = len(self.training_input_dtset)
+            total_samples = len(self.training_data)
             self.num_training_samples = int(total_samples * self.training_validation_lengths[0])
             self.num_validation_samples = total_samples - self.num_training_samples
             
