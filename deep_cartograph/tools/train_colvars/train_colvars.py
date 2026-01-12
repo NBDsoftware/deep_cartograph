@@ -22,6 +22,8 @@ def train_colvars(
     train_colvars_paths: Union[str, List[str]],
     train_topologies: Optional[List[str]] = None,
     trajectory_names: Optional[List[str]] = None,
+    val_colvars_paths: Optional[Union[str, List[str]]] = None,
+    val_topologies: Optional[List[str]] = None,
     reference_topology: Optional[str] = None,
     features_list: Optional[List[str]] = None,
     dimension: Optional[int] = None,
@@ -53,6 +55,13 @@ def train_colvars(
 
     train_topologies : Optional[List[str]], default=None
         Path to the topology files corresponding to the trajectory files (same order as trajectories).
+
+    val_colvars_paths : Optional[Union[str, List[str]]], default=None
+        Path or list of paths to colvars files containing the validation data (samples of features).
+    
+    val_topologies : Optional[List[str]], default=None
+        Path to the topology files corresponding to the validation trajectory files
+        (same order as validation trajectories).
 
     trajectory_names : Optional[List[str]], default=None
         List of names of the trajectories corresponding to the colvars files.  
@@ -109,6 +118,8 @@ def train_colvars(
         train_colvars_paths=train_colvars_paths,
         train_topology_paths=train_topologies,
         trajectory_names=trajectory_names,
+        val_colvars_paths=val_colvars_paths,
+        val_topology_paths=val_topologies,
         ref_topology_path=reference_topology,
         features_list=features_list,
         cv_dimension=dimension,

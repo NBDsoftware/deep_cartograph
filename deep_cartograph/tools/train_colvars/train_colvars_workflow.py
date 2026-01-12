@@ -26,6 +26,8 @@ class TrainColvarsWorkflow:
                  train_colvars_paths: List[str],
                  train_topology_paths: Optional[List[str]] = None,
                  trajectory_names: Optional[List[str]] = None,
+                 val_colvars_paths: Optional[List[str]] = None,
+                 val_topology_paths: Optional[List[str]] = None,
                  ref_topology_path: Optional[str] = None,           
                  features_list: Optional[List[str]] = None,
                  cv_dimension: Optional[int] = None,
@@ -60,7 +62,6 @@ class TrainColvarsWorkflow:
                 training/                       # Training data and model scores
                     checkpoints/
                 model.zip                       # Trained model
-
         """
         
         # Set output folder
@@ -74,6 +75,8 @@ class TrainColvarsWorkflow:
         self.train_colvars_paths: List[str] = train_colvars_paths
         self.train_topology_paths: Optional[List[str]] = train_topology_paths
         self.trajectory_names: Optional[List[str]] = trajectory_names if trajectory_names else [Path(f).stem for f in train_colvars_paths]
+        self.val_colvars_paths: Optional[List[str]] = val_colvars_paths
+        self.val_topology_paths: Optional[List[str]] = val_topology_paths
         self.ref_topology_path: Optional[str] = ref_topology_path
         self.features_list: Optional[List[str]] = features_list
 
@@ -300,6 +303,16 @@ class TrainColvarsWorkflow:
                 'features_list': self.features_list
             }
             cv_calculator.load_training_data(**args)
+            
+            # Load validation data if provided
+            if self.val_colvars_paths:
+                args = {
+                    'val_colvars_paths': self.val_colvars_paths,
+                    'val_topology_paths': self.val_topology_paths,
+                    'ref_topology_path': self.ref_topology_path,
+                    'features_list': self.features_list
+                }
+                cv_calculator.load_validation_data(**args)
             
             # Run the CV calculator - obtain a dataframe with the projected training data
             projected_train_df = cv_calculator.run(self.cv_dimension)

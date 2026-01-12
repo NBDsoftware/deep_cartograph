@@ -50,13 +50,12 @@ class CVCalculator:
         # Training data
         self.training_data: Optional[pd.DataFrame] = None
         self.training_data_labels: Optional[np.array] = None
+        
+        # Validation data (optional, taken from training data if not provided)
+        self.validation_data: Optional[pd.DataFrame] = None
 
         # Projection data labels
         self.projection_data_labels: Optional[np.array] = None
-        
-        # Number of samples
-        self.num_samples: int = None
-        self.num_training_samples: Union[int, None] = None
     
         # Features
         self.features_ref_labels: List[str] = []
@@ -127,6 +126,8 @@ class CVCalculator:
 
         if not cv_name:
             raise ValueError("Could not determine the CV name from the model file.")
+
+        logger.debug(f'Loading CV calculator of type: {cv_name}')
 
         # Look up the correct class from the map
         CalculatorClass = cv_calculators_map.get(cv_name)
@@ -199,6 +200,44 @@ class CVCalculator:
         self.model_output_folder = self.output_path / 'model'
         self.model_output_folder.mkdir(parents=True, exist_ok=True)
 
+    def load_validation_data(self,
+        val_colvars_paths: List[str],
+        val_topology_paths: Optional[List[str]] = None,
+        ref_topology_path: Optional[str] = None,
+        features_list: Optional[List[str]] = None,
+        ):
+        """
+        Loads the validation data from the colvars files
+        
+        Parameters
+        ----------
+        
+        val_colvars_paths 
+            List of paths to colvars files with the main data used for validation
+        val_topology_paths (Optional)
+            List of paths to topology files corresponding to the validation colvars files (same order)
+        ref_topology_path (Optional)
+            Path to the reference topology file. If None, the first topology file is used as reference topology
+        features_list (Optional)
+            List with the features to use for the validation (names from reference topology) or None to use all features in the colvars files
+        """
+        
+        # Topologies
+        if val_topology_paths is not None:
+            if ref_topology_path is None:
+                ref_topology_path = val_topology_paths[0]
+        
+        # Filtered validation data used to validate / compute the CVs
+        logger.info('Reading validation data from colvars files...')
+        self.validation_data = create_dataframe_from_files( 
+            colvars_paths = val_colvars_paths,
+            topology_paths = val_topology_paths,
+            reference_topology = ref_topology_path,   
+            features_list = features_list,  
+            file_label = 'traj_label',
+            **self.training_reading_settings
+        )
+    
     def load_training_data(self,
         train_colvars_paths: List[str],
         train_topology_paths: Optional[List[str]] = None, 
@@ -213,19 +252,15 @@ class CVCalculator:
 
         train_colvars_paths 
             List of paths to colvars files with the main data used for training
-                
         train_topology_paths (Optional)
             List of paths to topology files corresponding to the training colvars files (same order)
-        
         ref_topology_path (Optional)
             Path to the reference topology file. If None, the first topology file is used as reference topology
-            
         features_list (Optional)
             List with the features to use for the training (names from reference topology) or None to use all features in the colvars files
         """
         
         # Topologies
-        train_topology_paths
         self.ref_topology_path = ref_topology_path
         if train_topology_paths is not None:
             if self.ref_topology_path is None:
@@ -254,10 +289,6 @@ class CVCalculator:
         stats_df = self.training_data.agg(stats).T
         self.features_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         self.features_norm_mean, self.features_norm_range = self.prepare_normalization()
-        
-        # Get the total number of samples
-        self.num_samples = len(self.training_data)
-        logger.info(f'Number of samples: {self.num_samples}')
 
     def cv_ready(self) -> bool:
         """
@@ -906,8 +937,10 @@ class NonLinear(CVCalculator):
         """
         from lightning import LightningModule
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
-        from mlcolvar.utils.trainer import MetricsCallback
+
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
+        from mlcolvar.utils.trainer import MetricsCallback
+        from mlcolvar.data import DictDataset
                 
         super().__init__(
             configuration,
@@ -924,6 +957,8 @@ class NonLinear(CVCalculator):
         self.checkpoint: Optional[ModelCheckpoint] = None
         self.metrics: Optional[MetricsCallback] = None
         self.weights_path: Optional[str] = None
+        self.training_input_dtset: Optional[DictDataset] = None
+        self.validation_input_dtset: Optional[DictDataset] = None
 
         # Training configuration
         self.training_config: Dict = self.configuration.get('training', {})
@@ -938,6 +973,8 @@ class NonLinear(CVCalculator):
         self.max_tries: int = self.general_config.get('max_tries', 5)
         self.seed: int = self.general_config.get('seed', 42)
         self.training_validation_lengths: List = self.general_config.get('lengths', [])
+        self.num_training_samples: Optional[int] = None
+        self.num_validation_samples: Optional[int] = None
         self.batch_size: int = self.general_config.get('batch_size', 32)
         self.shuffle: bool = self.general_config.get('shuffle', True)
         self.random_split: bool = self.general_config.get('random_split', True)
@@ -1058,7 +1095,7 @@ class NonLinear(CVCalculator):
         if self.decoder_options['batchnorm'][-1]:
             logger.warning("Batch normalization in the last layer of the decoder is not recommended.")
 
-    def _adjust_lr_scheduler(self, datamodule):
+    def _adjust_lr_scheduler_from_datamodule(self, datamodule):
         """
         Adjusts LR scheduler parameters based on the training configuration.
         This is called right after the datamodule is created.
@@ -1070,17 +1107,37 @@ class NonLinear(CVCalculator):
 
         # Split the data to get the number of samples in the training set
         datamodule.setup(stage='fit')
+        steps_per_epoch = len(datamodule.train_dataloader())
 
-        logger.debug("Adjusting LR Scheduler parameters...") 
+        self.adjust_lr_scheduler(steps_per_epoch)
+    
+    def _adjust_lr_scheduler_from_loader(self, train_loader):
+            """
+            Adjusts LR scheduler parameters based on the training configuration.
+            This is called right after the dataloaders are created.
+            """
+            
+            # Proceed only if a scheduler is defined
+            if self.lr_scheduler is None:
+                return
+            
+            steps_per_epoch = len(train_loader)
+            self.adjust_lr_scheduler(steps_per_epoch)
 
+    def adjust_lr_scheduler(self, steps_per_epoch: int):
+        """
+        Adjusts LR scheduler parameters based on the training configuration.
+        """
+        
         scheduler_name = self.lr_scheduler.get('name', '')
+    
+        logger.debug("Adjusting LR Scheduler parameters...") 
         
         if scheduler_name == 'OneCycleLR':
             
             # Give reasonable default values if not provided in the configuration
             self.cv_options["lr_scheduler"]['max_lr'] = self.cv_options["lr_scheduler"].get('max_lr', 1e-3)
             self.cv_options["lr_scheduler"]['epochs'] = self.cv_options["lr_scheduler"].get('epochs', self.max_epochs)
-            steps_per_epoch = len(datamodule.train_dataloader())
             self.cv_options["lr_scheduler"]['steps_per_epoch'] = self.cv_options["lr_scheduler"].get('steps_per_epoch', steps_per_epoch)
             
             # Adjust the interval from the configuration to 'step'
@@ -1095,6 +1152,21 @@ class NonLinear(CVCalculator):
             # Adjust the interval from the configuration to 'epoch'
             self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
             
+    def check_num_samples(self):
+        """
+        Check the number of samples in the training and validation sets. 
+        """
+        
+        if self.validation_input_dtset is not None: 
+            # Validation data given separately
+            self.num_validation_samples = len(self.validation_input_dtset)
+            self.num_training_samples = len(self.training_input_dtset)
+        else:
+            # We extract validation from training data
+            total_samples = len(self.training_input_dtset)
+            self.num_training_samples = int(total_samples * self.training_validation_lengths[0])
+            self.num_validation_samples = total_samples - self.num_training_samples
+            
     def check_batch_size(self):
         """  
         Check the batch size is not larger than the number of samples in the training set.
@@ -1103,12 +1175,9 @@ class NonLinear(CVCalculator):
         """
         from deep_cartograph.modules.common import closest_power_of_two
         
-        # Get the number of samples in the training set
-        self.num_training_samples = int(self.num_samples*self.training_validation_lengths[0])
-        
         # Check the batch size is not larger than the number of samples in the training set
         if self.batch_size >= self.num_training_samples:
-            self.batch_size = closest_power_of_two(self.num_samples*self.training_validation_lengths[0])
+            self.batch_size = closest_power_of_two(self.num_training_samples)
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
     
@@ -1261,11 +1330,13 @@ class NonLinear(CVCalculator):
         """
         import torch
         import lightning
-        from mlcolvar.data import DictModule
+        from mlcolvar.data import DictModule, DictLoader
 
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
         self.set_up_cv_options()
+        
+        self.check_num_samples()
         
         self.check_batch_size()
 
@@ -1273,21 +1344,35 @@ class NonLinear(CVCalculator):
         while not training_succeeded and (self.tries < self.max_tries):
             self.tries += 1
             try:
-                # Setup datamodule and model for the current try
-                datamodule = DictModule(
-                    random_split=self.random_split,
-                    dataset=self.training_input_dtset,
-                    lengths=self.training_validation_lengths,
-                    batch_size=self.batch_size,
-                    shuffle=self.shuffle,
-                    generator=torch.manual_seed(self.seed + self.tries)
-                )
-                self._adjust_lr_scheduler(datamodule)
+                
+                # --- DATASET AND DATALOADER SETUP ---
+                if self.validation_input_dtset is not None:
+                    # Validation and training data are given separately
+                    train_loader = DictLoader(self.training_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
+                    val_loader = DictLoader(self.validation_input_dtset, batch_size=self.batch_size, shuffle=False)
+                    
+                    # For LR scheduler adjustment, we pass the loader since we don't have a module
+                    self._adjust_lr_scheduler_from_loader(train_loader)
+                    fit_kwargs = {'train_dataloaders': train_loader, 'val_dataloaders': val_loader}
+                else:
+                    # Validation and training data are given together, split in the datamodule
+                    datamodule = DictModule(
+                        random_split=self.random_split,
+                        dataset=self.training_input_dtset,
+                        lengths=self.training_validation_lengths,
+                        batch_size=self.batch_size,
+                        shuffle=self.shuffle,
+                        generator=torch.manual_seed(self.seed + self.tries)
+                    )
+                    self._adjust_lr_scheduler_from_datamodule(datamodule)
+                    fit_kwargs = {'datamodule': datamodule}
+
+                # --- MODEL SETUP ---
                 model = self.create_model()
                 model.optimizer_name = self.opt_name
                 logger.info(f"Model architecture: {model}")
 
-                # Setup and run trainer
+                # --- TRAINER SETUP AND TRAINING ---
                 trainer = lightning.Trainer(
                     callbacks=self.get_callbacks(),
                     max_epochs=self.max_epochs,
@@ -1297,7 +1382,7 @@ class NonLinear(CVCalculator):
                     check_val_every_n_epoch=self.check_val_every_n_epoch
                 )
                 logger.debug(f'Starting training try {self.tries}/{self.max_tries}...')
-                trainer.fit(model, datamodule)
+                trainer.fit(model, **fit_kwargs)
                 logger.debug(f'Training try {self.tries} completed.')
 
                 # Check if loss has decreased to consider the training a success
@@ -1308,8 +1393,7 @@ class NonLinear(CVCalculator):
 
             except Exception as e:
                 logger.error(f'Training try {self.tries} failed with an exception: {e}')
-                if self.tries < self.max_tries:
-                    logger.info('Retrying...')
+                if self.tries < self.max_tries: logger.info('Retrying...')
 
         if not training_succeeded:
             logger.error(f'{cv_names_map[self.cv_name]} did not converge after {self.max_tries} tries.')
@@ -1712,6 +1796,10 @@ class TICACalculator(LinearCalculator):
             configuration, 
             output_path)
         
+        from mlcolvar.data import DictDataset
+        
+        self.training_input_dtset: Optional[DictDataset] = None
+        
         self.cv_name = 'tica'
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
@@ -1765,6 +1853,10 @@ class HTICACalculator(LinearCalculator):
         super().__init__(
             configuration, 
             output_path)
+        
+        from mlcolvar.data import DictDataset
+        
+        self.training_input_dtset: Optional[DictDataset] = None
         
         self.cv_name = 'htica'
         
@@ -1897,9 +1989,21 @@ class AECalculator(NonLinear):
         
         import torch 
         from mlcolvar.data import DictDataset
+        
         # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.features_ref_labels)
+        train_data_dict = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
+
+    def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
+
+        import torch 
+        from mlcolvar.data import DictDataset
+
+        # Create DictDataset
+        if self.validation_data is not None:
+            val_data_dict = {"data": torch.Tensor(self.validation_data.values)}
+            self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
         
     def set_encoder_layers(self) -> List:
         """ 
@@ -2004,8 +2108,18 @@ class DeepTICACalculator(NonLinear):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
         from mlcolvar.utils.timelagged import create_timelagged_dataset
+
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
         self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
+    
+    def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
+    
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        
+        # Create validation time-lagged dataset
+        if self.validation_data is not None:
+            self.validation_input_dtset = create_timelagged_dataset(self.validation_data, lag_time=self.configuration.get('lag_time'))
 
     def set_encoder_layers(self) -> List:
         """ 
@@ -2142,8 +2256,19 @@ class VAECalculator(NonLinear):
         from mlcolvar.data import DictDataset
         
         # Create DictDatase
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.features_ref_labels)
+        train_data_dict = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
+        
+    def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
+        
+        import torch
+        from mlcolvar.data import DictDataset
+        
+        # Create validation DictDataset
+        val_data_dict = {"data": torch.Tensor(self.validation_data.values)}
+        self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
+            
         
     def set_encoder_layers(self) -> List:
         """ 
