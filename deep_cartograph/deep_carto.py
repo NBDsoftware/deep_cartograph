@@ -218,7 +218,6 @@ def deep_cartograph(
     # Compute features for validation trajectories
     if validation_trajectory_data:
         val_trajs, val_tops = check_data(validation_trajectory_data, validation_topology_data)
-        val_trajectory_names = [Path(traj).stem for traj in val_trajs]
         args = {
             'configuration': configuration['compute_features'], 
             'trajectories': val_trajs, 
@@ -229,7 +228,6 @@ def deep_cartograph(
         validation_colvars_paths = compute_features(**args)
     else:
         val_trajs, val_tops = None, None
-        val_trajectory_names = None
         validation_colvars_paths = None
     
     # Compute features for supplementary data
@@ -253,7 +251,6 @@ def deep_cartograph(
     # Compute features for waypoints data
     if waypoints_data:
         transition_waypoints = find_files(waypoints_data) # NOTE: we should only read files with a certain extension
-        waypoint_names = [Path(top).stem for top in transition_waypoints]
         args = {
             'configuration': configuration['compute_features'],
             'trajectories': transition_waypoints,
