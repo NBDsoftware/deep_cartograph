@@ -25,12 +25,12 @@ train_colvars:
         layers: [4, 4, 2]
         dropout: [null, null, null]
         activation: [leaky_relu, leaky_relu, leaky_relu]
-        batchnorm: False
+        batchnorm: [False, False, False]
       decoder: 
         layers: [2, 4, 4]
         dropout: [null, null, null]
         activation: [leaky_relu, leaky_relu, leaky_relu]
-        batchnorm: False
+        batchnorm: [False, False, False]
     training: 
       general:
         max_tries: 1
@@ -72,5 +72,5 @@ train_colvars:
       cmap: turbo
       marker_size: 12
 
-clustering:                        
+traj_cluster:                        
   run: False                        

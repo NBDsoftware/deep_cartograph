@@ -8,12 +8,12 @@ common:
       layers: [4, 20, 20, 2]
       dropout: [null, null, null, null]
       activation: [leaky_relu, leaky_relu, leaky_relu, leaky_relu]
-      batchnorm: False
+      batchnorm: [False, False, False, False]
     decoder: 
       layers: [2, 20, 20, 4]
       dropout: [null, null, null, null]
       activation: [leaky_relu, leaky_relu, leaky_relu, leaky_relu]
-      batchnorm: False
+      batchnorm: [False, False, False, False]
   training: 
     general:
       max_tries: 1
@@ -51,3 +51,6 @@ figures:
     alpha: 0.6
     cmap: turbo
     marker_size: 12                      
+
+traj_cluster:                        
+  run: False   
