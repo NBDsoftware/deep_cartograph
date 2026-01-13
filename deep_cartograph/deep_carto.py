@@ -289,6 +289,8 @@ def deep_cartograph(
         'train_colvars_paths': traj_colvars_paths,
         'train_topologies': topologies,
         'trajectory_names': trajectory_names,
+        'val_colvars_paths': validation_colvars_paths,
+        'val_topologies': val_tops,
         'reference_topology': reference_topology,
         'features_list': filtered_features,
         'dimension': dimension,

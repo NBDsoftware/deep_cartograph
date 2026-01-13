@@ -234,7 +234,7 @@ class CVCalculator:
             topology_paths = val_topology_paths,
             reference_topology = ref_topology_path,   
             features_list = features_list,  
-            file_label = 'traj_label',
+            file_label = None,
             **self.training_reading_settings
         )
     
