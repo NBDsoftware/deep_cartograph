@@ -28,6 +28,7 @@ class TrainColvarsWorkflow:
                  trajectory_names: Optional[List[str]] = None,
                  val_colvars_paths: Optional[List[str]] = None,
                  val_topology_paths: Optional[List[str]] = None,
+                 waypoint_structures: Optional[List[str]] = None,
                  ref_topology_path: Optional[str] = None,           
                  features_list: Optional[List[str]] = None,
                  cv_dimension: Optional[int] = None,
@@ -77,6 +78,7 @@ class TrainColvarsWorkflow:
         self.trajectory_names: Optional[List[str]] = trajectory_names if trajectory_names else [Path(f).stem for f in train_colvars_paths]
         self.val_colvars_paths: Optional[List[str]] = val_colvars_paths
         self.val_topology_paths: Optional[List[str]] = val_topology_paths
+        self.waypoint_structures: Optional[List[str]] = waypoint_structures
         self.ref_topology_path: Optional[str] = ref_topology_path
         self.features_list: Optional[List[str]] = features_list
 

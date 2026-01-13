@@ -24,6 +24,7 @@ def train_colvars(
     trajectory_names: Optional[List[str]] = None,
     val_colvars_paths: Optional[Union[str, List[str]]] = None,
     val_topologies: Optional[List[str]] = None,
+    waypoint_structures: Optional[List[str]] = None,
     reference_topology: Optional[str] = None,
     features_list: Optional[List[str]] = None,
     dimension: Optional[int] = None,
@@ -62,6 +63,11 @@ def train_colvars(
     val_topologies : Optional[List[str]], default=None
         Path to the topology files corresponding to the validation trajectory files
         (same order as validation trajectories).
+        
+    waypoint_structures : Optional[List[str]], default=None
+        List of paths to structure files (e.g. PDB) corresponding to waypoints of the transition. 
+        If given, the waypoints will be used to create a restraint guiding the CVs through them. 
+        See rmsd_restraint_guide parameter in the configuration.
 
     trajectory_names : Optional[List[str]], default=None
         List of names of the trajectories corresponding to the colvars files.  
@@ -120,6 +126,7 @@ def train_colvars(
         trajectory_names=trajectory_names,
         val_colvars_paths=val_colvars_paths,
         val_topology_paths=val_topologies,
+        waypoint_structures=waypoint_structures,
         ref_topology_path=reference_topology,
         features_list=features_list,
         cv_dimension=dimension,
