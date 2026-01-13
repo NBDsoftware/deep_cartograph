@@ -27,18 +27,18 @@ filter_features:
     relaxation_time: 1                                   
 
 train_colvars:
-  cvs: ['deep_tica', 'vae']
+  cvs: ['deep_tica']
   common:
-    dimension: 2
+    dimension: 1
     features_normalization: null
-    lag_time: 5 
+    lag_time: 2
     architecture:
       encoder: 
         layers: [32, 16, 4]  
         activation: ['leaky_relu', 'leaky_relu', 'leaky_relu']  
         batchnorm: [False, False, False]
         dropout: [null, null, null]
-        last_layer_activation: null
+        last_layer_activation: leaky_relu
       decoder:
         layers: [4, 16, 32]      
         activation: ['leaky_relu', 'leaky_relu', 'leaky_relu']
@@ -50,40 +50,22 @@ train_colvars:
         max_tries: 10
         seed: 42
         lengths: [0.8, 0.2]
-        batch_size: 128
+        batch_size: 16
         max_epochs: 1000
         shuffle: True
         random_split: True
         check_val_every_n_epoch: 1
         save_check_every_n_epoch: 1
       early_stopping:
-        patience: 500
-        min_delta: 1.0e-05
+        patience: 25
+        min_delta: 1.0e-04
       optimizer:
         kwargs:
-          lr: 0.001
+          lr: 0.0001
           weight_decay: 0
         name: Adam
       save_loss: True
       plot_loss: True
-  deep_tica:
-    features_normalization: null
-    architecture:
-      encoder: 
-        layers: [32, 16, 4] 
-        activation: ['leaky_relu', 'leaky_relu', 'leaky_relu']
-        last_layer_activation: leaky_relu 
-    training:
-      general:
-        batch_size: 128
-        max_epochs: 1000
-      optimizer:
-        name: Adam
-        kwargs: 
-          lr: 0.0001
-      early_stopping:
-        patience: 25
-        min_delta: 1.0e-04
   figures:
     fes:
       compute: True  
