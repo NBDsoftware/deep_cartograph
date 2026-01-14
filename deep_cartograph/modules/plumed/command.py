@@ -4,7 +4,7 @@ import math
 import logging
 import numpy as np
 
-from typing import List, Union
+from typing import List, Union, Optional
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -357,9 +357,9 @@ def read(
 def combine(
     command_label: str,
     arguments: List[str],
-    coefficients: Union[np.array, None] = None,
-    parameters: Union[np.array, None] = None,
-    powers: Union[np.array, None] = None,
+    coefficients: Optional[np.array] = None,
+    parameters: Optional[np.array] = None,
+    powers: Optional[np.array] = None,
     periodic: bool = False
     ) -> str:
     '''
@@ -418,6 +418,104 @@ def combine(
     combine_command += "\n"
     
     return combine_command
+
+def rmsd(
+    command_label: str, 
+    reference: str, 
+    type: str = "OPTIMAL"
+    ) -> str:
+    '''
+    Function that creates a PLUMED RMSD command.
+    
+    Inputs
+    ------
+    
+        command_label   (str):              command label
+        reference       (str):              reference structure
+        type            (str):              type of RMSD calculation
+
+    Outputs
+    -------
+    
+        rmsd_command    (str):              PLUMED RMSD command
+    '''
+
+    # Create RMSD command
+    rmsd_command = command_label + ": RMSD REFERENCE=" + reference + " TYPE=" + type + " \n"
+
+    return rmsd_command
+
+def upper_walls(
+    command_label: str, 
+    arguments: List[str],
+    at_eqs:  Optional[List[float]] = None,
+    kappas:  Optional[List[float]] = None,
+    exponents: Optional[List[int]] = None,
+    epsilons: Optional[List[float]] = None,
+    offsets: Optional[List[float]] = None
+    ) -> str:
+    '''
+    Function that creates a PLUMED UPPER_WALLS command.
+    
+    Inputs
+    ------
+
+        command_label   (str):              command label
+        argument        (str):              argument
+        at_eq           (float):            equilibrium position
+        kappa           (float):            force constant
+        exponent        (int):              exponent
+        epsilon         (float):            epsilon
+        offset          (float):            offset
+    
+    Outputs
+    -------
+
+        upper_walls_command (str):          PLUMED UPPER_WALLS command
+    '''
+    
+    # Create UPPER_WALLS command
+    upper_walls_command = command_label + ": UPPER_WALLS ARG=" + ",".join(arguments)
+    
+    if at_eqs is not None:
+        # Add at_eqs
+        upper_walls_command += " AT="
+        for at_eq in at_eqs:
+            upper_walls_command += f"{at_eq:.10g},"
+        upper_walls_command = upper_walls_command[:-1]
+        
+    if kappas is not None:
+        # Add kappas
+        upper_walls_command += " KAPPA="
+        for kappa in kappas:
+            upper_walls_command += f"{kappa:.10g},"
+        upper_walls_command = upper_walls_command[:-1]
+    
+    if exponents is not None:
+        # Add exponents
+        upper_walls_command += " EXP="
+        for exponent in exponents:
+            upper_walls_command += f"{exponent:.10g},"
+        upper_walls_command = upper_walls_command[:-1]
+    
+    if epsilons is not None:
+        # Add epsilons
+        upper_walls_command += " EPS="
+        for epsilon in epsilons:
+            upper_walls_command += f"{epsilon:.10g},"
+        upper_walls_command = upper_walls_command[:-1]
+    
+    if offsets is not None:
+        # Add offsets
+        upper_walls_command += " OFFSET="
+        for offset in offsets:
+            upper_walls_command += f"{offset:.10g},"
+        upper_walls_command = upper_walls_command[:-1]
+    
+    # Add newline
+    upper_walls_command += "\n"
+
+    return upper_walls_command
 
 def print(
     arguments: List[str], 

@@ -143,19 +143,19 @@ class BiasArgs(BaseModel):
     # Compression threshold
     compression_threshold: float = 0.1
     
-    # Additional rmsd restraint to pass through waypoint structures - see waypoint structures 
-    rmsd_restraint_guide: bool = False
-    # Force constant for the keep the rigid regions among the waypoints fixed (units: kJ mol^-1 nm^-2)
-    restraint_force_k: float = 5000.0
-    # Equilibrium rmsd above which the restraint is applied (units: nm)
-    restraint_rmsd_eq: float = 0.4
-    
 class Bias(BaseModel):
     
     # Name of the method
     method: Literal['wt_metadynamics', 'opes_metad', 'opes_metad_explore', 'opes_expanded'] = 'opes_metad'
     # Keyword arguments for the method
     args: BiasArgs = BiasArgs() 
+    # NOTE: this feature is still experimental and not ready for production use 
+    # Additional rmsd restraint to pass through waypoint structures - see waypoint structures 
+    add_rmsd_restraint: bool = False
+    # Force constant for the keep the rigid regions among the waypoints fixed (units: kJ mol^-1 nm^-2)
+    rmsd_restraint_k: float = 5000.0
+    # Equilibrium rmsd above which the restraint is applied (units: nm)
+    rmsd_restraint_eq: float = 0.4
     
 class CommonCollectiveVariable(BaseModel):
 

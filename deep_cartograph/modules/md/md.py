@@ -13,6 +13,8 @@ import MDAnalysis.analysis.align
 from MDAnalysis.lib.distances import calc_bonds
 from MDAnalysis import transformations as trans
 
+from deep_cartograph.modules.bio import PDBTopologyMapper
+
 # Set logger
 logger = logging.getLogger(__name__)
 
@@ -1239,6 +1241,102 @@ def create_plumed_rmsd_template(
         writer.write(u)
 
     return
+
+def create_rmsd_waypoint_reference(waypoint_structures: List[str], 
+                                   plumed_topology_path: str, 
+                                   rmsd_restraint_reference_path: str,
+                                   distance_threshold: float = 2.5):
+    """
+    Creates a PLUMED-compatible PDB reference for RMSD restraints.
+    Stable CA atoms across waypoints are marked with 1.0 in Occupancy/Beta columns.
+    Stable atoms are defined as those that do not deviate more than 'distance_threshold' Angstroms
+    from the other waypoints after alignment.
+    """
+    
+    # 1. Map all waypoints to the PLUMED topology ("Universal Reference" for mapping)
+    mappings = []
+    for wp in waypoint_structures:
+        mapper = PDBTopologyMapper(reference_topology=plumed_topology_path, topology=wp)
+        mappings.append(mapper.mapping)
+
+    # 2. Find common resids that exist in ALL waypoints AND the PLUMED topology
+    # The keys in mapper.mapping are the resids of the plumed_topology
+    common_plumed_resids = set(mappings[0].keys())
+    for m in mappings[1:]:
+        common_plumed_resids &= set(m.keys())
+    
+    sorted_common_resids = sorted(list(common_plumed_resids))
+    
+    # 3. Load Waypoints into MDAnalysis for alignment
+    wp_universes = [mda.Universe(wp) for wp in waypoint_structures]
+    
+    # Extract coordinates for the common residues (CA atoms)
+    # We need to map the PLUMED resid back to the specific WP resid
+    coords_list = []
+    for i, u in enumerate(wp_universes):
+        wp_mapping = mappings[i]
+        # Get the resids in the current waypoint PDB that correspond to our common set
+        current_wp_resids = [wp_mapping[r][2] for r in sorted_common_resids]
+        
+        # Select CA atoms. Note: We use the index-based mapping to ensure correct order
+        selection_string = "resid " + " ".join([str(r) for r in current_wp_resids]) + " and name CA"
+        ca_atoms = u.select_atoms(selection_string)
+        
+        # Safety check: ensure we got the exact same number of atoms
+        if len(ca_atoms) != len(sorted_common_resids):
+            logger.warning(f"Waypoint {waypoint_structures[i]} missing some CA atoms for common residues.")
+        
+        coords_list.append(ca_atoms.positions)
+
+    # 4. Perform Alignment
+    # Align all coordinate sets to the first one
+    ref_coords = coords_list[0]
+    aligned_coords = [ref_coords]
+    for i in range(1, len(coords_list)):
+        # Calculate rotation/translation to align coords_list[i] to ref_coords
+        mobile_coords = coords_list[i]
+        R, residue = MDAnalysis.analysis.align.rotation_matrix(mobile_coords, ref_coords)
+        # Apply transformation: (coords - centroid) @ R + ref_centroid
+        aligned = (mobile_coords - mobile_coords.mean(axis=0)) @ R.T + ref_coords.mean(axis=0)
+        aligned_coords.append(aligned)
+
+    # Compute all pairwise distances between the aligned waypoints for each residue
+    aligned_coords = np.array(aligned_coords)  # Shape: (num_waypoints, num_residues, 3)
+    num_residues = aligned_coords.shape[1]
+    stable_residues = []
+    for resid_idx in range(num_residues):
+        # Extract coordinates for this residue across all waypoints
+        residue_coords = aligned_coords[:, resid_idx, :]  # Shape: (num_waypoints, 3)
+        
+        # Compute pairwise distances
+        max_distance = 0.0
+        for i in range(len(residue_coords)):
+            for j in range(i + 1, len(residue_coords)):
+                dist = np.linalg.norm(residue_coords[i] - residue_coords[j])
+                if dist > max_distance:
+                    max_distance = dist
+        
+        # Check if max distance is within threshold
+        if max_distance <= distance_threshold:
+            stable_residues.append(sorted_common_resids[resid_idx])
+
+    # 7. Create the PLUMED Reference PDB
+    # Load the original PLUMED topology
+    plumed_u = mda.Universe(plumed_topology_path)
+    
+    # Initialize all Occupancy and B-factors to 0
+    plumed_u.atoms.occupancies = 0.0
+    plumed_u.atoms.tempfactors = 0.0
+    
+    # Set 1.0 for CA atoms of the stable common residues
+    final_selection = "resid " + " ".join([str(r) for r in stable_residues]) + " and name CA"
+    target_atoms = plumed_u.select_atoms(final_selection)
+    target_atoms.occupancies = 1.0
+    target_atoms.tempfactors = 1.0
+    
+    # Save the file
+    plumed_u.atoms.write(rmsd_restraint_reference_path)
+    logger.info(f"Reference structure created with {len(target_atoms)} active atoms.")
 
 # Analysis
 def RMSD(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:

@@ -521,7 +521,11 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def write_plumed_files(self, topology: Optional[str], output_folder: str) -> None:
+    def write_plumed_files(self, 
+                           topology: Optional[str], 
+                           output_folder: str, 
+                           waypoint_structures: Optional[List[str]] = None
+        ) -> None:
         """
         Creates all files needed to compute the collective variable from the features
         for the given topology using plumed. If the topology is not given, the creation
@@ -529,12 +533,16 @@ class CVCalculator:
         
         Parameters
         ----------
-        
+
         topology : Optional[str]
             Path to the topology file of the system (used to translate the features)
-            
+
         output_folder : str
             Path to the output folder where the files will be written
+
+        waypoint_structures : Optional[List[str]]
+            List of paths to waypoint structures that serve as guides for the CV. The guide is currently implemented as an 
+            RMSD restraint on those regions of the sequence that do not vary between waypoints. If None, no waypoints are used.
         """
 
         if topology is None:
@@ -543,7 +551,7 @@ class CVCalculator:
 
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
         from deep_cartograph.modules.features import Translator as FeatureTranslator
-        from deep_cartograph.modules.md import create_plumed_rmsd_template
+        from deep_cartograph.modules.md import create_plumed_rmsd_template, create_rmsd_waypoint_reference
         
         from deep_cartograph.modules.common import zip_files, remove_files
         
@@ -600,13 +608,27 @@ class CVCalculator:
         os.remove(plumed_input_path)
         self.plumed_files.remove(plumed_input_path)
         
+        rmsd_restraint_reference_path = None
+        if self.bias['add_rmsd_restraint']:
+            logger.debug('Creating waypoint RMSD restraint for enhanced sampling plumed input...')
+            if waypoint_structures is not None and len(waypoint_structures) > 0:
+                # Create a reference structure from the waypoints
+                rmsd_restraint_reference_path = os.path.join(output_folder, 'rmsd_restraint_reference.pdb')
+                create_rmsd_waypoint_reference(waypoint_structures, plumed_topology_path, rmsd_restraint_reference_path)
+                self.plumed_files.append(rmsd_restraint_reference_path)
+            else:
+                logger.warning('No waypoint structures provided for RMSD restraint guide. Skipping RMSD restraint.')
+        
         # Build the plumed input file to perform enhanced sampling
         plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
         self.plumed_files.append(plumed_input_path)
         builder_args.update({
             'sampling_method': self.bias["method"], 
             'sampling_params': self.bias["args"],
-            'plumed_input_path': plumed_input_path
+            'plumed_input_path': plumed_input_path,
+            'rmsd_restraint_reference_path': rmsd_restraint_reference_path,
+            'rmsd_restraint_k': self.bias['rmsd_restraint_k'],
+            'rmsd_restraint_eq': self.bias['rmsd_restraint_eq']
         })
         plumed_builder = ComputeEnhancedSamplingBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_{self.bias["method"]}_out.dat')
