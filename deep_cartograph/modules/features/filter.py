@@ -128,9 +128,9 @@ class Filter:
         
         # For each colvars and topology file
         common_features = None
-        for i in range(len(self.colvars_paths)):
+        for colvars_index in range(len(self.colvars_paths)):
             
-            colvars_path = self.colvars_paths[i]
+            colvars_path = self.colvars_paths[colvars_index]
             
             # Find the feature names in this colvars file
             feature_names = read_column_names(colvars_path, features_only=True)
@@ -138,11 +138,11 @@ class Filter:
             
             if self.topology_paths:
                 # Translate the feature names to the reference topology # NOTE: Here we are assuming that the mda topology is the same as the original one to translate features - won't be true when we start looking at individual atoms
-                ref_feature_names = FeatureTranslator(self.topology_paths[i], self.ref_topology_path, feature_names).run()
+                ref_feature_names = FeatureTranslator(self.topology_paths[colvars_index], self.ref_topology_path, feature_names).run()
                 # Check if any feature didn't have a translation
-                for i in range(len(feature_names)):
-                    if ref_feature_names[i] is None:
-                        logger.warning(f'Feature {feature_names[i]} from {Path(colvars_path).name} not found in the reference topology.')
+                for feature_index in range(len(feature_names)):
+                    if ref_feature_names[feature_index] is None:
+                        logger.warning(f'Feature {feature_names[feature_index]} from {Path(colvars_path).name} not found in the reference topology.')
                 ref_feature_names = [x for x in ref_feature_names if x is not None]
             else:
                 ref_feature_names = feature_names
