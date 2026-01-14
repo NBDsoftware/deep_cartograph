@@ -387,7 +387,7 @@ def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
     For sinusoidal features, both the sine and cosine components are considered together to compute the variation.
     """
     angle_threshold = np.pi / 8  # 22.5 degrees
-    distance_threshold = 0.3     # 0.3 nm or 3 Angstroms
+    distance_threshold = 0.5     # 0.5 nm or 5 Angstroms
     
     # Check the dataframe is not empty
     if features_df.empty:
