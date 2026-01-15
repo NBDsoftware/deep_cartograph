@@ -1391,6 +1391,8 @@ class NonLinear(CVCalculator):
 
                 # --- MODEL SETUP ---
                 model = self.create_model()
+                if self.cv_name == "deep_tica":
+                    model.set_regularization(c0_reg=self.configuration['tica_regularization'])
                 model.optimizer_name = self.opt_name
                 logger.info(f"Model architecture: {model}")
 

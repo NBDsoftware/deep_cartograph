@@ -163,6 +163,8 @@ class CommonCollectiveVariable(BaseModel):
     dimension: int = 2
     # Lag time for TICA and DeepTICA
     lag_time: int = 1
+    # TICA regularization constant (used only with TICA and DeepTICA)
+    tica_regularization: float = 1.0e-06
     # Features normalization
     features_normalization: Optional[Literal['mean_std', 'min_max_range1', 'min_max_range2']] = None
     # Input colvars
