@@ -884,12 +884,13 @@ def get_indices(topology: str, selection: Union[str, None] = None) -> list:
     return indices
 
 def load_coordinates(
-    topology_file, 
-    trajectory_file, 
-    selection="all", 
-    start=None,
-    stop=None,
-    step=None
+    topology_file: str, 
+    trajectory_file: str, 
+    selection: str = "all", 
+    prepare_trajectory: bool = False,
+    start: Optional[int] =None,
+    stop: Optional[int] = None,
+    step: Optional[int] = None
 ):
     """
     Loads a trajectory and returns time and coordinates arrays.
@@ -903,6 +904,8 @@ def load_coordinates(
     selection : str, optional
         MDAnalysis atom selection string (default "all").
         Use "name CA" for coarse grain/backbone analysis.
+    prepare_trajectory : bool, optional
+        If True, applies unwrapping and centering transformations to the trajectory. Default is False.
     start, stop, step : int, optional
         Slicing parameters for reading the trajectory.
 
@@ -916,7 +919,7 @@ def load_coordinates(
     """
     
     # Load Universe
-    u = load_universe(topology_file, trajectory_file, selection)
+    u = load_universe(topology_file, trajectory_file, selection, prepare_trajectory)
 
     # Pre-allocate Arrays
     # We define the slice of frames we want to read
@@ -936,7 +939,11 @@ def load_coordinates(
 
     return frame_array, coords_array
 
-def load_universe(topology_file: str, trajectory_file: str, selection: str = "all") -> mda.Universe:
+def load_universe(topology_file: str, 
+                  trajectory_file: str, 
+                  selection: str = "all",
+                  prepare_trajectory: bool = False
+    ) -> mda.Universe:
     """
     Loads a MDAnalysis Universe from topology and trajectory files. Applies
     unwrapping and centering transformations if applicable.
@@ -947,7 +954,10 @@ def load_universe(topology_file: str, trajectory_file: str, selection: str = "al
         Path to the topology file (pdb, gro, tpr, etc.)
     trajectory_file : str
         Path to the trajectory file (xtc, dcd, trr, etc.)
-
+    selection : str, optional
+        MDAnalysis atom selection string (default "all").
+    prepare_trajectory : bool, optional
+        If True, applies unwrapping and centering transformations to the trajectory. Default is False.
     Returns
     -------
     MDAnalysis.Universe
@@ -971,25 +981,28 @@ def load_universe(topology_file: str, trajectory_file: str, selection: str = "al
     # Trajectory preparation
     preparation_steps = []
     
-    # Unwrap trajectory if bonds are present
-    if len(u.bonds) == 0:
-        logger.warning("Topology does not contain bonds. Cannot unwrap trajectory.")
-    else:
-        logger.debug("Topology contains bonds. Unwrapping trajectory.")
-        try:
-            preparation_steps.append(trans.unwrap(selected_atom_group))
-        except Exception as e:
-            logger.warning(f"Could not unwrap trajectory. Error: {e}")
-            logger.warning("Make sure your trajectory has been unwrapped properly.")
+    if prepare_trajectory:
+        logger.info("Preparing trajectory: applying unwrapping and centering transformations.")
     
-    # Center trajectory if box dimensions are present
-    if u.dimensions is not None:
-        logger.debug("Trajectory contains box dimensions. Centering trajectory.")
-        try:
-            preparation_steps.append(trans.center_in_box(selected_atom_group, wrap=True))
-        except Exception as e:
-            logger.warning(f"Could not center trajectory. Error: {e}")
-            logger.warning("Make sure your trajectory has been centered properly.")
+        # Unwrap trajectory if bonds are present
+        if len(u.bonds) == 0:
+            logger.warning("Topology does not contain bonds. Cannot unwrap trajectory.")
+        else:
+            logger.debug("Topology contains bonds. Unwrapping trajectory.")
+            try:
+                preparation_steps.append(trans.unwrap(selected_atom_group))
+            except Exception as e:
+                logger.warning(f"Could not unwrap trajectory. Error: {e}")
+                logger.warning("Make sure your trajectory has been unwrapped properly.")
+        
+        # Center trajectory if box dimensions are present
+        if u.dimensions is not None:
+            logger.debug("Trajectory contains box dimensions. Centering trajectory.")
+            try:
+                preparation_steps.append(trans.center_in_box(selected_atom_group, wrap=True))
+            except Exception as e:
+                logger.warning(f"Could not center trajectory. Error: {e}")
+                logger.warning("Make sure your trajectory has been centered properly.")
 
     if preparation_steps:
         u.trajectory.add_transformations(*preparation_steps)
@@ -1001,10 +1014,11 @@ def interpolate_trajectory(
     trajectory_file: str,
     num_frames: int,
     keep_original_frames: bool = True,
-    interpolation_method: Literal['akima', 'pchip'] = 'pchip',
+    interpolation_method: Optional[Literal['akima', 'pchip']] = 'pchip',
     noise_std: Optional[float] = None,
     atom_selection: str = 'all',
     traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc',
+    prepare_trajectory: bool = False,
     output_path: str = None,
     ) -> Tuple[str, str]:
     """
@@ -1019,14 +1033,22 @@ def interpolate_trajectory(
         Path to the trajectory file (xtc, dcd, trr, etc.)
     num_frames : int
         Desired number of frames in the interpolated trajectory.
+    keep_original_frames : bool, optional
+        If True, the original frames are kept and additional frames are interpolated between them.
+        If False, only the interpolated frames are kept. Default is True.
     interpolation_method : str, optional
         Interpolation method to use ('akima' or 'pchip'). Default is 'pchip'.
         Akima looks smoother but pchip avoids oscillations better 
-        when there are abrupt changes in the trajectory.
+        when there are abrupt changes in the trajectory. If the interpolation method
+        is None, no interpolation is performed and the original frames are used.
+    noise_std : float, optional
+        Standard deviation of Gaussian noise to add to the interpolated coordinates. Default is None (no noise added).
     atom_selection : str, optional
         MDAnalysis atom selection string (default "all").
     traj_format : str, optional
         Format of the output trajectory ('xtc', 'dcd', 'nc', 'pdb'). Default is 'xtc'.
+    prepare_trajectory : bool, optional
+        Whether to apply unwrapping and centering transformations to the trajectory. Default is False.
     output_path : str, optional
         Path to save the interpolated trajectory. If None, saves in the current directory.
 
@@ -1054,23 +1076,30 @@ def interpolate_trajectory(
         return new_traj_path, new_top_path
         
     # Load the trajectory using MDAnalysis
-    frames, coords = load_coordinates(topology_file, trajectory_file, atom_selection)
+    frames, coords = load_coordinates(topology_file, trajectory_file, atom_selection, prepare_trajectory)
     
     # Define new frames
     if keep_original_frames:
+        # Generate additional frames 
         additional_frames = np.linspace(frames[0], frames[-1], num_frames - len(frames) + 2)[1:-1]
+        # Merge with original frames and sort - unevenly spaced frames
         new_frames = np.sort(np.concatenate((frames, additional_frames)))
     else:
-        new_frames = np.linspace(frames[0], frames[-1], num_frames)
+        # Generate new frames - evenly spaced
+        new_frames = np.linspace(frames[0]+.5, frames[-1]+.5, num_frames)
     
     # Interpolate coordinates
     if interpolation_method == 'akima':
         interpolator = Akima1DInterpolator(x=frames, y=coords, axis=0, method='makima')
     elif interpolation_method == 'pchip':
         interpolator = PchipInterpolator(x=frames, y=coords, axis=0)
+    elif interpolation_method is None:
+        new_coords = coords
     else:
         logger.error(f"Interpolation method '{interpolation_method}' not supported. Use 'akima' or 'pchip'.")
-    new_coords = interpolator(new_frames)
+    
+    if interpolation_method is not None:
+        new_coords = interpolator(new_frames)
     
     # Add noise if specified
     if noise_std is not None:

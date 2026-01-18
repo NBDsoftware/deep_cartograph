@@ -101,6 +101,7 @@ def traj_augmentation(
                                         noise_std=configuration['noise_std'],
                                         atom_selection=configuration['atom_selection'],
                                         traj_format=configuration['traj_format'],
+                                        prepare_trajectory=configuration['prepare_trajectory'],
                                         output_path=output_folder)
         augmented_trajectories.append(new_traj_path)
         augmented_topologies.append(new_top_path)
