@@ -28,6 +28,8 @@ class TrainColvarsWorkflow:
                  trajectory_names: Optional[List[str]] = None,
                  val_colvars_paths: Optional[List[str]] = None,
                  val_topology_paths: Optional[List[str]] = None,
+                 sup_topology_paths: Optional[List[str]] = None,
+                 sup_names: Optional[List[str]] = None,
                  waypoint_structures: Optional[List[str]] = None,
                  ref_topology_path: Optional[str] = None,           
                  features_list: Optional[List[str]] = None,
@@ -78,6 +80,8 @@ class TrainColvarsWorkflow:
         self.trajectory_names: Optional[List[str]] = trajectory_names if trajectory_names else [Path(f).stem for f in train_colvars_paths]
         self.val_colvars_paths: Optional[List[str]] = val_colvars_paths
         self.val_topology_paths: Optional[List[str]] = val_topology_paths
+        self.sup_topology_paths: Optional[List[str]] = sup_topology_paths
+        self.sup_names: Optional[List[str]] = sup_names
         self.waypoint_structures: Optional[List[str]] = waypoint_structures
         self.ref_topology_path: Optional[str] = ref_topology_path
         self.features_list: Optional[List[str]] = features_list
@@ -381,6 +385,21 @@ class TrainColvarsWorkflow:
                     # Save the projected input data
                     projected_train_df_i.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
 
+                # For each supplementary system
+                for sup_index in range(len(self.sup_topology_paths)):
+                    
+                    sup_name = self.sup_names[sup_index]
+                    sup_topology = self.sup_topology_paths[sup_index]
+                    
+                    # Output folder for the sup system
+                    sup_output_folder = os.path.join(cv_output_folder, 'traj_data', sup_name)
+                    os.makedirs(sup_output_folder, exist_ok=True)
+                    
+                    # Plumed input 
+                    plumed_inputs_folder = os.path.join(sup_output_folder, 'plumed_inputs')
+                    os.makedirs(plumed_inputs_folder, exist_ok=True)
+                    cv_calculator.write_plumed_files(sup_topology, plumed_inputs_folder, self.waypoint_structures)
+                    
             else:
                 logger.warning(f"Projected colvars dataframe is empty for {cv_name}. Skipping this CV.")
                 continue
