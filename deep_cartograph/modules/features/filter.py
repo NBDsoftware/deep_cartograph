@@ -176,10 +176,32 @@ class Filter:
         # Iterate over features
         start_time = time.time()
         if self.filter_features:
+            
+            # Read waypoint data for this feature
+            if self.waypoint_colvars_paths is not None:
+                waypoint_args = {
+                    'colvars_paths': self.waypoint_colvars_paths,
+                    'ref_feature_names': self.common_ref_features,
+                    'topology_paths': self.waypoint_topologies,
+                    'reference_topology': self.ref_topology_path
+                }
+                waypoint_features_df = read_features(**waypoint_args)
+                
+                # Check if the features changes across waypoints
+                from deep_cartograph.modules.statistics import variance_threshold
+                self.features_data['waypoint_variation'] = variance_threshold(waypoint_features_df)
+
+                # Filter according to the waypoint variation
+                self.features_data.loc[(self.features_data['waypoint_variation'] == False), 'pass'] = False
+
             for feature_num, feature_name in enumerate(self.common_ref_features, start=1):
                 
                 logger.debug(f"Analyzing feature: {feature_name}")
                 
+                # Check if the feature has already been filtered out
+                if not self.features_data.loc[(self.features_data['name'] == feature_name), 'pass'].values[0]:
+                    continue
+
                 # Read time series data for this feature
                 args = {
                     'colvars_paths': self.colvars_paths,
@@ -216,20 +238,6 @@ class Filter:
                     avg_time_per_feature = elapsed_time / feature_num
                     estimated_remaining = avg_time_per_feature * (total_num_features - feature_num)
                     logger.info(f'Processed {feature_num}/{total_num_features} features. Estimated time left: {estimated_remaining:.2f} seconds.')
-
-            # Read waypoint data for this feature
-            if self.waypoint_colvars_paths is not None:
-                waypoint_args = {
-                    'colvars_paths': self.waypoint_colvars_paths,
-                    'ref_feature_names': self.common_ref_features,
-                    'topology_paths': self.waypoint_topologies,
-                    'reference_topology': self.ref_topology_path
-                }
-                waypoint_features_df = read_features(**waypoint_args)
-                
-                # Check if the features changes across waypoints
-                from deep_cartograph.modules.statistics import variance_threshold
-                self.features_data['waypoint_variation'] = variance_threshold(waypoint_features_df)
                 
         if self.compute_entropy and self.entropy_quantile > 0:
             # Filter according to the entropy, those features with entropy below the threshold don't pass the filter
@@ -246,10 +254,6 @@ class Filter:
         # Filter according to the p-value of the Hartigan's Dip Test, those with the p-value above the significance level don't pass the filter
         if self.compute_diptest and self.diptest_significance_level > 0:
             self.features_data.loc[(self.features_data['hdtp'] > self.diptest_significance_level), 'pass'] = False
-                    
-        # Filter according to the waypoint variation
-        if self.waypoint_colvars_paths is not None:
-            self.features_data.loc[(self.features_data['waypoint_variation'] == False), 'pass'] = False
 
         if csv_summary:
             # Save the dataframe to a csv file
