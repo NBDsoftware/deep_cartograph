@@ -1189,6 +1189,10 @@ class NonLinear(CVCalculator):
             self.num_training_samples = int(total_samples * self.training_validation_lengths[0])
             self.num_validation_samples = total_samples - self.num_training_samples
             
+        # Log the number of samples
+        logger.info(f'Number of training samples: {self.num_training_samples}')
+        logger.info(f'Number of validation samples: {self.num_validation_samples}')
+            
     def check_batch_size(self):
         """  
         Check the batch size is not larger than the number of samples in the training set.
