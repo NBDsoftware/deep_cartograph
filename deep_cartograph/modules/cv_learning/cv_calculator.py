@@ -1375,7 +1375,7 @@ class NonLinear(CVCalculator):
                 if self.validation_input_dtset is not None:
                     # Validation and training data are given separately
                     train_loader = DictLoader(self.training_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
-                    val_loader = DictLoader(self.validation_input_dtset, batch_size=self.batch_size, shuffle=False)
+                    val_loader = DictLoader(self.validation_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
                     
                     # For LR scheduler adjustment, we pass the loader since we don't have a module
                     self._adjust_lr_scheduler_from_loader(train_loader)
@@ -1397,6 +1397,7 @@ class NonLinear(CVCalculator):
                 model = self.create_model()
                 if self.cv_name == "deep_tica":
                     model.set_regularization(c0_reg=self.configuration['tica_regularization'])
+                    # model.loss_fn = ReduceEigenvaluesLoss(mode='single2', n_eig=1) NOTE: to explore if needed
                 model.optimizer_name = self.opt_name
                 logger.info(f"Model architecture: {model}")
 
