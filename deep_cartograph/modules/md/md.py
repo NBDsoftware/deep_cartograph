@@ -1274,7 +1274,8 @@ def create_plumed_rmsd_template(
 def create_rmsd_waypoint_reference(waypoint_structures: List[str], 
                                    plumed_topology_path: str, 
                                    rmsd_restraint_reference_path: str,
-                                   distance_threshold: float = 2.5):
+                                   align_waypoint_structures: Optional[bool] = True,
+                                   distance_threshold: Optional[float] = 2.0):
     """
     Creates a PLUMED-compatible PDB reference for RMSD restraints.
     Stable CA atoms across waypoints are marked with 1.0 in Occupancy/Beta columns.
@@ -1317,22 +1318,30 @@ def create_rmsd_waypoint_reference(waypoint_structures: List[str],
         
         coords_list.append(ca_atoms.positions)
 
-    # 4. Perform Alignment
-    # Align all coordinate sets to the first one
+    # 4. Perform Alignment (Conditional)
     ref_coords = coords_list[0]
     aligned_coords = [ref_coords]
-    for i in range(1, len(coords_list)):
-        # Calculate rotation/translation to align coords_list[i] to ref_coords
-        mobile_coords = coords_list[i]
-        R, residue = MDAnalysis.analysis.align.rotation_matrix(mobile_coords, ref_coords)
-        # Apply transformation: (coords - centroid) @ R + ref_centroid
-        aligned = (mobile_coords - mobile_coords.mean(axis=0)) @ R.T + ref_coords.mean(axis=0)
-        aligned_coords.append(aligned)
 
-    # Compute all pairwise distances between the aligned waypoints for each residue
+    if align_waypoint_structures:
+        logger.info("Aligning waypoints to the first structure for stability check...")
+        for i in range(1, len(coords_list)):
+            # Calculate rotation/translation to align coords_list[i] to ref_coords
+            mobile_coords = coords_list[i]
+            R, residue = MDAnalysis.analysis.align.rotation_matrix(mobile_coords, ref_coords)
+            # Apply transformation: (coords - centroid) @ R + ref_centroid
+            aligned = (mobile_coords - mobile_coords.mean(axis=0)) @ R.T + ref_coords.mean(axis=0)
+            aligned_coords.append(aligned)
+    else:
+        logger.info("Skipping alignment (using raw coordinates)...")
+        # Simply append the rest of the coordinates without modification
+        for i in range(1, len(coords_list)):
+            aligned_coords.append(coords_list[i])
+
+    # 5. Compute all pairwise distances between the aligned waypoints for each residue
     aligned_coords = np.array(aligned_coords)  # Shape: (num_waypoints, num_residues, 3)
     num_residues = aligned_coords.shape[1]
     stable_residues = []
+    
     for resid_idx in range(num_residues):
         # Extract coordinates for this residue across all waypoints
         residue_coords = aligned_coords[:, resid_idx, :]  # Shape: (num_waypoints, 3)
@@ -1349,7 +1358,7 @@ def create_rmsd_waypoint_reference(waypoint_structures: List[str],
         if max_distance <= distance_threshold:
             stable_residues.append(sorted_common_resids[resid_idx])
 
-    # 7. Create the PLUMED Reference PDB
+    # 6. Create the PLUMED Reference PDB
     # Load the original PLUMED topology
     plumed_u = mda.Universe(plumed_topology_path)
     
@@ -1357,11 +1366,15 @@ def create_rmsd_waypoint_reference(waypoint_structures: List[str],
     plumed_u.atoms.occupancies = 0.0
     plumed_u.atoms.tempfactors = 0.0
     
-    # Set 1.0 for CA atoms of the stable common residues
-    final_selection = "resid " + " ".join([str(r) for r in stable_residues]) + " and name CA"
-    target_atoms = plumed_u.select_atoms(final_selection)
-    target_atoms.occupancies = 1.0
-    target_atoms.tempfactors = 1.0
+    if stable_residues:
+        # Set 1.0 for CA atoms of the stable common residues
+        final_selection = "resid " + " ".join([str(r) for r in stable_residues]) + " and name CA"
+        target_atoms = plumed_u.select_atoms(final_selection)
+        target_atoms.occupancies = 1.0
+        target_atoms.tempfactors = 1.0
+        logger.info(f"Reference structure created with {len(target_atoms)} active atoms.")
+    else:
+        logger.warning("No stable residues found within the distance threshold!")
     
     # Save the file
     plumed_u.atoms.write(rmsd_restraint_reference_path)

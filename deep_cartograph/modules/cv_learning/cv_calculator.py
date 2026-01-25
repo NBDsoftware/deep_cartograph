@@ -614,7 +614,10 @@ class CVCalculator:
             if waypoint_structures is not None and len(waypoint_structures) > 0:
                 # Create a reference structure from the waypoints
                 rmsd_restraint_reference_path = os.path.join(output_folder, 'rmsd_restraint_reference.pdb')
-                create_rmsd_waypoint_reference(waypoint_structures, plumed_topology_path, rmsd_restraint_reference_path)
+                create_rmsd_waypoint_reference(waypoint_structures, 
+                                               plumed_topology_path, 
+                                               rmsd_restraint_reference_path,
+                                               self.bias['align_waypoint_structures'])
                 self.plumed_files.append(rmsd_restraint_reference_path)
             else:
                 logger.warning('No waypoint structures provided for RMSD restraint guide. Skipping RMSD restraint.')

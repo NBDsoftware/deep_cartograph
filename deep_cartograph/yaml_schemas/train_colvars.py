@@ -152,6 +152,8 @@ class Bias(BaseModel):
     # NOTE: this feature is still experimental and not ready for production use 
     # Additional rmsd restraint to pass through waypoint structures - see waypoint structures 
     add_rmsd_restraint: bool = False
+    # Wether to align the waypoint structures before computing the distance between atoms or not
+    align_waypoint_structures: bool = True
     # Force constant for the keep the rigid regions among the waypoints fixed (units: kJ mol^-1 nm^-2)
     rmsd_restraint_k: float = 5000.0
     # Equilibrium rmsd above which the restraint is applied (units: nm)
