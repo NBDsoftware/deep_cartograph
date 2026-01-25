@@ -160,6 +160,9 @@ def deep_cartograph(
     # Check seed data
     seed_trajectories, seed_topologies = check_data(seed_trajectory_data, seed_topology_data)
     trajectory_seed_names = [Path(traj).stem for traj in seed_trajectories]
+
+    if supplementary_traj_data:
+        supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
     
     if len(trajectories)+len(seed_trajectories) == 0:
         logger.error("No trajectory files found in the provided trajectory data paths.")
@@ -184,6 +187,7 @@ def deep_cartograph(
         'configuration': configuration['analyze_geometry'],
         'trajectories': trajectories,
         'topologies': topologies,
+        'ref_topologies': supplementary_tops if supplementary_traj_data else None,
         'output_folder': os.path.join(output_folder, 'analyze_geometry')
     }
     analyze_geometry(**args)
@@ -232,7 +236,6 @@ def deep_cartograph(
     
     # Compute features for supplementary data
     if supplementary_traj_data:
-        supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
         sup_trajectory_names = [Path(traj).stem for traj in supplementary_trajs]
         args = {
             'configuration': configuration['compute_features'], 

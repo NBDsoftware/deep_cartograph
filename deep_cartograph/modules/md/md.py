@@ -596,6 +596,8 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
     ------
         features_labels (list): list containing the feature labels.
     """
+    
+    # NOTE: we should check for duplicates between different groups! :) 
 
     features_labels = []
     
@@ -1380,37 +1382,64 @@ def create_rmsd_waypoint_reference(waypoint_structures: List[str],
     plumed_u.atoms.write(rmsd_restraint_reference_path)
     logger.info(f"Reference structure created with {len(target_atoms)} active atoms.")
 
-# Analysis
-def RMSD(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
-    """
-    Calculate the RMSD of the trajectory with respect to a reference structure.
+def RMSD(trajectory_path: str, 
+         topology_path: str, 
+         selection: str, 
+         fitting_selection: str, 
+         reference_path: str = None
+    ) -> np.array:
+    
+    u = mda.Universe(topology_path, trajectory_path)
+    ref_structure = reference_path if reference_path else topology_path
+    ref = mda.Universe(ref_structure)
 
-    Input
-    -----
-        trajectory_path   (str): path to the trajectory file.
-        topology_path     (str): path to the topology file.
-        rmsd_selection    (str): selection of atoms to calculate the RMSD.
-        fitting_selection (str): selection of atoms to fit the trajectory to.
-    
-    Output
-    ------
-        rmsd (np.array): array with the RMSD values for each frame.
-    """
+    # 1. Map topologies to get the pairs
+    mapper = PDBTopologyMapper(ref_structure, topology_path)
+    mapping_pairs = [(ref_id, val[2]) for ref_id, val in mapper.mapping.items()]
 
-    # Load trajectory
-    try:
-        u = mda.Universe(topology_path, trajectory_path)
-    except Exception as e:
-        logger.error(f"Error loading trajectory {trajectory_path}. {e}")
-        sys.exit(1)
-        
-    ref = mda.Universe(topology_path)
+    if not mapping_pairs:
+        logger.error(f"No common residues found between {ref_structure} and {topology_path}")
+        return np.array([])
+
+    # 2. Build distinct strings for the two different numbering systems
+    ref_res_str = "resid " + " ".join([str(p[0]) for p in mapping_pairs])
+    sim_res_str = "resid " + " ".join([str(p[1]) for p in mapping_pairs])
+
+    # 3. Create Tuples for the RMSD class
+    # Format: (mobile_selection, reference_selection)
+    fit_tuple = (
+        f"({fitting_selection}) and ({sim_res_str})", 
+        f"({fitting_selection}) and ({ref_res_str})"
+    )
     
-    R = MDAnalysis.analysis.rms.RMSD(u, ref, select=fitting_selection, groupselections=[selection]).run()
+    analysis_tuple = (
+        f"({selection}) and ({sim_res_str})", 
+        f"({selection}) and ({ref_res_str})"
+    )
     
-    rmsd = R.results.rmsd.T[3]
+    # Check the simulation and reference selections are equal and not empty
+    ref_atoms = ref.select_atoms(analysis_tuple[1])
+    sim_atoms = u.select_atoms(analysis_tuple[0])
+    if len(ref_atoms) == 0 or len(sim_atoms) == 0:
+        logger.error(f"Selections resulted in zero atoms. Please check the selection strings.")
+        return np.array([])
+    if len(ref_atoms) != len(sim_atoms):
+        logger.error(f"Number of atoms in simulation ({len(sim_atoms)}) and reference ({len(ref_atoms)}) selections do not match.")
+        return np.array([])
+
+    # 4. Initialize the RMSD class using the Tuples
+    # 'select' handles the fitting (superposition)
+    # 'groupselections' handles the actual RMSD calculation after fitting
+    R = MDAnalysis.analysis.rms.RMSD(
+        u, 
+        ref, 
+        select=fit_tuple,         # This performs the fit
+        groupselections=[analysis_tuple]  # This calculates the value
+    ).run()
     
-    return rmsd
+    # Column 0: Frame, Column 1: Time, Column 2: Fit RMSD, Column 3: Groupselection RMSD
+    # We return Column 3 because it represents the actual requested selection
+    return R.results.rmsd.T[3]
  
 def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
     """

@@ -11,9 +11,12 @@ from typing import Dict, List
 ########
 
 def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: List[str], 
-                     output_folder: str = 'analyze_geometry') -> str:
+                     ref_topologies: List[str], output_folder: str = 'analyze_geometry') -> str:
     """
-    Function that performs different geometrical analysis of a trajectory using MDAnalysis
+    Function that performs different geometrical analysis of a trajectory using MDAnalysis.
+    
+    - RMSD: Root Mean Square Deviation -> with respect to the first frame or a listed reference structure
+    - RMSF: Root Mean Square Fluctuation
 
     Parameters
     ----------
@@ -26,6 +29,9 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
             
         topology_data:            
             Path to topology files of the trajectories.
+            
+        ref_topologies:
+            (Optional) List of paths to reference topology files to compute RMSD against.
             
         output_folder:       
             (Optional) Path to the output folder
@@ -81,21 +87,26 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
                 y_data = {}
                 x_data = {}
                 
-                # Analyze each trajectory
+                # Inside analyze_geometry loop...
                 for trajectory, topology in zip(trajectories, topologies):
-                    
-                    # Get trajectory name
                     trajectory_name = Path(trajectory).stem
-                    
-                    # Get selections
                     selection = params['selection']
                     fit_selection = params['fit_selection']
                     
-                    # Execute analysis
                     if category == 'RMSD':
-                        y_data[trajectory_name] = RMSD(trajectory, topology, selection, fit_selection)
-                        x_data[trajectory_name] = np.arange(0, len(y_data[trajectory_name])) * dt_per_frame
-                        x_label = 'Time (ns)'
+                        # Use ref_topologies if they exist, otherwise use the topology itself
+                        refs_to_run = ref_topologies if ref_topologies else [None]
+                        
+                        for ref_pdb in refs_to_run:
+                            logger.info(f"   - Processing trajectory: {trajectory_name} with reference: {ref_pdb if ref_pdb else 'first frame'}")
+                            ref_label = f"_to_{Path(ref_pdb).stem}" if ref_pdb else ""
+                            traj_key = trajectory_name + ref_label
+                            
+                            y_data[traj_key] = RMSD(
+                                trajectory, topology, selection, fit_selection, reference_path=ref_pdb
+                            )
+                            x_data[traj_key] = np.arange(0, len(y_data[traj_key])) * dt_per_frame
+                            x_label = 'Time (ns)'
                     elif category == 'RMSF':
                         y_data[trajectory_name], x_data[trajectory_name] = RMSF(trajectory, topology, selection, fit_selection)
                         x_label = 'Residue'
@@ -115,15 +126,20 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
 
     return
 
-def set_logger(verbose: bool):
+def set_logger(verbose: bool, log_path: str):
     """
-    Function that sets the logging configuration. If verbose is True, it sets the logging level to DEBUG.
-    If verbose is False, it sets the logging level to INFO.
+    Configures logging for Deep Cartograph. 
+    
+    If `verbose` is `True`, sets the logging level to DEBUG.
+    Otherwise, sets it to INFO.
 
     Inputs
     ------
 
-        verbose (bool): If True, sets the logging level to DEBUG. If False, sets the logging level to INFO.
+    Args:
+        verbose (bool): If `True`, logging level is set to DEBUG. 
+                        If `False`, logging level is set to INFO.
+        log_path (str): Path to the log file where logs will be saved.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -143,17 +159,18 @@ def set_logger(verbose: bool):
     # Check the existence of the configuration files
     if not os.path.exists(info_config_path):
         raise FileNotFoundError(f"Configuration file not found: {info_config_path}")
-    
     if not os.path.exists(debug_config_path):
         raise FileNotFoundError(f"Configuration file not found: {debug_config_path}")
     
-    if verbose:
-        logging.config.fileConfig(debug_config_path, disable_existing_loggers=True)
-    else:
-        logging.config.fileConfig(info_config_path, disable_existing_loggers=True)
+    # Pass the log_path to the fileConfig using the 'defaults' parameter
+    config_path = debug_config_path if verbose else info_config_path
+    logging.config.fileConfig(
+        config_path,
+        defaults={'log_path': log_path},
+        disable_existing_loggers=True
+    )
 
     logger = logging.getLogger("deep_cartograph")
-
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
 
 ########
@@ -172,15 +189,14 @@ def main():
     parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to analyze.", required=True)
     parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data.", required=True)
     
+    parser.add_argument('-ref_top_data', dest='ref_topology_data', help="(Optional) Path to reference topology or folder with reference topology files to compute RMSD against.", required=False, default=None)
     parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 
     args = parser.parse_args()
 
-    # Determine output folder, if restart is False, create a unique output folder
+    # Determine output folder
     output_folder = args.output_folder if args.output_folder else 'analyze_geometry'
-    if not args.restart:
-        output_folder = get_unique_path(output_folder)
     os.makedirs(output_folder, exist_ok=True)
 
     # Set logger
@@ -192,12 +208,18 @@ def main():
     
     # Check main input folders
     trajectories, topologies = check_data(args.trajectory_data, args.topology_data)
+    
+    # If reference topology data is provided
+    ref_topologies = None
+    if args.ref_topology_data:
+        ref_topologies, _ = check_data(args.ref_topology_data, args.ref_topology_data)
 
     # Run Analyze Geometry tool
     _ = analyze_geometry(
         configuration = configuration, 
         trajectories = trajectories,
         topologies = topologies,
+        ref_topologies = ref_topologies,
         output_folder = output_folder)
 
 if __name__ == "__main__":
