@@ -88,35 +88,41 @@ class Filter:
         logger.info(f'Initial size of features set (only common features): {len(self.common_ref_features)}.')
         save_list(self.common_ref_features, os.path.join(self.output_dir, 'all_features.txt'))
 
-        # Conditions to filter features
-        self.compute_diptest = settings['compute_diptest']
-        self.compute_entropy = settings['compute_entropy']
-        self.compute_std = settings['compute_std']
-        self.filter_features = self.compute_diptest or self.compute_entropy or self.compute_std or (self.waypoint_colvars_paths is not None)
-
         # Thresholds
-        self.diptest_significance_level = settings['diptest_significance_level']
-        self.entropy_quantile = settings['entropy_quantile']
-        self.std_quantile = settings['std_quantile']
+        self.local_distance_threshold: Optional[float] = settings['local_distance_threshold']
+        self.diptest_significance_level: Optional[float] = settings['diptest_significance_level']
+        self.entropy_quantile: Optional[float] = settings['entropy_quantile']
+        self.std_quantile: Optional[float] = settings['std_quantile']
+        
+        # Conditions to filter features
+        self.diptest_filter = self.diptest_significance_level is not None
+        self.entropy_filter = self.entropy_quantile is not None
+        self.std_filter = self.std_quantile is not None
+        self.local_contact_filter = self.local_distance_threshold is not None
+        self.filter_features = self.diptest_filter or self.entropy_filter or self.std_filter or (self.waypoint_colvars_paths is not None)
         
         # features to analyze, all pass initially
         self.features_data = pd.DataFrame({'name': self.common_ref_features, 'pass': True})
         
         # Add entropy column if needed
-        if self.compute_entropy:
+        if self.entropy_filter:
             self.features_data['entropy'] = 0.0
         
         # Add std column if needed
-        if self.compute_std:
+        if self.std_filter:
             self.features_data['std'] = 0.0
         
         # Add dip test column if needed
-        if self.compute_diptest:
+        if self.diptest_filter:
             self.features_data['hdtp'] = 1.0
             
         # Add waypoint variation column if needed
         if self.waypoint_colvars_paths is not None:
-            self.features_data['waypoint_variation'] = True
+            self.features_data['waypoint_difference'] = True
+        
+        # Add local contact column if needed  
+        if self.local_contact_filter:
+            self.features_data['is_local_contact'] = True
 
     def find_common_features(self) -> List[str]:
         """
@@ -187,13 +193,22 @@ class Filter:
                 }
                 waypoint_features_df = read_features(**waypoint_args)
                 
-                # Check if the features changes across waypoints
-                from deep_cartograph.modules.statistics import variance_threshold
-                self.features_data['waypoint_variation'] = variance_threshold(waypoint_features_df)
+                # Check if the features change across waypoints
+                from deep_cartograph.modules.statistics import difference_filter
+                self.features_data['waypoint_difference'] = difference_filter(waypoint_features_df)
 
-                # Filter according to the waypoint variation
-                self.features_data.loc[(self.features_data['waypoint_variation'] == False), 'pass'] = False
+                # Filter according to the waypoint difference
+                self.features_data.loc[(self.features_data['waypoint_difference'] == False), 'pass'] = False
 
+                if self.local_contact_filter:
+                    
+                    # Check if the distance features correspond to local contacts
+                    from deep_cartograph.modules.statistics import min_value_filter
+                    self.features_data['is_local_contact'] = min_value_filter(waypoint_features_df, self.local_distance_threshold)
+                    
+                    # Filter according to the local contact condition
+                    self.features_data.loc[(self.features_data['is_local_contact'] == False), 'pass'] = False
+                    
             for feature_num, feature_name in enumerate(self.common_ref_features, start=1):
                 
                 logger.debug(f"Analyzing feature: {feature_name}")
@@ -212,21 +227,21 @@ class Filter:
                 feature_timeseries_df = read_features(**args)
                     
                 # Entropy
-                if self.compute_entropy:
+                if self.entropy_filter:
                     # Compute and update the entropy of the feature
                     from deep_cartograph.modules.statistics import shannon_entropy
                     feature_entropy = shannon_entropy(feature_timeseries_df)
                     self.features_data.loc[(self.features_data['name'] == feature_name), 'entropy'] = feature_entropy
 
                 # Standard deviation
-                if self.compute_std:
+                if self.std_filter:
                     # Compute and update the standard deviation of the feature
                     from deep_cartograph.modules.statistics import standard_deviation
                     feature_std = standard_deviation(feature_timeseries_df)
                     self.features_data.loc[(self.features_data['name'] == feature_name), 'std'] = feature_std
                 
                 # Dip test
-                if self.compute_diptest:
+                if self.diptest_filter:
                     # Compute and update the p-value of the Hartigan's Dip Test of the feature
                     from deep_cartograph.modules.statistics import dip_test
                     feature_hdt_pvalues = dip_test(feature_timeseries_df)
@@ -239,20 +254,20 @@ class Filter:
                     estimated_remaining = avg_time_per_feature * (total_num_features - feature_num)
                     logger.info(f'Processed {feature_num}/{total_num_features} features. Estimated time left: {estimated_remaining:.2f} seconds.')
                 
-        if self.compute_entropy and self.entropy_quantile > 0:
+        if self.entropy_filter and self.entropy_quantile > 0:
             # Filter according to the entropy, those features with entropy below the threshold don't pass the filter
             entropy_threshold = self.features_data['entropy'].quantile(q = self.entropy_quantile)
             logger.info(f'    Entropy threshold: {entropy_threshold:.2f} bits (quantile: {self.entropy_quantile:.2f})')
             self.features_data.loc[(self.features_data['entropy'] < entropy_threshold), 'pass'] = False
 
-        if self.compute_std and self.std_quantile > 0:
+        if self.std_filter and self.std_quantile > 0:
             # Filter according to the standard deviation, those features with std below the threshold don't pass the filter
             std_threshold = self.features_data['std'].quantile(q = self.std_quantile)
             logger.info(f'    Standard deviation threshold: {std_threshold:.2f} a.u. (quantile: {self.std_quantile:.2f})')
             self.features_data.loc[(self.features_data['std'] < std_threshold), 'pass'] = False
             
         # Filter according to the p-value of the Hartigan's Dip Test, those with the p-value above the significance level don't pass the filter
-        if self.compute_diptest and self.diptest_significance_level > 0:
+        if self.diptest_filter and self.diptest_significance_level > 0:
             self.features_data.loc[(self.features_data['hdtp'] > self.diptest_significance_level), 'pass'] = False
 
         if csv_summary:

@@ -379,12 +379,13 @@ def find_centroids(data: pd.DataFrame, centroids: np.array, clustering_features:
     return data
 
 # Feature statistics
-def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
+def difference_filter(features_df: pd.DataFrame) -> List[bool]:
     """
-    Function that checks if the variation of each feature between different samples
-    is above a certain threshold. The threshold is fixed and depends on the feature type.
+    Function that checks if the difference of each feature between samples
+    is above a certain fixed threshold that depends on the feature type.
     
-    For sinusoidal features, both the sine and cosine components are considered together to compute the variation.
+    For sinusoidal features, both the sine and cosine components are considered 
+    to compute the variation.
     """
     angle_threshold = np.pi / 8  # 22.5 degrees
     distance_threshold = 0.2     # 0.2 nm or 2 Angstroms
@@ -435,6 +436,32 @@ def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
             results.loc[results['name'] == name, 'above_threshold'] = delta >= distance_threshold 
             
     return results['above_threshold'].tolist()
+
+def min_value_filter(features_df: pd.DataFrame, threshold: float) -> List[bool]:
+    """
+    Function that checks if the minimum value of each feature across samples is below a certain threshold.
+    
+    Inputs
+    ------
+
+        features_df:
+            DataFrame with the time series of the features
+        threshold:
+            Minimum value threshold
+
+    Outputs
+    -------
+
+        results:
+            List of booleans indicating if the minimum value of each feature is below the threshold
+    """
+    
+    feature_names = list(features_df.columns)
+    results = []
+    for name in feature_names:
+        min_value = np.min(features_df[name].to_numpy())
+        results.append(min_value <= threshold)
+    return results
     
 
 def shannon_entropy(features_df: pd.DataFrame) -> List[float]:
