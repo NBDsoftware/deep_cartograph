@@ -39,7 +39,7 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
 
     from deep_cartograph.modules.common import validate_configuration, save_data
     from deep_cartograph.modules.figures import plot_data
-    from deep_cartograph.modules.md import RMSD, RMSF
+    from deep_cartograph.modules.md import RMSD, RMSF, dRMSD
     
     from deep_cartograph.yaml_schemas.analyze_geometry import AnalyzeGeometrySchema
 
@@ -67,17 +67,15 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
     # Get time step per frame in ns
     dt_per_frame = float(configuration['dt_per_frame'])* 1e-3 
 
-    # For each type of analysis in the configuration
+    # For each type of analysis
     for category, analyses in configuration['analysis'].items():
         
-        # If there are analyses of this type
+        # If there is any requested
         if analyses:
-            
             logger.info(f"Analyzing {category}...")
-        
+
             # For each analysis of this type
             for name, params in analyses.items():
-                
                 logger.info(f" - {name}")
                 
                 title = params['title']
@@ -87,29 +85,44 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
                 y_data = {}
                 x_data = {}
                 
-                # Inside analyze_geometry loop...
+                # For each trajectory and topology
                 for trajectory, topology in zip(trajectories, topologies):
                     trajectory_name = Path(trajectory).stem
                     selection = params['selection']
-                    fit_selection = params['fit_selection']
+                    fit_selection = params.get('fit_selection')
+                    selection_stride = params.get('selection_stride', 1)
                     
                     if category == 'RMSD':
-                        # Use ref_topologies if they exist, otherwise use the topology itself
+                        # Use ref_topologies if they exist, otherwise use the first frame
                         refs_to_run = ref_topologies if ref_topologies else [None]
-                        
                         for ref_pdb in refs_to_run:
                             logger.info(f"   - Processing trajectory: {trajectory_name} with reference: {ref_pdb if ref_pdb else 'first frame'}")
-                            ref_label = f"_to_{Path(ref_pdb).stem}" if ref_pdb else ""
+                            ref_label = f"_to_{Path(ref_pdb).stem}" if ref_pdb else "first_frame"
                             traj_key = trajectory_name + ref_label
                             
-                            y_data[traj_key] = RMSD(
-                                trajectory, topology, selection, fit_selection, reference_path=ref_pdb
-                            )
+                            y_data[traj_key] = RMSD(trajectory, topology, selection, fit_selection, ref_pdb)
                             x_data[traj_key] = np.arange(0, len(y_data[traj_key])) * dt_per_frame
                             x_label = 'Time (ns)'
                     elif category == 'RMSF':
                         y_data[trajectory_name], x_data[trajectory_name] = RMSF(trajectory, topology, selection, fit_selection)
                         x_label = 'Residue'
+                    elif category == 'dRMSD':
+                        # Use ref_topologies if they exist, otherwise use the topology
+                        refs_to_run = ref_topologies if ref_topologies else [topology]
+                        for ref_pdb in refs_to_run:
+                            logger.info(f"   - Processing trajectory: {trajectory_name} with reference: {ref_pdb}")
+                            ref_label = f"_to_{Path(ref_pdb).stem}"
+                            traj_key = trajectory_name + ref_label
+                            
+                            dRMSD_output_folder = os.path.join(output_folder, f'dRMSD_temp_{traj_key}')
+                            os.makedirs(dRMSD_output_folder, exist_ok=True)
+                            
+                            y_data[traj_key] = dRMSD(trajectory, topology, selection, selection_stride, ref_pdb, dRMSD_output_folder)
+                            x_data[traj_key] = np.arange(0, len(y_data[traj_key])) * dt_per_frame
+                            x_label = 'Time (ns)'
+                    else:
+                        logger.error(f"Unknown analysis category: {category}")
+                        continue
                 
                 # Create figure path
                 figure_path = os.path.join(output_folder, f'{name}_{category}.png')

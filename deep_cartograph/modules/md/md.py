@@ -1386,7 +1386,7 @@ def RMSD(trajectory_path: str,
          topology_path: str, 
          selection: str, 
          fitting_selection: str, 
-         reference_path: str = None
+         reference_path: Optional[str] = None
     ) -> np.array:
     
     u = mda.Universe(topology_path, trajectory_path)
@@ -1484,6 +1484,82 @@ def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selec
     
     return rmsf_per_residue, residues
 
+def dRMSD(trajectory_path: str, topology_path: str, selection: str, selection_stride: int, reference_path: str, output_path: str) -> np.array:
+    """
+    Calculate the dRMSD of the trajectory with respect to a reference structure
+
+    Input
+    -----
+        trajectory_path (str): path to the trajectory file.
+        topology_path   (str): path to the topology file.
+        selection       (str): selection of atoms to calculate the dRMSD.
+        reference_path  (str): path to the reference structure file.
+        output_path     (str): path to save the intermediate files used for dRMSD calculation.
+
+    Output
+    ------
+        drmsd (np.array): array with the dRMSD values for each frame
+    """
+    
+    from deep_cartograph.tools import compute_features
+    from deep_cartograph.modules.plumed.colvars import read_features, read_column_names
+    
+    # Define configuration for pairwise distances calculation
+    distance_group = {
+        'first_selection' : selection,
+        'second_selection' : selection, 
+        'first_stride' : selection_stride,
+        'second_stride' : selection_stride,
+        'skip_neigh_residues': True,
+        'skip_bonded_atoms': True
+    }
+        
+    config = {
+        'plumed_settings': {
+            'features': {
+                'distance_groups' : {
+                    'distances': distance_group
+                }
+            }
+        }
+    }
+    
+    # Compute distances between selected atoms along the trajectory and the reference
+    traj_colvars_paths = compute_features(configuration=config,
+                                          trajectories=[trajectory_path, reference_path],
+                                          topologies=[topology_path, reference_path],
+                                          reference_topology=reference_path,
+                                          output_folder=os.path.join(output_path, 'compute_features'))
+
+    ref_feature_names = read_column_names(traj_colvars_paths[1])
+    
+    # Load distances during trajectory
+    traj_distance_df = read_features(traj_colvars_paths[0], 
+                                     ref_feature_names=ref_feature_names,
+                                     topology_paths=[topology_path],
+                                     reference_topology=reference_path)
+    
+    # Load reference distances
+    ref_distance_df = read_features(traj_colvars_paths[1],
+                                    ref_feature_names=ref_feature_names,
+                                    topology_paths=[reference_path],
+                                    reference_topology=reference_path)
+    
+    # Remove time column if present
+    if 'time' in traj_distance_df.columns:
+        traj_distance_df = traj_distance_df.drop(columns=['time'])
+    if 'time' in ref_distance_df.columns:
+        ref_distance_df = ref_distance_df.drop(columns=['time'])
+    
+    # Calculate dRMSD for each frame
+    drmsd_values = []
+    ref_distances = ref_distance_df.iloc[0].values  # Reference distances are constant
+    for index, row in traj_distance_df.iterrows():
+        traj_distances = row.values
+        drmsd = np.sqrt(np.mean((traj_distances - ref_distances) ** 2))
+        drmsd_values.append(drmsd)
+    
+    return np.array(drmsd_values)
 
 # Other
 def to_entity_name(mda_selection: str) -> str:
