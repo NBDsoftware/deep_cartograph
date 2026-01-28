@@ -89,7 +89,8 @@ class Filter:
         save_list(self.common_ref_features, os.path.join(self.output_dir, 'all_features.txt'))
 
         # Thresholds
-        self.local_distance_threshold: Optional[float] = settings['local_distance_threshold']
+        distance_threshold_angstroms = settings.get('local_distance_threshold', None)
+        self.local_distance_threshold: Optional[float] = distance_threshold_angstroms/10 if distance_threshold_angstroms is not None else None  # Convert to nm
         self.diptest_significance_level: Optional[float] = settings['diptest_significance_level']
         self.entropy_quantile: Optional[float] = settings['entropy_quantile']
         self.std_quantile: Optional[float] = settings['std_quantile']
