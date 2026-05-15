@@ -1,7 +1,6 @@
 # Import necessary modules
 import os
 import sys
-import copy
 import logging
 import numpy as np
 import pandas as pd
@@ -27,10 +26,15 @@ class TrainColvarsWorkflow:
                  train_colvars_paths: List[str],
                  train_topology_paths: Optional[List[str]] = None,
                  trajectory_names: Optional[List[str]] = None,
+                 val_colvars_paths: Optional[List[str]] = None,
+                 val_topology_paths: Optional[List[str]] = None,
+                 sup_topology_paths: Optional[List[str]] = None,
+                 sup_names: Optional[List[str]] = None,
+                 waypoint_structures: Optional[List[str]] = None,
                  ref_topology_path: Optional[str] = None,           
                  features_list: Optional[List[str]] = None,
                  cv_dimension: Optional[int] = None,
-                 cvs: Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]] = None,
+                 cvs: Optional[List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']]] = None,
                  frames_per_sample: Optional[int] = 1,
                  output_folder: Optional[str] = 'train_colvars'):
         """
@@ -61,7 +65,6 @@ class TrainColvarsWorkflow:
                 training/                       # Training data and model scores
                     checkpoints/
                 model.zip                       # Trained model
-
         """
         
         # Set output folder
@@ -75,6 +78,11 @@ class TrainColvarsWorkflow:
         self.train_colvars_paths: List[str] = train_colvars_paths
         self.train_topology_paths: Optional[List[str]] = train_topology_paths
         self.trajectory_names: Optional[List[str]] = trajectory_names if trajectory_names else [Path(f).stem for f in train_colvars_paths]
+        self.val_colvars_paths: Optional[List[str]] = val_colvars_paths
+        self.val_topology_paths: Optional[List[str]] = val_topology_paths
+        self.sup_topology_paths: Optional[List[str]] = sup_topology_paths
+        self.sup_names: Optional[List[str]] = sup_names
+        self.waypoint_structures: Optional[List[str]] = waypoint_structures
         self.ref_topology_path: Optional[str] = ref_topology_path
         self.features_list: Optional[List[str]] = features_list
 
@@ -88,7 +96,7 @@ class TrainColvarsWorkflow:
         self._validate_files()
 
         # CV related attributes
-        self.cvs_list: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
+        self.cvs_list: List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']] = cvs if cvs else self.configuration['cvs']
         self.cv_dimension: int = cv_dimension
         self.cv_labels: List[str] = None
         self.cv_type: str = None
@@ -111,9 +119,6 @@ class TrainColvarsWorkflow:
                     if not files_exist(self.ref_topology_path):
                         logger.error(f"Reference topology file {self.ref_topology_path} does not exist. Exiting...")
                         sys.exit(1)
-            else:
-                logger.error("Trajectory file provided but no topology file. Exiting...")
-                sys.exit(1)
          
     def create_fes_plots(self, 
                          data: pd.DataFrame, 
@@ -291,7 +296,7 @@ class TrainColvarsWorkflow:
             
             # Construct the corresponding CV calculator
             args = {
-                'configuration': copy.deepcopy(merged_configuration),
+                'configuration': merged_configuration,
                 'output_path': self.output_folder
             }
             cv_calculator = cv_calculators_map[cv_name](**args)
@@ -305,11 +310,18 @@ class TrainColvarsWorkflow:
             }
             cv_calculator.load_training_data(**args)
             
+            # Load validation data if provided
+            if self.val_colvars_paths:
+                args = {
+                    'val_colvars_paths': self.val_colvars_paths,
+                    'val_topology_paths': self.val_topology_paths,
+                    'ref_topology_path': self.ref_topology_path,
+                    'features_list': self.features_list
+                }
+                cv_calculator.load_validation_data(**args)
+            
             # Run the CV calculator - obtain a dataframe with the projected training data
             projected_train_df = cv_calculator.run(self.cv_dimension)
-            
-            # Return file labels to the projected training data
-            projected_train_df['traj_label'] = cv_calculator.training_data_labels
 
             # Update CV info
             self.cv_dimension = cv_calculator.get_cv_dimension()
@@ -317,6 +329,9 @@ class TrainColvarsWorkflow:
             self.cv_type = cv_calculator.get_cv_type()
                 
             if projected_train_df is not None:
+                
+                # Return file labels to the projected training data
+                projected_train_df['traj_label'] = cv_calculator.training_data_labels
                 
                 # Iterate over the trajectories used for training
                 for traj_index in range(len(self.train_colvars_paths)):
@@ -338,7 +353,7 @@ class TrainColvarsWorkflow:
                     # Create plumed inputs for this CV and topology
                     plumed_inputs_folder = os.path.join(traj_output_folder, 'plumed_inputs')
                     os.makedirs(plumed_inputs_folder, exist_ok=True)
-                    cv_calculator.write_plumed_files(topology, plumed_inputs_folder)
+                    cv_calculator.write_plumed_files(topology, plumed_inputs_folder, self.waypoint_structures)
 
                     # Get the projected data for this colvars file
                     projected_train_df_i = projected_train_df[projected_train_df['traj_label'] == traj_index]
@@ -370,6 +385,25 @@ class TrainColvarsWorkflow:
                     # Save the projected input data
                     projected_train_df_i.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
 
+                if self.sup_topology_paths is not None:
+                    # For each supplementary system
+                    for sup_index in range(len(self.sup_topology_paths)):
+                        
+                        sup_topology = self.sup_topology_paths[sup_index]
+                        if self.sup_names is None:
+                            sup_name = Path(sup_topology).stem
+                        else:
+                            sup_name = self.sup_names[sup_index]
+                        
+                        # Output folder for the sup system
+                        sup_output_folder = os.path.join(cv_output_folder, 'traj_data', sup_name)
+                        os.makedirs(sup_output_folder, exist_ok=True)
+                        
+                        # Plumed input 
+                        plumed_inputs_folder = os.path.join(sup_output_folder, 'plumed_inputs')
+                        os.makedirs(plumed_inputs_folder, exist_ok=True)
+                        cv_calculator.write_plumed_files(sup_topology, plumed_inputs_folder, self.waypoint_structures)
+                    
             else:
                 logger.warning(f"Projected colvars dataframe is empty for {cv_name}. Skipping this CV.")
                 continue

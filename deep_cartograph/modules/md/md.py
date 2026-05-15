@@ -4,16 +4,16 @@ import sys
 import glob
 import logging
 import numpy as np
-import pandas as pd
-from typing import List, Dict, Union, Literal
 from pathlib import Path
+from typing import List, Dict, Union, Literal, Tuple, Optional
 
 import MDAnalysis as mda
 import MDAnalysis.analysis.rms
 import MDAnalysis.analysis.align
 from MDAnalysis.lib.distances import calc_bonds
+from MDAnalysis import transformations as trans
 
-import deep_cartograph.modules.plumed as plumed
+from deep_cartograph.modules.bio import PDBTopologyMapper
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -596,6 +596,8 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
     ------
         features_labels (list): list containing the feature labels.
     """
+    
+    # NOTE: we should check for duplicates between different groups! :) 
 
     features_labels = []
     
@@ -883,7 +885,245 @@ def get_indices(topology: str, selection: Union[str, None] = None) -> list:
 
     return indices
 
+def load_coordinates(
+    topology_file: str, 
+    trajectory_file: str, 
+    selection: str = "all", 
+    prepare_trajectory: bool = False,
+    start: Optional[int] =None,
+    stop: Optional[int] = None,
+    step: Optional[int] = None
+):
+    """
+    Loads a trajectory and returns time and coordinates arrays.
+    
+    Parameters
+    ----------
+    topology_file : str
+        Path to the topology file (pdb, gro, tpr, etc.)
+    trajectory_file : str
+        Path to the trajectory file (xtc, dcd, trr, etc.)
+    selection : str, optional
+        MDAnalysis atom selection string (default "all").
+        Use "name CA" for coarse grain/backbone analysis.
+    prepare_trajectory : bool, optional
+        If True, applies unwrapping and centering transformations to the trajectory. Default is False.
+    start, stop, step : int, optional
+        Slicing parameters for reading the trajectory.
 
+    Returns
+    -------
+    tuple (time_array, coords_array)
+        time_array : np.ndarray
+            Shape (n_frames,). The simulation time for each frame.
+        coords_array : np.ndarray
+            Shape (n_frames, n_atoms, 3). The coordinates array.
+    """
+    
+    # Load Universe
+    u = load_universe(topology_file, trajectory_file, selection, prepare_trajectory)
+
+    # Pre-allocate Arrays
+    # We define the slice of frames we want to read
+    atom_group = u.select_atoms(selection)
+    trajectory_slice = u.trajectory[start:stop:step]
+    n_frames = len(trajectory_slice)
+    n_atoms = len(atom_group)
+        
+    # Shape: (Time, Atoms, Coordinates) -> (N, M, 3)
+    coords_array = np.zeros((n_frames, n_atoms, 3), dtype=np.float32)
+    frame_array = np.zeros(n_frames, dtype=np.float32)
+
+    # Read coordinates
+    for i, _ in enumerate(trajectory_slice):
+        coords_array[i] = atom_group.positions
+        frame_array[i] = float(i)
+
+    return frame_array, coords_array
+
+def load_universe(topology_file: str, 
+                  trajectory_file: str, 
+                  selection: str = "all",
+                  prepare_trajectory: bool = False
+    ) -> mda.Universe:
+    """
+    Loads a MDAnalysis Universe from topology and trajectory files. Applies
+    unwrapping and centering transformations if applicable.
+    
+    Parameters
+    ----------
+    topology_file : str
+        Path to the topology file (pdb, gro, tpr, etc.)
+    trajectory_file : str
+        Path to the trajectory file (xtc, dcd, trr, etc.)
+    selection : str, optional
+        MDAnalysis atom selection string (default "all").
+    prepare_trajectory : bool, optional
+        If True, applies unwrapping and centering transformations to the trajectory. Default is False.
+    Returns
+    -------
+    MDAnalysis.Universe
+        The loaded Universe object.
+    """
+    
+    # Load the Universe
+    try:
+        u = mda.Universe(topology_file, trajectory_file, guess_bonds=True)
+    except Exception as e:
+        logger.error(f"Could not load universe with provided files. Error: {e}")
+    
+    # Select Atoms
+    selected_atom_group = u.select_atoms(selection)
+    if len(selected_atom_group) == 0:
+        logger.error(f"Selection '{selection}' matched 0 atoms.")
+        sys.exit(1)
+        
+    logger.info(f"Loading {len(selected_atom_group)} atoms from {u.trajectory.n_frames} frames.")
+
+    # Trajectory preparation
+    preparation_steps = []
+    
+    if prepare_trajectory:
+        logger.info("Preparing trajectory: applying unwrapping and centering transformations.")
+    
+        # Unwrap trajectory if bonds are present
+        if len(u.bonds) == 0:
+            logger.warning("Topology does not contain bonds. Cannot unwrap trajectory.")
+        else:
+            logger.debug("Topology contains bonds. Unwrapping trajectory.")
+            try:
+                preparation_steps.append(trans.unwrap(selected_atom_group))
+            except Exception as e:
+                logger.warning(f"Could not unwrap trajectory. Error: {e}")
+                logger.warning("Make sure your trajectory has been unwrapped properly.")
+        
+        # Center trajectory if box dimensions are present
+        if u.dimensions is not None:
+            logger.debug("Trajectory contains box dimensions. Centering trajectory.")
+            try:
+                preparation_steps.append(trans.center_in_box(selected_atom_group, wrap=True))
+            except Exception as e:
+                logger.warning(f"Could not center trajectory. Error: {e}")
+                logger.warning("Make sure your trajectory has been centered properly.")
+
+    if preparation_steps:
+        u.trajectory.add_transformations(*preparation_steps)
+    
+    return u
+
+def interpolate_trajectory(
+    topology_file: str,         
+    trajectory_file: str,
+    num_frames: int,
+    keep_original_frames: bool = True,
+    interpolation_method: Optional[Literal['akima', 'pchip']] = 'pchip',
+    noise_std: Optional[float] = None,
+    atom_selection: str = 'all',
+    traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc',
+    prepare_trajectory: bool = False,
+    output_path: str = None,
+    ) -> Tuple[str, str]:
+    """
+    Interpolates a trajectory to a specified number of frames using the given interpolation method.
+    
+    Parameters
+    ----------
+    
+    topology_file : str
+        Path to the topology file (pdb, gro, tpr, etc.)
+    trajectory_file : str
+        Path to the trajectory file (xtc, dcd, trr, etc.)
+    num_frames : int
+        Desired number of frames in the interpolated trajectory.
+    keep_original_frames : bool, optional
+        If True, the original frames are kept and additional frames are interpolated between them.
+        If False, only the interpolated frames are kept. Default is True.
+    interpolation_method : str, optional
+        Interpolation method to use ('akima' or 'pchip'). Default is 'pchip'.
+        Akima looks smoother but pchip avoids oscillations better 
+        when there are abrupt changes in the trajectory. If the interpolation method
+        is None, no interpolation is performed and the original frames are used.
+    noise_std : float, optional
+        Standard deviation of Gaussian noise to add to the interpolated coordinates. Default is None (no noise added).
+    atom_selection : str, optional
+        MDAnalysis atom selection string (default "all").
+    traj_format : str, optional
+        Format of the output trajectory ('xtc', 'dcd', 'nc', 'pdb'). Default is 'xtc'.
+    prepare_trajectory : bool, optional
+        Whether to apply unwrapping and centering transformations to the trajectory. Default is False.
+    output_path : str, optional
+        Path to save the interpolated trajectory. If None, saves in the current directory.
+
+    Returns
+    -------
+    
+    tuple (new_trajectory_path, new_topology_path)
+        new_trajectory_path : str
+            Path to the interpolated trajectory file.
+        new_topology_path : str
+            Path to the topology file for the interpolated trajectory.
+    """ 
+    
+    from scipy.interpolate import Akima1DInterpolator, PchipInterpolator
+    from MDAnalysis.coordinates.memory import MemoryReader
+    
+    # Get the trajectory name without extension
+    traj_name = Path(trajectory_file).stem
+    new_traj_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.{traj_format}")
+    new_top_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.pdb")
+
+    # Check if the output files already exist
+    if os.path.exists(new_traj_path) and os.path.exists(new_top_path):
+        logger.info(f"Interpolated trajectory and topology already exist at {new_traj_path} and {new_top_path}. Skipping interpolation.")
+        return new_traj_path, new_top_path
+        
+    # Load the trajectory using MDAnalysis
+    frames, coords = load_coordinates(topology_file, trajectory_file, atom_selection, prepare_trajectory)
+    
+    # Define new frames
+    if keep_original_frames:
+        # Generate additional frames 
+        additional_frames = np.linspace(frames[0], frames[-1], num_frames - len(frames) + 2)[1:-1]
+        # Merge with original frames and sort - unevenly spaced frames
+        new_frames = np.sort(np.concatenate((frames, additional_frames)))
+    else:
+        # Generate new frames - evenly spaced
+        new_frames = np.linspace(frames[0]+.5, frames[-1]+.5, num_frames)
+    
+    # Interpolate coordinates
+    if interpolation_method == 'akima':
+        interpolator = Akima1DInterpolator(x=frames, y=coords, axis=0, method='makima')
+    elif interpolation_method == 'pchip':
+        interpolator = PchipInterpolator(x=frames, y=coords, axis=0)
+    elif interpolation_method is None:
+        new_coords = coords
+    else:
+        logger.error(f"Interpolation method '{interpolation_method}' not supported. Use 'akima' or 'pchip'.")
+    
+    if interpolation_method is not None:
+        new_coords = interpolator(new_frames)
+    
+    # Add noise if specified
+    if noise_std is not None:
+        noise = np.random.normal(0, noise_std, new_coords.shape)
+        new_coords += noise
+    
+    # Create a matching topology for the selection
+    # Load the original universe to grab the atom information
+    u_orig = mda.Universe(topology_file)
+    selected_atoms = u_orig.select_atoms(atom_selection)
+    # Write just the selected atoms to the new topology PDB
+    selected_atoms.write(new_top_path)
+    
+    # Create a new trajectory file
+    u = mda.Universe(new_top_path)
+    u.load_new(new_coords, format=MemoryReader)
+    with mda.Writer(new_traj_path, n_atoms=u.atoms.n_atoms) as Writer:
+        for ts in u.trajectory:
+            Writer.write(u)
+    
+    return new_traj_path, new_top_path
+    
 # I/O functions
 def find_supported_traj(parent_path, filename = None):
     """
@@ -1033,37 +1273,173 @@ def create_plumed_rmsd_template(
 
     return
 
-# Analysis
-def RMSD(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
+def create_rmsd_waypoint_reference(waypoint_structures: List[str], 
+                                   plumed_topology_path: str, 
+                                   rmsd_restraint_reference_path: str,
+                                   align_waypoint_structures: Optional[bool] = True,
+                                   distance_threshold: Optional[float] = 2.0):
     """
-    Calculate the RMSD of the trajectory with respect to a reference structure.
-
-    Input
-    -----
-        trajectory_path   (str): path to the trajectory file.
-        topology_path     (str): path to the topology file.
-        rmsd_selection    (str): selection of atoms to calculate the RMSD.
-        fitting_selection (str): selection of atoms to fit the trajectory to.
+    Creates a PLUMED-compatible PDB reference for RMSD restraints.
+    Stable CA atoms across waypoints are marked with 1.0 in Occupancy/Beta columns.
+    Stable atoms are defined as those that do not deviate more than 'distance_threshold' Angstroms
+    from the other waypoints after alignment.
+    """
     
-    Output
-    ------
-        rmsd (np.array): array with the RMSD values for each frame.
-    """
+    # 1. Map all waypoints to the PLUMED topology ("Universal Reference" for mapping)
+    mappings = []
+    for wp in waypoint_structures:
+        mapper = PDBTopologyMapper(reference_topology=plumed_topology_path, topology=wp)
+        mappings.append(mapper.mapping)
 
-    # Load trajectory
-    try:
-        u = mda.Universe(topology_path, trajectory_path)
-    except Exception as e:
-        logger.error(f"Error loading trajectory {trajectory_path}. {e}")
-        sys.exit(1)
+    # 2. Find common resids that exist in ALL waypoints AND the PLUMED topology
+    # The keys in mapper.mapping are the resids of the plumed_topology
+    common_plumed_resids = set(mappings[0].keys())
+    for m in mappings[1:]:
+        common_plumed_resids &= set(m.keys())
+    
+    sorted_common_resids = sorted(list(common_plumed_resids))
+    
+    # 3. Load Waypoints into MDAnalysis for alignment
+    wp_universes = [mda.Universe(wp) for wp in waypoint_structures]
+    
+    # Extract coordinates for the common residues (CA atoms)
+    # We need to map the PLUMED resid back to the specific WP resid
+    coords_list = []
+    for i, u in enumerate(wp_universes):
+        wp_mapping = mappings[i]
+        # Get the resids in the current waypoint PDB that correspond to our common set
+        current_wp_resids = [wp_mapping[r][2] for r in sorted_common_resids]
         
-    ref = mda.Universe(topology_path)
+        # Select CA atoms. Note: We use the index-based mapping to ensure correct order
+        selection_string = "resid " + " ".join([str(r) for r in current_wp_resids]) + " and name CA"
+        ca_atoms = u.select_atoms(selection_string)
+        
+        # Safety check: ensure we got the exact same number of atoms
+        if len(ca_atoms) != len(sorted_common_resids):
+            logger.warning(f"Waypoint {waypoint_structures[i]} missing some CA atoms for common residues.")
+        
+        coords_list.append(ca_atoms.positions)
+
+    # 4. Perform Alignment (Conditional)
+    ref_coords = coords_list[0]
+    aligned_coords = [ref_coords]
+
+    if align_waypoint_structures:
+        logger.info("Aligning waypoints to the first structure for stability check...")
+        for i in range(1, len(coords_list)):
+            # Calculate rotation/translation to align coords_list[i] to ref_coords
+            mobile_coords = coords_list[i]
+            R, residue = MDAnalysis.analysis.align.rotation_matrix(mobile_coords, ref_coords)
+            # Apply transformation: (coords - centroid) @ R + ref_centroid
+            aligned = (mobile_coords - mobile_coords.mean(axis=0)) @ R.T + ref_coords.mean(axis=0)
+            aligned_coords.append(aligned)
+    else:
+        logger.info("Skipping alignment (using raw coordinates)...")
+        # Simply append the rest of the coordinates without modification
+        for i in range(1, len(coords_list)):
+            aligned_coords.append(coords_list[i])
+
+    # 5. Compute all pairwise distances between the aligned waypoints for each residue
+    aligned_coords = np.array(aligned_coords)  # Shape: (num_waypoints, num_residues, 3)
+    num_residues = aligned_coords.shape[1]
+    stable_residues = []
     
-    R = MDAnalysis.analysis.rms.RMSD(u, ref, select=fitting_selection, groupselections=[selection]).run()
+    for resid_idx in range(num_residues):
+        # Extract coordinates for this residue across all waypoints
+        residue_coords = aligned_coords[:, resid_idx, :]  # Shape: (num_waypoints, 3)
+        
+        # Compute pairwise distances
+        max_distance = 0.0
+        for i in range(len(residue_coords)):
+            for j in range(i + 1, len(residue_coords)):
+                dist = np.linalg.norm(residue_coords[i] - residue_coords[j])
+                if dist > max_distance:
+                    max_distance = dist
+        
+        # Check if max distance is within threshold
+        if max_distance <= distance_threshold:
+            stable_residues.append(sorted_common_resids[resid_idx])
+
+    # 6. Create the PLUMED Reference PDB
+    # Load the original PLUMED topology
+    plumed_u = mda.Universe(plumed_topology_path)
     
-    rmsd = R.results.rmsd.T[3]
+    # Initialize all Occupancy and B-factors to 0
+    plumed_u.atoms.occupancies = 0.0
+    plumed_u.atoms.tempfactors = 0.0
     
-    return rmsd
+    if stable_residues:
+        # Set 1.0 for CA atoms of the stable common residues
+        final_selection = "resid " + " ".join([str(r) for r in stable_residues]) + " and name CA"
+        target_atoms = plumed_u.select_atoms(final_selection)
+        target_atoms.occupancies = 1.0
+        target_atoms.tempfactors = 1.0
+        logger.info(f"Reference structure created with {len(target_atoms)} active atoms.")
+    else:
+        logger.warning("No stable residues found within the distance threshold!")
+    
+    # Save the file
+    plumed_u.atoms.write(rmsd_restraint_reference_path)
+    logger.info(f"Reference structure created with {len(target_atoms)} active atoms.")
+
+def RMSD(trajectory_path: str, 
+         topology_path: str, 
+         selection: str, 
+         fitting_selection: str, 
+         reference_path: str = None
+    ) -> np.array:
+    
+    u = mda.Universe(topology_path, trajectory_path)
+    ref_structure = reference_path if reference_path else topology_path
+    ref = mda.Universe(ref_structure)
+
+    # 1. Map topologies to get the pairs
+    mapper = PDBTopologyMapper(ref_structure, topology_path)
+    mapping_pairs = [(ref_id, val[2]) for ref_id, val in mapper.mapping.items()]
+
+    if not mapping_pairs:
+        logger.error(f"No common residues found between {ref_structure} and {topology_path}")
+        return np.array([])
+
+    # 2. Build distinct strings for the two different numbering systems
+    ref_res_str = "resid " + " ".join([str(p[0]) for p in mapping_pairs])
+    sim_res_str = "resid " + " ".join([str(p[1]) for p in mapping_pairs])
+
+    # 3. Create Tuples for the RMSD class
+    # Format: (mobile_selection, reference_selection)
+    fit_tuple = (
+        f"({fitting_selection}) and ({sim_res_str})", 
+        f"({fitting_selection}) and ({ref_res_str})"
+    )
+    
+    analysis_tuple = (
+        f"({selection}) and ({sim_res_str})", 
+        f"({selection}) and ({ref_res_str})"
+    )
+    
+    # Check the simulation and reference selections are equal and not empty
+    ref_atoms = ref.select_atoms(analysis_tuple[1])
+    sim_atoms = u.select_atoms(analysis_tuple[0])
+    if len(ref_atoms) == 0 or len(sim_atoms) == 0:
+        logger.error(f"Selections resulted in zero atoms. Please check the selection strings.")
+        return np.array([])
+    if len(ref_atoms) != len(sim_atoms):
+        logger.error(f"Number of atoms in simulation ({len(sim_atoms)}) and reference ({len(ref_atoms)}) selections do not match.")
+        return np.array([])
+
+    # 4. Initialize the RMSD class using the Tuples
+    # 'select' handles the fitting (superposition)
+    # 'groupselections' handles the actual RMSD calculation after fitting
+    R = MDAnalysis.analysis.rms.RMSD(
+        u, 
+        ref, 
+        select=fit_tuple,         # This performs the fit
+        groupselections=[analysis_tuple]  # This calculates the value
+    ).run()
+    
+    # Column 0: Frame, Column 1: Time, Column 2: Fit RMSD, Column 3: Groupselection RMSD
+    # We return Column 3 because it represents the actual requested selection
+    return R.results.rmsd.T[3]
  
 def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
     """

@@ -1,20 +1,16 @@
 from pydantic import BaseModel
-from typing import Union, List
+from typing import Union, Optional
 
 class FilterSettings(BaseModel):
-    
-    # Compute Hartigan's dip test
-    compute_diptest: bool = True
-    # Compute entropy of the features
-    compute_entropy: bool = False
-    # Compute standard deviation of the features
-    compute_std: bool = False
-    # Hartigan's dip test significance level
-    diptest_significance_level: float = 0.05
-    # Entropy quantile to use for filtering (0 to skip filter)
-    entropy_quantile: float = 0.0
-    # Standard deviation quantile to use for filtering (0 to skip filter)
-    std_quantile: float = 0.0
+
+    # Distance threshold to distinguish local contacts (in Angstroms) (None to skip filter)
+    local_distance_threshold: Optional[float] = None
+    # Hartigan's dip test significance level (None to skip filter)
+    diptest_significance_level: Optional[float] = 0.05
+    # Entropy quantile to use for filtering (None to skip filter)
+    entropy_quantile: Optional[float] = None
+    # Standard deviation quantile to use for filtering (None to skip filter)
+    std_quantile: Optional[float] = None
 
 class SamplingSettings(BaseModel):
     

@@ -41,7 +41,9 @@ common:
     stop: null
     stride: 1 
   architecture:
-    encoder: [15, 15]
+    encoder: 
+      layers: [15, 15]
+      dropout: [0.1, 0.1]
   training:
     general:
       max_tries: 10
@@ -49,7 +51,6 @@ common:
       lengths: [0.8, 0.2]
       batch_size: 32
       max_epochs: 1000
-      dropout: 0.1
       shuffle: False
       random_split: False
       check_val_every_n_epoch: 10

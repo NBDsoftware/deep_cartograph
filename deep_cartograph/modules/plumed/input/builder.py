@@ -82,10 +82,14 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
     
     def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
-                 sampling_params: Dict, fit_template_path: Optional[str] = None):
+                 sampling_params: Dict, fit_template_path: Optional[str] = None, 
+                 rmsd_restraint_reference_path: Optional[str] = None, 
+                 rmsd_restraint_k: Optional[float] = None,
+                 rmsd_restraint_eq: Optional[float] = None):
         return super().__init__(plumed_input_path, topology_path, features_list, traj_stride, 
                                 cv_type, cv_params, sampling_method, sampling_params,
-                                fit_template_path)
+                                fit_template_path, rmsd_restraint_reference_path, 
+                                rmsd_restraint_k, rmsd_restraint_eq)
     
     def build(self, colvars_path: str):
         """ 

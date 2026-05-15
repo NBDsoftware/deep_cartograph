@@ -4,7 +4,7 @@ import sys
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Union, Literal, List
+from typing import Dict, Optional, Tuple, Literal, List
 from sklearn.cluster import HDBSCAN
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -109,7 +109,10 @@ def optimize_clustering(features: np.ndarray, settings: Dict):
 
     return cluster_labels, centroids
 
-def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.ndarray = None) -> np.ndarray:
+def cluster_data(features: np.ndarray, 
+                 settings: Dict, 
+                 initial_centroids: np.ndarray = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Cluster the data in features using the clustering settings provided in the settings dictionary.
 
@@ -135,6 +138,8 @@ def cluster_data(features: np.ndarray, settings: Dict, initial_centroids: np.nda
     settings['min_samples'] = settings.get('min_samples',  max(int(0.001 * features.shape[0]), 1)) # 0.1% of the number of samples, at least 1
     settings['cluster_selection_epsilon'] = settings.get('cluster_selection_epsilon', 0)
     settings['linkage'] = settings.get('linkage', 'complete')
+    settings['max_cluster_size'] = settings.get('max_cluster_size')
+    settings['cluster_selection_method'] = settings.get('cluster_selection_method', 'eom')
 
     if settings['algorithm'] == 'kmeans':
         cluster_labels, centroids = kmeans_clustering(features, settings['num_clusters'], settings['n_init'], initial_centroids)
@@ -191,8 +196,12 @@ def kmeans_clustering(feature_matrix: np.ndarray, num_clusters: int, n_init: int
 
     return clusters, centroids
 
-def hdbscan_clustering(feature_matrix: np.array, min_cluster_size: int, max_cluster_size: Union[None, int], 
-                       min_samples: int, cluster_selection_epsilon: float, cluster_selection_method: Literal["eom", "leaf"]
+def hdbscan_clustering(feature_matrix: np.array, 
+                       min_cluster_size: Optional[int] = 5, 
+                       max_cluster_size: Optional[int] = None, 
+                       min_samples: Optional[int] = None, 
+                       cluster_selection_epsilon: Optional[float] = None, 
+                       cluster_selection_method: Literal["eom", "leaf"] = "eom"
                        ) -> Tuple[np.array, np.array]:
     """
     Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
@@ -370,15 +379,16 @@ def find_centroids(data: pd.DataFrame, centroids: np.array, clustering_features:
     return data
 
 # Feature statistics
-def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
+def difference_filter(features_df: pd.DataFrame) -> List[bool]:
     """
-    Function that checks if the variation of each feature between different samples
-    is above a certain threshold. The threshold is fixed and depends on the feature type.
+    Function that checks if the difference of each feature between samples
+    is above a certain fixed threshold that depends on the feature type.
     
-    For sinusoidal features, both the sine and cosine components are considered together to compute the variation.
+    For sinusoidal features, both the sine and cosine components are considered 
+    to compute the variation.
     """
     angle_threshold = np.pi / 8  # 22.5 degrees
-    distance_threshold = 0.5     # 0.5 nm or 5 Angstroms
+    distance_threshold = 0.2     # 0.2 nm or 2 Angstroms
     
     # Check the dataframe is not empty
     if features_df.empty:
@@ -398,15 +408,16 @@ def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
                 sine_timeseries = features_df[name].to_numpy()
                 cosine_timeseries = features_df[cosine_name].to_numpy()
                 
-                # Compute the angle for each sample
-                angles = np.arctan2(sine_timeseries, cosine_timeseries)
+                # Compute the angle for each sample between 0 and 2pi
+                angles = np.arctan2(sine_timeseries, cosine_timeseries) + np.pi  # Shift to [0, 2pi]
                 
                 # Get the maximum difference between all samples in radians
-                delta = np.max(angles) - np.min(angles)
+                delta = np.abs(np.max(angles) - np.min(angles))
             else:
-                logger.warning(f"Cosine component {cosine_name} not found for sine component {name}. Skipping this feature.")
+                logger.warning(f"Cosine component {cosine_name} not found for sine component {name}. Check the compute features step. Skipping this feature.")
                 delta = 10  # Large difference to skip this feature
 
+            # Check if the angle difference is big enough
             results.loc[results['name'] == name, 'above_threshold'] = delta >= angle_threshold
             results.loc[results['name'] == cosine_name, 'above_threshold'] = delta >= angle_threshold
 
@@ -425,6 +436,32 @@ def variance_threshold(features_df: pd.DataFrame) -> List[bool]:
             results.loc[results['name'] == name, 'above_threshold'] = delta >= distance_threshold 
             
     return results['above_threshold'].tolist()
+
+def min_value_filter(features_df: pd.DataFrame, threshold: float) -> List[bool]:
+    """
+    Function that checks if the minimum value of each feature across samples is below a certain threshold.
+    
+    Inputs
+    ------
+
+        features_df:
+            DataFrame with the time series of the features
+        threshold:
+            Minimum value threshold
+
+    Outputs
+    -------
+
+        results:
+            List of booleans indicating if the minimum value of each feature is below the threshold
+    """
+    
+    feature_names = list(features_df.columns)
+    results = []
+    for name in feature_names:
+        min_value = np.min(features_df[name].to_numpy())
+        results.append(min_value <= threshold)
+    return results
     
 
 def shannon_entropy(features_df: pd.DataFrame) -> List[float]:

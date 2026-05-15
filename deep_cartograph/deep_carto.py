@@ -9,6 +9,7 @@ from typing import Dict, List, Literal, Optional
 from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 from deep_cartograph.tools import (
     analyze_geometry,
+    traj_augmentation,
     compute_features,
     filter_features,
     train_colvars,
@@ -30,8 +31,12 @@ from deep_cartograph.modules.common import (
 
 def deep_cartograph(
     configuration: Dict,
-    trajectory_data: str,
-    topology_data: str,
+    trajectory_data: Optional[str] = None,
+    topology_data: Optional[str] = None,
+    validation_trajectory_data: Optional[str] = None,
+    validation_topology_data: Optional[str] = None,
+    seed_trajectory_data: Optional[str] = None,
+    seed_topology_data: Optional[str] = None,
     supplementary_traj_data: Optional[str] = None,
     supplementary_top_data: Optional[str] = None,
     reference_topology: Optional[str] = None,
@@ -57,6 +62,28 @@ def deep_cartograph(
             Path to a topology file or directory with topology files for trajectories.
             - If a single topology file is provided, it is used for all trajectories.
             - If a directory is provided, each topology file must match a trajectory filename.
+            Accepted format: `.pdb`.
+            
+        validation_trajectory_data (str):
+            Path to a trajectory file or directory containing multiple trajectories
+            to use for validating the collective variables during training.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
+        
+        validation_topology_data (str):
+            Path to a topology file or directory with topology files for validation trajectories.
+            - If a single topology file is provided, it is used for all validation trajectories.    
+            - If a directory is provided, each topology file must match a validation trajectory filename.
+            Accepted format: `.pdb`.    
+            
+        seed_trajectory_data (str):
+            Path to a trajectory file or directory containing multiple trajectories
+            to augment using the trajectory augmentation tool.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
+        
+        seed_topology_data (str):
+            Path to a topology file or directory with topology files for seed trajectories.
+            - If a single topology file is provided, it is used for all seed trajectories.
+            - If a directory is provided, each topology file must match a seed trajectory filename.
             Accepted format: `.pdb`.
         
         supplementary_traj_data (Optional[str]): 
@@ -126,13 +153,30 @@ def deep_cartograph(
     # Validate configuration
     configuration = validate_configuration(configuration, DeepCartograph, output_folder)
     
-    # Check main input folders
+    # Check main data
     trajectories, topologies = check_data(trajectory_data, topology_data)
     trajectory_names = [Path(traj).stem for traj in trajectories]
     
+    # Check seed data
+    seed_trajectories, seed_topologies = check_data(seed_trajectory_data, seed_topology_data)
+    trajectory_seed_names = [Path(traj).stem for traj in seed_trajectories]
+
+    if supplementary_traj_data:
+        supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
+    
+    if len(trajectories)+len(seed_trajectories) == 0:
+        logger.error("No trajectory files found in the provided trajectory data paths.")
+        sys.exit(1)
+
     # Set reference topology
     if not reference_topology:
-        reference_topology = topologies[0]
+        if len(topologies) > 0:
+            reference_topology = topologies[0]
+        elif len(seed_topologies) > 0:
+            reference_topology = seed_topologies[0]
+        else:
+            logger.error("No topology files found to set as reference topology.")
+            sys.exit(1)
     elif not os.path.exists(reference_topology):
         logger.error(f"Reference topology file missing: {reference_topology}")
         sys.exit(1)
@@ -143,13 +187,29 @@ def deep_cartograph(
         'configuration': configuration['analyze_geometry'],
         'trajectories': trajectories,
         'topologies': topologies,
+        'ref_topologies': supplementary_tops if supplementary_traj_data else None,
         'output_folder': os.path.join(output_folder, 'analyze_geometry')
     }
     analyze_geometry(**args)
+    
+    # STEP 1: Augment seed trajectories
+    # ---------------------------------
+    args = {
+        'configuration': configuration['traj_augmentation'],
+        'trajectories': seed_trajectories,
+        'topologies': seed_topologies,
+        'output_folder': os.path.join(output_folder, 'traj_augmentation')
+    }
+    augmented_trajs, augmented_tops = traj_augmentation(**args)
 
-    # STEP 1: Compute features
+    # Combine main and augmented seed trajectories
+    trajectories.extend(augmented_trajs)
+    topologies.extend(augmented_tops)
+    trajectory_names.extend(trajectory_seed_names)
+    
+    # STEP 2: Compute features
     # ------------------------
-    # Compute features for all trajectories
+    # Compute features for main trajectories
     args = {
         'configuration': configuration['compute_features'], 
         'trajectories': trajectories, 
@@ -159,9 +219,23 @@ def deep_cartograph(
     }
     traj_colvars_paths = compute_features(**args)
     
+    # Compute features for validation trajectories
+    if validation_trajectory_data:
+        val_trajs, val_tops = check_data(validation_trajectory_data, validation_topology_data)
+        args = {
+            'configuration': configuration['compute_features'], 
+            'trajectories': val_trajs, 
+            'topologies': val_tops, 
+            'reference_topology': reference_topology,
+            'output_folder': os.path.join(output_folder, 'compute_val_features')
+        }
+        validation_colvars_paths = compute_features(**args)
+    else:
+        val_trajs, val_tops = None, None
+        validation_colvars_paths = None
+    
     # Compute features for supplementary data
     if supplementary_traj_data:
-        supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
         sup_trajectory_names = [Path(traj).stem for traj in supplementary_trajs]
         args = {
             'configuration': configuration['compute_features'], 
@@ -180,7 +254,6 @@ def deep_cartograph(
     # Compute features for waypoints data
     if waypoints_data:
         transition_waypoints = find_files(waypoints_data) # NOTE: we should only read files with a certain extension
-        waypoint_names = [Path(top).stem for top in transition_waypoints]
         args = {
             'configuration': configuration['compute_features'],
             'trajectories': transition_waypoints,
@@ -193,7 +266,7 @@ def deep_cartograph(
     else:
         waypoint_colvars_paths = None
         
-    # STEP 2: Filter features
+    # STEP 3: Filter features
     # ------------------------
     args = {
         'configuration': configuration['filter_features'], 
@@ -209,13 +282,18 @@ def deep_cartograph(
     # Read filtered features
     filtered_features = read_features_list(output_features_path)
 
-    # STEP 3: Train colvars
+    # STEP 4: Train colvars
     # ---------------------
     args = {
         'configuration': configuration['train_colvars'],
         'train_colvars_paths': traj_colvars_paths,
         'train_topologies': topologies,
         'trajectory_names': trajectory_names,
+        'val_colvars_paths': validation_colvars_paths,
+        'val_topologies': val_tops,
+        'sup_topologies': supplementary_tops,
+        'sup_traj_names': sup_trajectory_names,
+        'waypoint_structures': transition_waypoints if waypoints_data else None,
         'reference_topology': reference_topology,
         'features_list': filtered_features,
         'dimension': dimension,
@@ -225,8 +303,8 @@ def deep_cartograph(
     }
     trained_cvs_data = train_colvars(**args)
     
-    # STEP 4: Trajectory projection
-    # -----------------------------
+    # STEP 5: Supplementary trajectory projection
+    # -------------------------------------------
     if supplementary_trajs:
         args = { 
             'configuration' : configuration['traj_projection'],
@@ -241,7 +319,7 @@ def deep_cartograph(
     else:
         sup_cvs_data = {}
 
-    # STEP 5: Trajectory clustering
+    # STEP 6: Trajectory clustering
     # -----------------------------
     for cv in trained_cvs_data.keys():
 
@@ -324,18 +402,50 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-traj_data', dest='trajectory_data', required=True,
+        '-traj_data', dest='trajectory_data', required=False,    # NOTE: do they have to be aligned? Specify here
         help=(
-            "Path to trajectory or folder with trajectories to analyze. "
+            "Path to trajectory or folder with trajectories with data to train CVs. "
+            "These trajectories will not be modified before using them to train CVs. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
     parser.add_argument(
-        '-top_data', dest='topology_data', required=True,
+        '-top_data', dest='topology_data', required=False,
         help=(
             "Path to topology or folder with topology files for the trajectories. "
             "If a folder is provided, each topology should have the same name as the "
             "corresponding trajectory in -traj_data. Accepted format: .pdb."
+        )
+    )
+    parser.add_argument(
+        '-val_traj_data', dest='validation_trajectory_data', required=False,
+        help=(
+            "Path to trajectory or folder with trajectories with data to validate CVs during training. "
+            "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
+        )
+    )
+    parser.add_argument(
+        '-val_top_data', dest='validation_topology_data', required=False,
+        help=(
+            "Path to topology or folder with topology files for the validation trajectories. "
+            "If a folder is provided, each topology should have the same name as the "
+            "corresponding trajectory in -val_traj_data. Accepted format: .pdb."
+        )
+    )
+    parser.add_argument(
+        '-seed_traj_data', dest='seed_trajectory_data', required=False,
+        help=(
+            "Path to trajectory or folder with trajectories with data to augment using the trajectory augmentation tool. "
+            "These trajectories will be augmented through interpolation before using them to train CVs. "
+            "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
+        )
+    )
+    parser.add_argument(
+        '-seed_top_data', dest='seed_topology_data', required=False,
+        help=(
+            "Path to topology or folder with topology files for the seed trajectories. "
+            "If a folder is provided, each topology should have the same name as the "
+            "corresponding trajectory in -seed_traj_data. Accepted format: .pdb."
         )
     )
 
@@ -344,7 +454,7 @@ def parse_arguments():
         '-sup_traj_data', dest='supplementary_traj_data', required=False,
         help=(
             "Path to supplementary trajectory or folder with supplementary trajectories. "
-            "Used to project onto the CV alongside 'trajectory_data' but not used for computing CVs."
+            "Used to project onto the CV alongside the training data but not used for computing CVs."
         )
     )
     parser.add_argument(
@@ -421,6 +531,10 @@ def main():
         configuration=configuration,
         trajectory_data=args.trajectory_data,
         topology_data=args.topology_data,
+        validation_trajectory_data=args.validation_trajectory_data,
+        validation_topology_data=args.validation_topology_data,
+        seed_trajectory_data=args.seed_trajectory_data,
+        seed_topology_data=args.seed_topology_data,
         supplementary_traj_data=args.supplementary_traj_data,
         supplementary_top_data=args.supplementary_top_data,
         reference_topology=args.reference_topology,

@@ -19,14 +19,18 @@ class NeuralNetwork(BaseModel):
     # Fully connected hidden layers
     layers: List[int] = [64, 32, 16]
     # Activation function
-    activation: Union[str, List[str]] = "leaky_relu"
+    activation: List[Optional[Literal['relu', 'elu', 'tanh', 'softplus', 'shifted_softplus', 'custom_sigmoid', 'leaky_relu', 'linear']]] = ['leaky_relu', 'leaky_relu', 'leaky_relu']
     # Whether to use batch normalization
-    batchnorm: Union[bool, List[bool]] = False
+    batchnorm: List[bool] = [False, False, False]
     # Value for dropout (if 0.0, no dropout is applied)
-    dropout: Union[Optional[float], List[Optional[float]]] = 0.0
-    # Whether to use activation functions for the last layer
-    last_layer_activation: bool = True
-    
+    dropout: List[Optional[float]] = [None, None, None]
+    # Activation function for the last layer before the output
+    last_layer_activation: Optional[Literal['relu', 'elu', 'tanh', 'softplus', 'shifted_softplus', 'custom_sigmoid', 'leaky_relu', 'linear']] = None
+    # Whether to use batch normalization for the last layer before the output
+    last_layer_batchnorm: bool = False
+    # Value for dropout for the last layer before the output (if 0.0, no dropout is applied)
+    last_layer_dropout: Optional[float] = None
+
 class Architecture(BaseModel):
 
     # Fully connected hidden layers between the input and latent space
@@ -73,9 +77,9 @@ class EarlyStopping(BaseModel):
 
 class KLAnnealing(BaseModel):
     # Type of KL annealing ('linear' or 'cyclical')
-    type: Literal['linear', 'sigmoid', 'cyclical'] = 'cyclical'
-    # Sart value for beta (KL divergence weight)
-    start_beta: float = 0.0
+    type: Literal['linear', 'sigmoid', 'cyclical'] = 'linear'
+    # Start value for beta (KL divergence weight)
+    start_beta: float = 1e-06
     # Maximum value of the KL divergence weight (beta)
     max_beta: float = 0.01
     # Start epoch for the annealing
@@ -94,11 +98,11 @@ class Trainings(BaseModel):
     # Optimizer settings
     optimizer: Optimizer = Optimizer()
     # Learning rate scheduler settings
-    lr_scheduler: Optional[RLScheduler] = RLScheduler()
+    lr_scheduler: Optional[RLScheduler] = None
     # Learning rate scheduler configuration 
     lr_scheduler_config: Optional[dict] = {'interval': 'epoch', 'monitor': 'valid_loss', 'frequency': 1}
     # KL Annealing settings (used only with VAE)
-    kl_annealing: KLAnnealing = KLAnnealing()
+    kl_annealing: Optional[KLAnnealing] = None
     # Wether to save the training and validation losses after training
     save_loss: bool = True
     # Wether to plot the loss after training
@@ -145,6 +149,15 @@ class Bias(BaseModel):
     method: Literal['wt_metadynamics', 'opes_metad', 'opes_metad_explore', 'opes_expanded'] = 'opes_metad'
     # Keyword arguments for the method
     args: BiasArgs = BiasArgs() 
+    # NOTE: this feature is still experimental and not ready for production use 
+    # Additional rmsd restraint to pass through waypoint structures - see waypoint structures 
+    add_rmsd_restraint: bool = False
+    # Wether to align the waypoint structures before computing the distance between atoms or not
+    align_waypoint_structures: bool = True
+    # Force constant for the keep the rigid regions among the waypoints fixed (units: kJ mol^-1 nm^-2)
+    rmsd_restraint_k: float = 5000.0
+    # Equilibrium rmsd above which the restraint is applied (units: nm)
+    rmsd_restraint_eq: float = 0.4
     
 class CommonCollectiveVariable(BaseModel):
 
@@ -152,8 +165,10 @@ class CommonCollectiveVariable(BaseModel):
     dimension: int = 2
     # Lag time for TICA and DeepTICA
     lag_time: int = 1
+    # TICA regularization constant (used only with TICA and DeepTICA)
+    tica_regularization: float = 1.0e-06
     # Features normalization
-    features_normalization: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = 'min_max_range2'
+    features_normalization: Optional[Literal['mean_std', 'min_max_range1', 'min_max_range2']] = None
     # Input colvars
     input_colvars: InputColvars = InputColvars()
     # Architecture settings (used only with NN-based Collective Variables)

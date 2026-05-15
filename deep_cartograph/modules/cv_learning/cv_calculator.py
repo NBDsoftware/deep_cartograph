@@ -1,4 +1,5 @@
 import os
+import copy
 import shutil
 import logging
 import numpy as np
@@ -37,10 +38,10 @@ class CVCalculator:
         """
         
         # Configuration
-        self.configuration: Dict = configuration if configuration is not None else {}
+        self.configuration: Dict = copy.deepcopy(configuration) if configuration is not None else {}
         self.architecture_config: Dict = self.configuration.get('architecture', {})
         self.training_reading_settings: Dict = self.configuration.get('input_colvars', {})
-        self.feats_norm_mode: Literal['mean_std', 'min_max_range1', 'min_max_range2', 'none'] = self.configuration.get('features_normalization', 'none')
+        self.feats_norm_mode: Optional[Literal['mean_std', 'min_max_range1', 'min_max_range2']] = self.configuration.get('features_normalization', None)
         self.bias: Dict = self.configuration.get('bias', {})
 
         # Topologies
@@ -49,13 +50,12 @@ class CVCalculator:
         # Training data
         self.training_data: Optional[pd.DataFrame] = None
         self.training_data_labels: Optional[np.array] = None
+        
+        # Validation data (optional, taken from training data if not provided)
+        self.validation_data: Optional[pd.DataFrame] = None
 
         # Projection data labels
         self.projection_data_labels: Optional[np.array] = None
-        
-        # Number of samples
-        self.num_samples: int = None
-        self.num_training_samples: Union[int, None] = None
     
         # Features
         self.features_ref_labels: List[str] = []
@@ -106,6 +106,10 @@ class CVCalculator:
         from deep_cartograph.modules.common import unzip_files
         import json
 
+        # Check the model path exists
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f'Model file not found: {model_path}')
+        
         # Define a path to unzip the model temporarily
         temp_model_path = os.path.join(output_path, "model")
         unzip_files(model_path, output_path)
@@ -114,6 +118,7 @@ class CVCalculator:
         metadata_path = os.path.join(temp_model_path, 'metadata.json')
         if not os.path.exists(metadata_path):
             logger.error(f'Metadata file not found in the model: {metadata_path}')
+            cv_name = None
         else:
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
@@ -121,6 +126,8 @@ class CVCalculator:
 
         if not cv_name:
             raise ValueError("Could not determine the CV name from the model file.")
+
+        logger.debug(f'Loading CV calculator of type: {cv_name}')
 
         # Look up the correct class from the map
         CalculatorClass = cv_calculators_map.get(cv_name)
@@ -193,6 +200,44 @@ class CVCalculator:
         self.model_output_folder = self.output_path / 'model'
         self.model_output_folder.mkdir(parents=True, exist_ok=True)
 
+    def load_validation_data(self,
+        val_colvars_paths: List[str],
+        val_topology_paths: Optional[List[str]] = None,
+        ref_topology_path: Optional[str] = None,
+        features_list: Optional[List[str]] = None,
+        ):
+        """
+        Loads the validation data from the colvars files
+        
+        Parameters
+        ----------
+        
+        val_colvars_paths 
+            List of paths to colvars files with the main data used for validation
+        val_topology_paths (Optional)
+            List of paths to topology files corresponding to the validation colvars files (same order)
+        ref_topology_path (Optional)
+            Path to the reference topology file. If None, the first topology file is used as reference topology
+        features_list (Optional)
+            List with the features to use for the validation (names from reference topology) or None to use all features in the colvars files
+        """
+        
+        # Topologies
+        if val_topology_paths is not None:
+            if ref_topology_path is None:
+                ref_topology_path = val_topology_paths[0]
+        
+        # Filtered validation data used to validate / compute the CVs
+        logger.info('Reading validation data from colvars files...')
+        self.validation_data = create_dataframe_from_files( 
+            colvars_paths = val_colvars_paths,
+            topology_paths = val_topology_paths,
+            reference_topology = ref_topology_path,   
+            features_list = features_list,  
+            file_label = None,
+            **self.training_reading_settings
+        )
+    
     def load_training_data(self,
         train_colvars_paths: List[str],
         train_topology_paths: Optional[List[str]] = None, 
@@ -207,19 +252,15 @@ class CVCalculator:
 
         train_colvars_paths 
             List of paths to colvars files with the main data used for training
-                
         train_topology_paths (Optional)
             List of paths to topology files corresponding to the training colvars files (same order)
-        
         ref_topology_path (Optional)
             Path to the reference topology file. If None, the first topology file is used as reference topology
-            
         features_list (Optional)
             List with the features to use for the training (names from reference topology) or None to use all features in the colvars files
         """
         
         # Topologies
-        train_topology_paths
         self.ref_topology_path = ref_topology_path
         if train_topology_paths is not None:
             if self.ref_topology_path is None:
@@ -248,10 +289,6 @@ class CVCalculator:
         stats_df = self.training_data.agg(stats).T
         self.features_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         self.features_norm_mean, self.features_norm_range = self.prepare_normalization()
-        
-        # Get the total number of samples
-        self.num_samples = len(self.training_data)
-        logger.info(f'Number of samples: {self.num_samples}')
 
     def cv_ready(self) -> bool:
         """
@@ -293,7 +330,7 @@ class CVCalculator:
             
         # Set the mean and range for the normalization
         # No normalization of input features (not recommended)
-        if self.feats_norm_mode == 'none':
+        if self.feats_norm_mode is None:
             means = np.zeros(len(self.features_stats["mean"]))
             ranges = np.ones(len(self.features_stats["mean"]))
         # Normalized data will have mean 0 and std 1, non-defined range.
@@ -335,6 +372,8 @@ class CVCalculator:
             Projected training data or None if the CV computation failed
         """
         
+        self.create_output_folders()
+        
         # Overwrite the dimension from the configuration if provided
         if cv_dimension:
             self.cv_dimension = cv_dimension
@@ -345,6 +384,7 @@ class CVCalculator:
         self.set_labels()
        
         # If the CV was computed successfully
+        projected_training_data = None
         if self.cv is not None:
             
             self.normalize_cv()
@@ -481,23 +521,37 @@ class CVCalculator:
         
         raise NotImplementedError
 
-    def write_plumed_files(self, topology: str, output_folder: str) -> None:
+    def write_plumed_files(self, 
+                           topology: Optional[str], 
+                           output_folder: str, 
+                           waypoint_structures: Optional[List[str]] = None
+        ) -> None:
         """
         Creates all files needed to compute the collective variable from the features
-        for the given topology using plumed.
+        for the given topology using plumed. If the topology is not given, the creation
+        of the plumed input is skipped.
         
         Parameters
         ----------
-        
-        topology : str
+
+        topology : Optional[str]
             Path to the topology file of the system (used to translate the features)
-            
+
         output_folder : str
             Path to the output folder where the files will be written
+
+        waypoint_structures : Optional[List[str]]
+            List of paths to waypoint structures that serve as guides for the CV. The guide is currently implemented as an 
+            RMSD restraint on those regions of the sequence that do not vary between waypoints. If None, no waypoints are used.
         """
+
+        if topology is None:
+            logger.warning('Topology not provided. Skipping PLUMED files creation.')
+            return
+
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
         from deep_cartograph.modules.features import Translator as FeatureTranslator
-        from deep_cartograph.modules.md import create_plumed_rmsd_template
+        from deep_cartograph.modules.md import create_plumed_rmsd_template, create_rmsd_waypoint_reference
         
         from deep_cartograph.modules.common import zip_files, remove_files
         
@@ -554,13 +608,30 @@ class CVCalculator:
         os.remove(plumed_input_path)
         self.plumed_files.remove(plumed_input_path)
         
+        rmsd_restraint_reference_path = None
+        if self.bias['add_rmsd_restraint']:
+            logger.debug('Creating waypoint RMSD restraint for enhanced sampling plumed input...')
+            if waypoint_structures is not None and len(waypoint_structures) > 0:
+                # Create a reference structure from the waypoints
+                rmsd_restraint_reference_path = os.path.join(output_folder, 'rmsd_restraint_reference.pdb')
+                create_rmsd_waypoint_reference(waypoint_structures, 
+                                               plumed_topology_path, 
+                                               rmsd_restraint_reference_path,
+                                               self.bias['align_waypoint_structures'])
+                self.plumed_files.append(rmsd_restraint_reference_path)
+            else:
+                logger.warning('No waypoint structures provided for RMSD restraint guide. Skipping RMSD restraint.')
+        
         # Build the plumed input file to perform enhanced sampling
         plumed_input_path = os.path.join(output_folder, f'plumed_input_{self.cv_name}_{self.bias["method"]}.dat')
         self.plumed_files.append(plumed_input_path)
         builder_args.update({
             'sampling_method': self.bias["method"], 
             'sampling_params': self.bias["args"],
-            'plumed_input_path': plumed_input_path
+            'plumed_input_path': plumed_input_path,
+            'rmsd_restraint_reference_path': rmsd_restraint_reference_path,
+            'rmsd_restraint_k': self.bias['rmsd_restraint_k'],
+            'rmsd_restraint_eq': self.bias['rmsd_restraint_eq']
         })
         plumed_builder = ComputeEnhancedSamplingBuilder(**builder_args)
         plumed_builder.build(f'{self.cv_name}_{self.bias["method"]}_out.dat')
@@ -891,8 +962,10 @@ class NonLinear(CVCalculator):
         """
         from lightning import LightningModule
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
-        from mlcolvar.utils.trainer import MetricsCallback
+
         from mlcolvar.cvs import AutoEncoderCV, DeepTICA, VariationalAutoEncoderCV
+        from mlcolvar.utils.trainer import MetricsCallback
+        from mlcolvar.data import DictDataset
                 
         super().__init__(
             configuration,
@@ -905,10 +978,12 @@ class NonLinear(CVCalculator):
         }
         
         # Main attributes
-        self.cv: Optional[lightning.LightningModule] = None
+        self.cv: Optional[LightningModule] = None
         self.checkpoint: Optional[ModelCheckpoint] = None
         self.metrics: Optional[MetricsCallback] = None
         self.weights_path: Optional[str] = None
+        self.training_input_dtset: Optional[DictDataset] = None
+        self.validation_input_dtset: Optional[DictDataset] = None
 
         # Training configuration
         self.training_config: Dict = self.configuration.get('training', {})
@@ -923,6 +998,8 @@ class NonLinear(CVCalculator):
         self.max_tries: int = self.general_config.get('max_tries', 5)
         self.seed: int = self.general_config.get('seed', 42)
         self.training_validation_lengths: List = self.general_config.get('lengths', [])
+        self.num_training_samples: Optional[int] = None
+        self.num_validation_samples: Optional[int] = None
         self.batch_size: int = self.general_config.get('batch_size', 32)
         self.shuffle: bool = self.general_config.get('shuffle', True)
         self.random_split: bool = self.general_config.get('random_split', True)
@@ -977,39 +1054,73 @@ class NonLinear(CVCalculator):
         self.cv = torch.jit.load(weights_path)
         self.cv.eval()
 
-    def set_up_last_layer(self):
+    def set_up_encoder_last_layer(self):
+        """ 
+        Sets up the last layer of the encoder based on the user-provided configuration.
         """
-        Sets up the last layer of the decoder based on the normalization of the features.
+    
+        # If CV is VAE, less layers are built using feedforward and the last 
+        # layer is built using a linear mean and variance, see mlcolvar classes
+        if self.cv_name != 'vae':
+
+            # Add dropout to the last layer of the encoder - user defined or default None
+            self.encoder_options['dropout'].append(self.encoder_options['last_layer_dropout'])
+
+            # Add activation function to the last layer of the encoder - user defined or default None
+            self.encoder_options['activation'].append(self.encoder_options['last_layer_activation'])
+            
+            # Add batch normalization to the last layer of the encoder - user defined or default False
+            self.encoder_options['batchnorm'].append(self.encoder_options['last_layer_batchnorm'])
+            
+            # NOTE: We should check which model we are using and if the choices make sense
+        
+        # Remove extra keys that are not part of the arguments of the feedforward class of mlcolvars
+        self.encoder_options.pop('last_layer_activation')
+        self.encoder_options.pop('last_layer_dropout')
+        self.encoder_options.pop('last_layer_batchnorm')
+            
+    def set_up_decoder_last_layer(self):
         """
-        # Add activation function to the last layer of the decoder based on the normalization of the features
-        if isinstance(self.decoder_options.get('activation'), list):
-            # Normalized using min max with range [0, 1] -> use sigmoid activation
-            if self.feats_norm_mode == 'min_max_range1':
-                self.decoder_options['activation'].append('custom_sigmoid')
-            # Normalized using min max with range [-1, 1] -> use tanh activation
-            elif self.feats_norm_mode == 'min_max_range2':
-                self.decoder_options['activation'].append('tanh')
-            # In other cases (mean_std or none), avoid adding an activation function
-            else:
-                self.decoder_options['activation'].append(None)
-        else:
-            logger.warning('''Decoder activation function is a single value, the same activation will be used for all layers. 
-                           Make sure the chosen activation function matches the normalization of the features when doing regression
-                           or choose last_layer_activation = False.''')
+        Sets up the last layer of the decoder based on the user-provided configuration and the features normalization.
+        """
+        # Add activation function to the last layer of the decoder - user defined or default None
+        self.decoder_options['activation'].append(self.decoder_options['last_layer_activation'])
+        self.decoder_options.pop('last_layer_activation')
         
-        # We add a layer to the decoder
+        # Warn the user and correct, if the range of the last activation function 
+        # does not match the normalization of the features
         
-        # No dropout for the last layer of the decoder
-        if isinstance(self.decoder_options['dropout'], list):
-            self.decoder_options['dropout'].append(None)
-        # No batch norm for the last layer of the decoder 
-        if isinstance(self.decoder_options['batchnorm'], list):
-            self.decoder_options['batchnorm'].append(False)
-        elif self.decoder_options['batchnorm'] is True:
-            logger.warning('''Batch normalization is set to True for all layers of the decoder, 
-                           including the last layer. Make sure this is intended or provide a list for batchnorm.''')
-                       
-    def _adjust_lr_scheduler(self, datamodule):
+        # Normalized using min max with range [0, 1] -> should use sigmoid activation
+        if self.feats_norm_mode == 'min_max_range1':
+            if self.decoder_options['activation'][-1] != 'custom_sigmoid':
+                logger.warning(f"""The last layer activation function of the decoder is set to 
+                               {self.decoder_options['activation'][-1]}, but the features are 
+                               normalized using min max with range [0, 1]. Changing the activation 
+                               function to 'sigmoid'.""")
+                self.decoder_options['activation'][-1] = 'custom_sigmoid'
+                
+        # Normalized using min max with range [-1, 1] -> should use tanh activation
+        elif self.feats_norm_mode == 'min_max_range2':
+            if self.decoder_options['activation'][-1] != 'tanh':
+                logger.warning(f"""The last layer activation function of the decoder is set to 
+                               {self.decoder_options['activation'][-1]}, but the features are 
+                               normalized using min max with range [-1, 1]. Changing the activation 
+                               function to 'tanh'.""")
+                self.decoder_options['activation'][-1] = 'tanh'
+        
+        # Add dropout to the last layer of the decoder - should be None in general
+        self.decoder_options['dropout'].append(self.decoder_options['last_layer_dropout'])
+        self.decoder_options.pop('last_layer_dropout')
+        if self.decoder_options['dropout'][-1] is not None:
+            logger.warning("Dropout in the last layer of the decoder is not recommended.")
+    
+        # Add batch normalization to the last layer of the decoder - should be False in general
+        self.decoder_options['batchnorm'].append(self.decoder_options['last_layer_batchnorm'])
+        self.decoder_options.pop('last_layer_batchnorm')
+        if self.decoder_options['batchnorm'][-1]:
+            logger.warning("Batch normalization in the last layer of the decoder is not recommended.")
+
+    def _adjust_lr_scheduler_from_datamodule(self, datamodule):
         """
         Adjusts LR scheduler parameters based on the training configuration.
         This is called right after the datamodule is created.
@@ -1021,17 +1132,37 @@ class NonLinear(CVCalculator):
 
         # Split the data to get the number of samples in the training set
         datamodule.setup(stage='fit')
+        steps_per_epoch = len(datamodule.train_dataloader())
 
-        logger.debug("Adjusting LR Scheduler parameters...") 
+        self.adjust_lr_scheduler(steps_per_epoch)
+    
+    def _adjust_lr_scheduler_from_loader(self, train_loader):
+            """
+            Adjusts LR scheduler parameters based on the training configuration.
+            This is called right after the dataloaders are created.
+            """
+            
+            # Proceed only if a scheduler is defined
+            if self.lr_scheduler is None:
+                return
+            
+            steps_per_epoch = len(train_loader)
+            self.adjust_lr_scheduler(steps_per_epoch)
 
+    def adjust_lr_scheduler(self, steps_per_epoch: int):
+        """
+        Adjusts LR scheduler parameters based on the training configuration.
+        """
+        
         scheduler_name = self.lr_scheduler.get('name', '')
+    
+        logger.debug("Adjusting LR Scheduler parameters...") 
         
         if scheduler_name == 'OneCycleLR':
             
             # Give reasonable default values if not provided in the configuration
             self.cv_options["lr_scheduler"]['max_lr'] = self.cv_options["lr_scheduler"].get('max_lr', 1e-3)
             self.cv_options["lr_scheduler"]['epochs'] = self.cv_options["lr_scheduler"].get('epochs', self.max_epochs)
-            steps_per_epoch = len(datamodule.train_dataloader())
             self.cv_options["lr_scheduler"]['steps_per_epoch'] = self.cv_options["lr_scheduler"].get('steps_per_epoch', steps_per_epoch)
             
             # Adjust the interval from the configuration to 'step'
@@ -1046,6 +1177,25 @@ class NonLinear(CVCalculator):
             # Adjust the interval from the configuration to 'epoch'
             self.cv_options["lr_scheduler_config"]["interval"] = 'epoch'
             
+    def check_num_samples(self):
+        """
+        Check the number of samples in the training and validation sets. 
+        """
+        
+        if self.validation_input_dtset is not None: 
+            # Validation data given separately
+            self.num_validation_samples = len(self.validation_data)
+            self.num_training_samples = len(self.training_data)
+        else:
+            # We extract validation from training data
+            total_samples = len(self.training_data)
+            self.num_training_samples = int(total_samples * self.training_validation_lengths[0])
+            self.num_validation_samples = total_samples - self.num_training_samples
+            
+        # Log the number of samples
+        logger.info(f'Number of training samples: {self.num_training_samples}')
+        logger.info(f'Number of validation samples: {self.num_validation_samples}')
+            
     def check_batch_size(self):
         """  
         Check the batch size is not larger than the number of samples in the training set.
@@ -1054,12 +1204,9 @@ class NonLinear(CVCalculator):
         """
         from deep_cartograph.modules.common import closest_power_of_two
         
-        # Get the number of samples in the training set
-        self.num_training_samples = int(self.num_samples*self.training_validation_lengths[0])
-        
         # Check the batch size is not larger than the number of samples in the training set
         if self.batch_size >= self.num_training_samples:
-            self.batch_size = closest_power_of_two(self.num_samples*self.training_validation_lengths[0])
+            self.batch_size = closest_power_of_two(self.num_training_samples)
             logger.warning(f"""The batch size is larger than the number of samples in the training set. 
                            Setting the batch size to the closest power of two: {self.batch_size}""")
     
@@ -1114,11 +1261,12 @@ class NonLinear(CVCalculator):
         """
         import torch 
         
-        # Set up the last layer of the decoder
-        self.set_up_last_layer()
+        # Set up the last layer for the encoder and decoders
+        self.set_up_encoder_last_layer()
+        self.set_up_decoder_last_layer()
         
         # Normalization of features in the Non-linear models
-        if self.feats_norm_mode == 'none':
+        if self.feats_norm_mode is None:
             self.cv_options = {'norm_in' : None}
         else:
             self.cv_options = {'norm_in' : {'mode' : 'mean_std',
@@ -1211,11 +1359,13 @@ class NonLinear(CVCalculator):
         """
         import torch
         import lightning
-        from mlcolvar.data import DictModule
+        from mlcolvar.data import DictModule, DictLoader
 
         logger.info(f'Training {cv_names_map[self.cv_name]} ...')
         
         self.set_up_cv_options()
+        
+        self.check_num_samples()
         
         self.check_batch_size()
 
@@ -1223,21 +1373,38 @@ class NonLinear(CVCalculator):
         while not training_succeeded and (self.tries < self.max_tries):
             self.tries += 1
             try:
-                # Setup datamodule and model for the current try
-                datamodule = DictModule(
-                    random_split=self.random_split,
-                    dataset=self.training_input_dtset,
-                    lengths=self.training_validation_lengths,
-                    batch_size=self.batch_size,
-                    shuffle=self.shuffle,
-                    generator=torch.manual_seed(self.seed + self.tries)
-                )
-                self._adjust_lr_scheduler(datamodule)
+                
+                # --- DATASET AND DATALOADER SETUP ---
+                if self.validation_input_dtset is not None:
+                    # Validation and training data are given separately
+                    train_loader = DictLoader(self.training_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
+                    val_loader = DictLoader(self.validation_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
+                    
+                    # For LR scheduler adjustment, we pass the loader since we don't have a module
+                    self._adjust_lr_scheduler_from_loader(train_loader)
+                    fit_kwargs = {'train_dataloaders': train_loader, 'val_dataloaders': val_loader}
+                else:
+                    # Validation and training data are given together, split in the datamodule
+                    datamodule = DictModule(
+                        random_split=self.random_split,
+                        dataset=self.training_input_dtset,
+                        lengths=self.training_validation_lengths,
+                        batch_size=self.batch_size,
+                        shuffle=self.shuffle,
+                        generator=torch.manual_seed(self.seed + self.tries)
+                    )
+                    self._adjust_lr_scheduler_from_datamodule(datamodule)
+                    fit_kwargs = {'datamodule': datamodule}
+
+                # --- MODEL SETUP ---
                 model = self.create_model()
+                if self.cv_name == "deep_tica":
+                    model.set_regularization(c0_reg=self.configuration['tica_regularization'])
+                    # model.loss_fn = ReduceEigenvaluesLoss(mode='single2', n_eig=1) NOTE: to explore if needed
                 model.optimizer_name = self.opt_name
                 logger.info(f"Model architecture: {model}")
 
-                # Setup and run trainer
+                # --- TRAINER SETUP AND TRAINING ---
                 trainer = lightning.Trainer(
                     callbacks=self.get_callbacks(),
                     max_epochs=self.max_epochs,
@@ -1247,7 +1414,7 @@ class NonLinear(CVCalculator):
                     check_val_every_n_epoch=self.check_val_every_n_epoch
                 )
                 logger.debug(f'Starting training try {self.tries}/{self.max_tries}...')
-                trainer.fit(model, datamodule)
+                trainer.fit(model, **fit_kwargs)
                 logger.debug(f'Training try {self.tries} completed.')
 
                 # Check if loss has decreased to consider the training a success
@@ -1258,8 +1425,7 @@ class NonLinear(CVCalculator):
 
             except Exception as e:
                 logger.error(f'Training try {self.tries} failed with an exception: {e}')
-                if self.tries < self.max_tries:
-                    logger.info('Retrying...')
+                if self.tries < self.max_tries: logger.info('Retrying...')
 
         if not training_succeeded:
             logger.error(f'{cv_names_map[self.cv_name]} did not converge after {self.max_tries} tries.')
@@ -1400,6 +1566,11 @@ class NonLinear(CVCalculator):
                     'linestyles': ['-', '-'],
                     'yscale': 'log'
                 }
+                
+                # Deep TICA needs linear yscale as loss is negative
+                if self.cv_name == 'deep_tica':
+                    loss_plot_config['yscale'] = 'linear'
+
                 ax = plot_metrics(cpu_metrics, **loss_plot_config)
                 ax.figure.savefig(os.path.join(self.training_output_folder, f'loss.png'), dpi=300, bbox_inches='tight')
                 ax.figure.clf()
@@ -1567,8 +1738,8 @@ class NonLinear(CVCalculator):
                 logger.debug('Model device not found, defaulting to CPU.')
                 self.cv.device = torch.device('cpu')
                 
-            # Move data to the device of the model (GPU or CPU)
-            data_on_model_device = torch.tensor(data.values).to(self.cv.device)
+            # Move data to the device of the model (GPU or CPU) - make sure the data type matches the model
+            data_on_model_device = torch.tensor(data.values, dtype=torch.float32).to(self.cv.device)
             # Project the data onto the CV space
             projected_tensor = self.cv(data_on_model_device)
             
@@ -1589,7 +1760,7 @@ class NonLinear(CVCalculator):
         
         # Compute the sensitivity analysis
         results = sensitivity_analysis(self.cv, self.training_input_dtset, metric="mean_abs_val", 
-                                       feature_names=None, per_class=False, plot_mode=None)
+                                       feature_names=self.features_ref_labels, per_class=False, plot_mode=None)
         
         # Save the sensitivities to a file
         sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
@@ -1619,8 +1790,6 @@ class PCACalculator(LinearCalculator):
             output_path)
         
         self.cv_name = 'pca'
-
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
 
@@ -1659,9 +1828,11 @@ class TICACalculator(LinearCalculator):
             configuration, 
             output_path)
         
-        self.cv_name = 'tica'
+        from mlcolvar.data import DictDataset
         
-        self.create_output_folders()
+        self.training_input_dtset: Optional[DictDataset] = None
+        
+        self.cv_name = 'tica'
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
     
@@ -1715,12 +1886,14 @@ class HTICACalculator(LinearCalculator):
             configuration, 
             output_path)
         
+        from mlcolvar.data import DictDataset
+        
+        self.training_input_dtset: Optional[DictDataset] = None
+        
         self.cv_name = 'htica'
         
         self.num_subspaces = self.configuration.get('num_subspaces')
         self.subspaces_dimension = self.configuration.get('subspaces_dimension')
-        
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
     
@@ -1753,12 +1926,15 @@ class HTICACalculator(LinearCalculator):
         data_tensor = self.training_input_dtset['data']
         data_lag_tensor = self.training_input_dtset['data_lag'] 
         
-        # Split the data tensor into 10 tensors using torch_split
-        data_tensors = torch.split(data_tensor, self.num_features//self.num_subspaces, dim=1)
-        
-        # Split the data lag tensor into 10 tensors using torch_split
-        data_lag_tensors = torch.split(data_lag_tensor, self.num_features//self.num_subspaces, dim=1)
-        
+        # Split the data and data lag tensor into num_subspaces tensors
+        split_size = self.num_features // self.num_subspaces
+        if split_size != 0:
+            data_tensors = torch.split(data_tensor, split_size, dim=1)
+            data_lag_tensors = torch.split(data_lag_tensor, split_size, dim=1)
+        else:
+            logger.error(f'Number of subspaces {self.num_subspaces} is larger than number of features {self.num_features}. Exiting...')
+            return
+
         # Initialize the eigenvectors and eigenvalues
         level_1_eigvecs = []     
         
@@ -1824,15 +2000,7 @@ class AECalculator(NonLinear):
         
         self.cv_name = 'ae'
         
-        self.create_output_folders()
-        
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-        
-        # Add encoder activation and dropout option for last layer if these are lists
-        if isinstance(self.encoder_options.get('dropout'), list):
-            self.encoder_options['dropout'].append(None)
-        if isinstance(self.encoder_options.get('activation'), list):
-            self.encoder_options['activation'].append(None)
 
     def set_up_cv_options(self):
         """ 
@@ -1853,9 +2021,21 @@ class AECalculator(NonLinear):
         
         import torch 
         from mlcolvar.data import DictDataset
+        
         # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.features_ref_labels)
+        train_data_dict = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
+
+    def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
+
+        import torch 
+        from mlcolvar.data import DictDataset
+
+        # Create DictDataset
+        if self.validation_data is not None:
+            val_data_dict = {"data": torch.Tensor(self.validation_data.values)}
+            self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
         
     def set_encoder_layers(self) -> List:
         """ 
@@ -1941,20 +2121,8 @@ class DeepTICACalculator(NonLinear):
             output_path)
         
         self.cv_name = 'deep_tica'
-
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-            
-        # NOTE: In the future we might want to allow for a custom last layer before the latent space
-        # Currently it will be the same as the one for the hidden layers - if not a list
-        # or no activation/dropout is applied to the last layer
-        
-        # Add encoder activation and dropout option for last layer if these are lists
-        if isinstance(self.encoder_options.get('dropout'), list):
-            self.encoder_options['dropout'].append(None)
-        if isinstance(self.encoder_options.get('activation'), list):
-            self.encoder_options['activation'].append(None)
 
     def set_up_cv_options(self):
         """ 
@@ -1972,8 +2140,18 @@ class DeepTICACalculator(NonLinear):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
         from mlcolvar.utils.timelagged import create_timelagged_dataset
+
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
         self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
+    
+    def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
+    
+        from mlcolvar.utils.timelagged import create_timelagged_dataset
+        
+        # Create validation time-lagged dataset
+        if self.validation_data is not None:
+            self.validation_input_dtset = create_timelagged_dataset(self.validation_data, lag_time=self.configuration.get('lag_time'))
 
     def set_encoder_layers(self) -> List:
         """ 
@@ -2065,17 +2243,25 @@ class VAECalculator(NonLinear):
             output_path)
         
         # VAE-specific settings
-        self.kl_annealing_config = self.training_config.get('kl_annealing', {})
-        self.type = self.kl_annealing_config.get('type')
-        self.start_beta = self.kl_annealing_config.get('start_beta')
-        self.max_beta = self.kl_annealing_config.get('max_beta')
-        self.start_epoch = self.kl_annealing_config.get('start_epoch')
-        self.n_cycles = self.kl_annealing_config.get('n_cycles')
-        self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal')
+        self.kl_annealing_config = self.training_config.get('kl_annealing')
+        if self.kl_annealing_config is not None:
+            # User-defined KL annealing settings
+            self.type = self.kl_annealing_config.get('type')
+            self.start_beta = self.kl_annealing_config.get('start_beta')
+            self.max_beta = self.kl_annealing_config.get('max_beta')
+            self.start_epoch = self.kl_annealing_config.get('start_epoch', self.max_epochs // 2)
+            self.n_cycles = self.kl_annealing_config.get('n_cycles')
+            self.n_epochs_anneal = self.kl_annealing_config.get('n_epochs_anneal', self.max_epochs // 4)
+        else:
+            # Reasonable default KL annealing settings
+            self.type = 'sigmoid'
+            self.start_beta = 1e-06                       # Low value to concentrate on reconstruction at the beginning
+            self.max_beta = 0.01                          # Max value that should be adjusted
+            self.start_epoch = self.max_epochs // 2       # Start annealing after 50 % of the total epochs
+            self.n_cycles = 1                             # Won't be used
+            self.n_epochs_anneal = self.max_epochs // 4   # Anneal during 25 % of the total epochs
 
         self.cv_name = 'vae'
-
-        self.create_output_folders()
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
         
@@ -2102,8 +2288,19 @@ class VAECalculator(NonLinear):
         from mlcolvar.data import DictDataset
         
         # Create DictDatase
-        dictionary = {"data": torch.Tensor(self.training_data.values)}
-        self.training_input_dtset = DictDataset(dictionary, feature_names=self.features_ref_labels)
+        train_data_dict = {"data": torch.Tensor(self.training_data.values)}
+        self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
+        
+    def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
+        
+        import torch
+        from mlcolvar.data import DictDataset
+        
+        # Create validation DictDataset
+        val_data_dict = {"data": torch.Tensor(self.validation_data.values)}
+        self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
+            
         
     def set_encoder_layers(self) -> List:
         """ 
@@ -2164,6 +2361,7 @@ class VAECalculator(NonLinear):
             n_cvs=self.cv_dimension,
             encoder_layers=self.encoder_layers, 
             decoder_layers=self.decoder_layers,
+            beta=self.start_beta,
             options=self.cv_options)
          
         return model
@@ -2184,6 +2382,7 @@ class VAECalculator(NonLinear):
         
         general_callbacks = super().get_callbacks()
         
+        # KL annealing callback
         kl_annealing_args = {
             'type': self.type,
             'start_beta': self.start_beta,
@@ -2197,6 +2396,7 @@ class VAECalculator(NonLinear):
         
         # If ReduceLROnPlateau is the scheduler, add our custom manager
         if self.lr_scheduler and self.lr_scheduler.get('name') == 'ReduceLROnPlateau':
+
             # The start epoch should be when the kl annealing finishes + 1/4 of the remaining epochs
             start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal + (self.max_epochs - self.start_epoch - self.n_epochs_anneal)//4
         

@@ -36,7 +36,7 @@ train_colvars:
     architecture:
       encoder: 
         layers: [20, 20]
-        dropout: 0.1
+        dropout: [0.1, 0.1]
     training: 
       general:
         max_tries: 10       

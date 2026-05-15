@@ -185,7 +185,16 @@ class Assembler:
                 logger.error(f"Malformed sin feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.sin(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
+            # Build the commands to compute the sinus
+            torsion_label = feature_label.replace("sin", "tor")
+            sinus_commands = plumed.command.torsion(command_label=torsion_label, 
+                                                    atoms=[entity.replace("_", "-") for entity in entities[1:]])
+            sinus_commands += plumed.command.custom(command_label=feature_label, 
+                                                    expression="sin(x)", 
+                                                    arguments=[torsion_label], 
+                                                    periodic=False)
+            
+            return sinus_commands
         
         elif feat_name == "cos":
             
@@ -194,7 +203,20 @@ class Assembler:
                 logger.error(f"Malformed cos feature label: {feature_label}")
                 sys.exit(1)
             
-            return plumed.command.cos(feature_label, [entity.replace("_", "-") for entity in entities[1:]])
+            # Build the commands to compute the cosinus
+            # Check if torsion command is needed - if there is the equivalent sin feature, it has been already defined
+            torsion_label = feature_label.replace("cos", "tor")
+            if feature_label.replace("cos", "sin") in self.features_list:
+                cosinus_commands = ""
+            else:
+                cosinus_commands = plumed.command.torsion(command_label=torsion_label, 
+                                                         atoms=[entity.replace("_", "-") for entity in entities[1:]])
+            cosinus_commands += plumed.command.custom(command_label=feature_label, 
+                                                    expression="cos(x)", 
+                                                    arguments=[torsion_label], 
+                                                    periodic=False)
+            
+            return cosinus_commands
         
         elif feat_name == "tor":
             
@@ -322,7 +344,7 @@ class CollectiveVariableAssembler(Assembler):
         features_range = self.cv_params['features_norm_range']
         
         # Normalize the input features
-        if features_norm_mode != 'none': 
+        if features_norm_mode is not None: 
             self.input_content += "\n# Normalized features\n"
             normalized_feature_labels = []
             for index, feature in enumerate(self.features_list):
@@ -430,12 +452,19 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
     def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
-                 sampling_params: Dict, fit_template_path: Optional[str] = None):
+                 sampling_params: Dict, fit_template_path: Optional[str] = None,
+                 rmsd_restraint_reference_path: Optional[str] = None,
+                 rmsd_restraint_k: Optional[float] = None,
+                 rmsd_restraint_eq: Optional[float] = None):
         super().__init__(plumed_input_path, topology_path, features_list, traj_stride, 
                          cv_type, cv_params, fit_template_path)
-        self.sampling_method = sampling_method  # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
-        self.sampling_params = sampling_params  # Parameters for the enhanced sampling method
-        self.bias_labels = []  # Labels of the bias potentials
+
+        self.rmsd_restraint_reference_path = rmsd_restraint_reference_path  # Path to RMSD restraint reference structure
+        self.rmsd_restraint_k = rmsd_restraint_k                            # Force constant for RMSD restraint
+        self.rmsd_restraint_eq = rmsd_restraint_eq                          # Equilibrium RMSD for restraint
+        self.sampling_method = sampling_method                              # Type of enhanced sampling (e.g., metadynamics, umbrella sampling)
+        self.sampling_params = sampling_params                              # Parameters for the enhanced sampling method
+        self.bias_labels = []                                               # Labels of the bias potentials
         
     def build(self):
         """Override the base build method to include the enhanced sampling section."""
@@ -460,6 +489,32 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         else:
             raise ValueError(f"Enhanced sampling method {self.sampling_method} not recognized.")
         
+        # Add RMSD restraint if needed
+        self.add_rmsd_restraint()
+    
+    def add_rmsd_restraint(self):
+        """   
+        Add an RMSD restraint to the PLUMED input file if a reference structure is provided.
+        The restrain is added using a RMSD command followed by an UPPER_WALLS command.
+        """
+        
+        if self.rmsd_restraint_reference_path is not None:
+            
+            # Add RMSD calculation command
+            rmsd_label = "rmsd_restraint"
+            self.input_content += "\n# RMSD Restraint\n"
+            self.input_content += plumed.command.rmsd(rmsd_label, os.path.abspath(self.rmsd_restraint_reference_path))
+            
+            # Add UPPER_WALLS command to apply the restraint
+            upper_walls_label = "rmsd_restraint_wall"
+            self.input_content += plumed.command.upper_walls(upper_walls_label,
+                                                             arguments = [rmsd_label],
+                                                             at_eqs = [float(self.rmsd_restraint_eq)], 
+                                                             kappas = [float(self.rmsd_restraint_k)])
+            
+            # Add the RMSD and upper walls labels to the print arguments
+            self.print_args.extend([rmsd_label, upper_walls_label])
+
     def add_wt_metadynamics(self):
         """
         Add well-tempered metadynamics action to the PLUMED input file.
