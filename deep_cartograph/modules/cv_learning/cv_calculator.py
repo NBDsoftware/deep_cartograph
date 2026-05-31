@@ -1411,7 +1411,7 @@ class NonLinear(CVCalculator):
                     logger=False,
                     enable_checkpointing=True,
                     enable_progress_bar=False,
-                    check_val_every_n_epoch=self.check_val_every_n_epoch
+                    check_val_every_n_epoch=self.check_val_every_n_epoch  # We could add gradient_clip_val if needed
                 )
                 logger.debug(f'Starting training try {self.tries}/{self.max_tries}...')
                 trainer.fit(model, **fit_kwargs)
