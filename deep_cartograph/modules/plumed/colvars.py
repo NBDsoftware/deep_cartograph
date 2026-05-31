@@ -396,6 +396,11 @@ def create_dataframe_from_files(
         
         tmp_df = load_dataframe(colvars_paths[file_index], **kwargs)
         
+        # Add a quick sanity check for NaNs
+        if tmp_df.isna().any().any():
+            logger.error(f"NaN values detected in raw data file: {colvars_paths[file_index]}")
+            raise ValueError(f"Clean your data! NaNs found in {colvars_paths[file_index]}")
+        
         # Remove unwanted columns by default
         tmp_df = tmp_df.filter(regex="^(?!.*labels)^(?!.*time)^(?!.*bias)^(?!.*walker)")
         
