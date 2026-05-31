@@ -588,19 +588,29 @@ def generate_colors(num_colors: int, base_colormap: str) -> list:
     
     return colors
 
-def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: str, y_label: str, x_label: str, figure_path: str):
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import Dict
+
+def plot_data(y_data: Dict[str, np.array], 
+              x_data: Dict[str, np.array], 
+              title: str, 
+              y_label: str, 
+              x_label: str, 
+              figure_path: str,
+              font_size: int = 18):
     """
     Plot each array in y_data vs the corresponding array in x_data and save the figure to a file.
     
     Inputs
     ------
-    
-        y_data:     dictionary with the y data to plot
-        x_data:     dictionary with the x values for each y data
-        title:      title of the plot
-        y_label:    label of the y axis
-        x_label:    label of the x axis
+        y_data:      dictionary with the y data to plot
+        x_data:      dictionary with the x values for each y data
+        title:       title of the plot
+        y_label:     label of the y axis
+        x_label:     label of the x axis
         figure_path: path where the figure will be saved 
+        font_size:   font size for title, labels, and ticks (default: 12)
     """
     
     # Create figure
@@ -614,7 +624,6 @@ def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: s
     
     # For each column in data
     for key in y_data.keys():
-        
         # Find the corresponding x data
         x_array = x_data.get(key)
         if x_array is None:
@@ -631,17 +640,24 @@ def plot_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], title: s
     
     # Set axis limits
     ax.set_xlim(min(x_limits), max(x_limits))
-    ax.set_ylim(0, max(y_limits)+max(y_limits)*0.05)
+    ax.set_ylim(0, max(y_limits) + max(y_limits) * 0.05)
+    
+    # --- Formatting Font Sizes ---
     
     # Set axis labels
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
+    ax.set_xlabel(x_label, fontsize=font_size)
+    ax.set_ylabel(y_label, fontsize=font_size)
     
     # Set title
-    ax.set_title(title)
+    ax.set_title(title, fontsize=font_size)
     
-    # Add legend
-    ax.legend()
+    # Set tick parameters (axis numbers)
+    ax.tick_params(axis='both', which='major', labelsize=font_size)
+    
+    # Add legend (optional: added fontsize here too for consistency)
+    #ax.legend(fontsize=font_size)
+    
+    plt.tight_layout()
     
     # Save figure
     fig.savefig(figure_path, dpi=300)

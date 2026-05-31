@@ -22,13 +22,25 @@ class RMSFSettings(RMSSettings):
     
     # Title for the RMSF calculation
     title: str = "Protein Backbone RMSF"
+
+class dRMSDSettings(BaseModel):
     
+    # Title for the dRMSD calculation
+    title: str = "Protein Backbone dRMSD"
+    
+    # Selection of atoms to compute the dRMSD
+    selection: str = "protein and name CA"
+    
+    # Stride for the selection of atoms. Include only every stride-th atom in the selection
+    selection_stride: int = 5
 
 class AnalysisList(BaseModel):
     
     RMSD: Dict[str, RMSDSettings] = {}
     
     RMSF: Dict[str, RMSFSettings] = {}
+    
+    dRMSD: Dict[str, dRMSDSettings] = {}
     
     
 class AnalyzeGeometrySchema(BaseModel):

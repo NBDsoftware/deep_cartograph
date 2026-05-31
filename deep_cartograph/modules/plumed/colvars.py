@@ -117,7 +117,7 @@ def read_features(
             List of paths to the colvars files with the time series data of the features
         
         ref_feature_names:     
-            List of names feature names to read, should be present in all the colvars files
+            List of feature names to read, should be present in all the colvars files
         
         topology_paths:        
             List of paths to the topology files corresponding to the different colvars files 
@@ -140,11 +140,10 @@ def read_features(
     if isinstance(colvars_paths, str):
         colvars_paths = [colvars_paths]
 
+    # Check topology paths and set reference topology
     if topology_paths:
-        # Set reference topology
         if not reference_topology:
             reference_topology = topology_paths[0]
-        # Check there are as many topology files as colvars files
         if len(colvars_paths) != len(topology_paths):
             logger.error(f"Number of topology files does not match the number of colvars files.")
             sys.exit(1)
@@ -190,6 +189,9 @@ def read_features(
             # Read the requested features and samples from the colvar file using pandas
             colvars_df = pd.read_csv(colvars_paths[colvars_index], sep='\s+', dtype=np.float32, comment='#', usecols=selected_feature_names, skiprows= lambda x: x not in stratified_samples, names=all_feature_names)
 
+        # Enforce the selected features order
+        colvars_df = colvars_df[selected_feature_names]
+        
         # Change the column names to the reference names before concatenating
         colvars_df.columns = ref_feature_names
         
