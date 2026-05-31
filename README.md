@@ -13,9 +13,9 @@ Deep cartograph can be used to train different collective variables from simulat
 
 Starting from a trajectory and topology files, Deep cartograph can be used to:
 
-  1. Featurize the trajectory into a lower dimensional space invariant to rotations and translations.
+  1. Featurize the trajectory.
   2. Filter the features.
-  3. Compute and train different collective variables (CVs) using the filtered features.
+  3. Compute and train different collective variables (CVs).
   4. Project and cluster the trajectory in the CV space.
   5. Produce a PLUMED input file to enhance the sampling.
 
