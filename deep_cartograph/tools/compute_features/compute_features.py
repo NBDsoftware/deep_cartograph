@@ -234,7 +234,11 @@ def compute_features(
         need_fit_template = any(feat.startswith("coord") for feat in features_list)
         if need_fit_template:
             fit_template_path = os.path.join(traj_output_folder, "fit_template.pdb")
-            md.create_plumed_rmsd_template(reference_topology, fit_template_path)
+            md.create_plumed_rmsd_template(topology, fit_template_path)
+            logger.warning(f"""This CV is using coordinates as features, 
+                           make sure the topology and trajectory for {top_name} are 
+                           fitted to the rest of topologies.
+                           Otherwise the features computed won't have the same meaning between systems.""")
         else:
             fit_template_path = None
 

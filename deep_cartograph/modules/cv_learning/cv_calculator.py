@@ -582,8 +582,12 @@ class CVCalculator:
         need_fit_template = any(feat.startswith("coord") for feat in features_list)
         if need_fit_template:
             fit_template_path = os.path.join(output_folder, "fit_template.pdb")
-            create_plumed_rmsd_template(self.ref_topology_path, fit_template_path)
+            create_plumed_rmsd_template(topology, fit_template_path)
             self.plumed_files.append(fit_template_path)
+            logger.warning(f"""This CV is using coordinates as features, 
+                           make sure the topology and trajectory for {topology_name} are 
+                           fitted to the rest of topologies.
+                           Otherwise the CV values using this PLUMED input file will not be correct.""")
         else:
             fit_template_path = None
 
