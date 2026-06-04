@@ -4,14 +4,17 @@ import shutil
 import numpy as np
 import logging.config
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 ########
 # TOOL #
 ########
 
-def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: List[str], 
-                     ref_topologies: List[str], output_folder: str = 'analyze_geometry') -> str:
+def analyze_geometry(configuration: Dict, 
+                     trajectories: List[str], 
+                     topologies: List[str], 
+                     ref_topologies: Optional[List[str]], 
+                     output_folder: str = 'analyze_geometry') -> None:
     """
     Function that performs different geometrical analysis of a trajectory using MDAnalysis.
     
@@ -62,7 +65,7 @@ def analyze_geometry(configuration: Dict, trajectories: List[str], topologies: L
     
     if not configuration['run']:
         logger.info("Skipping Analyze Geometry step.")
-        return output_folder
+        return
     
     # Get time step per frame in ns
     dt_per_frame = float(configuration['dt_per_frame'])* 1e-3 
@@ -228,7 +231,7 @@ def main():
         ref_topologies, _ = check_data(args.ref_topology_data, args.ref_topology_data)
 
     # Run Analyze Geometry tool
-    _ = analyze_geometry(
+    analyze_geometry(
         configuration = configuration, 
         trajectories = trajectories,
         topologies = topologies,

@@ -1021,7 +1021,7 @@ def interpolate_trajectory(
     atom_selection: str = 'all',
     traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc',
     prepare_trajectory: bool = False,
-    output_path: str = None,
+    output_path: Optional[str] = None,
     ) -> Tuple[str, str]:
     """
     Interpolates a trajectory to a specified number of frames using the given interpolation method.

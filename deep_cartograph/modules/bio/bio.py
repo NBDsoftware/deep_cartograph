@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, Optional
 
 from Bio import PDB, Align
 from Bio.SeqUtils import seq1
@@ -8,7 +8,7 @@ from Bio.SeqUtils import seq1
 logger = logging.getLogger(__name__)
 
 class PDBTopologyMapper:
-    def __init__(self, reference_topology: str, topology: str):
+    def __init__(self, reference_topology: str, target_topology: str):
         """
         Use biopython to read two PDB files, align their sequences, and store a mapping.
         
@@ -17,33 +17,34 @@ class PDBTopologyMapper:
         
             reference_topology :
                 Path to the reference PDB file.
-            topology :
+            target_topology :
                 Path to the other PDB file.
         """
 
-        # Type hints
         self.ref_sequence: str
         self.ref_resids: List[int]
-        self.ref_residues: List[Tuple[int, str]]
+        self.ref_resnames: List[Tuple[int, str]]
+
         self.sequence: str
         self.resids: List[int]
-        self.residues: List[Tuple[int, str]]
+        self.resnames: List[Tuple[int, str]]
+
         self.alignment: Align.Alignment
         self.mapping: Dict[int, Tuple[str, str, int]]
         
         # Find information per residue of each topology
         self.ref_sequence, self.ref_resids = self.find_residues(reference_topology)
-        self.ref_residues = [(resid, resname) for resid, resname in zip(self.ref_resids, self.ref_sequence)]
+        self.ref_resnames = [(resid, resname) for resid, resname in zip(self.ref_resids, self.ref_sequence)]
 
-        self.sequence, self.resids = self.find_residues(topology)
-        self.residues = [(resid, resname) for resid, resname in zip(self.resids, self.sequence)]
+        self.sequence, self.resids = self.find_residues(target_topology)
+        self.resnames = [(resid, resname) for resid, resname in zip(self.resids, self.sequence)]
 
-        # Align sequences and create mapping between residues in reference topology and the other topology
+        # Align sequences and create mapping between residues in reference topology and the target topology
         self.alignment = self.align_sequences(self.ref_sequence, self.sequence)
         self.mapping = self.get_mapping()
 
     @staticmethod
-    def find_residues(pdb_file: str, chain_id: str = None) -> Tuple[str, List[int]]:
+    def find_residues(pdb_file: str, chain_id: Optional[str] = None) -> Tuple[str, List[int]]:
         """
         Finds the one-letter amino acid sequence and its residue indices from a PDB file.
         
@@ -67,6 +68,9 @@ class PDBTopologyMapper:
     
         structure = parser.get_structure("protein", pdb_file)
         
+        if structure is None:
+            raise ValueError(f"Could not parse PDB file: {pdb_file}")
+
         sequence = []
         indices = []
         model = structure[0]  # Assume first model is relevant
@@ -97,9 +101,9 @@ class PDBTopologyMapper:
         alignments = aligner.align(seq1, seq2)
         return alignments[0]  # Take the best alignment
     
-    def get_mapping(self) -> Dict[int, int]:
+    def get_mapping(self) -> Dict[int, Tuple[str, str, int]]:
         """
-        Creates a mapping from reference residues to other topology residues using the sequence alignment.
+        Creates a mapping from reference residues to target residues using the sequence alignment.
         
         NOTE: this mapping currently only takes into account amino acid residues.
         
@@ -113,11 +117,12 @@ class PDBTopologyMapper:
             }
 
         Where the key is the resid of the reference topology (for quick translation lookup) and
-        the Tuple value is formed by the reference resname, the other topology resname and the other topology resid.
+        the Tuple value is formed by the reference resname, the target topology resname and 
+        the target topology resid.
         """
 
         # Find indices of matching sequence segments (there can be more than one segments if there are mismatches or gaps)
-        # These indices refer to the original sequences (self.ref_sequence and self.residues)
+        # These indices refer to the original sequences (self.ref_sequence and self.resnames)
         reference_segment_indices = self.alignment.aligned[0]
         segment_indices = self.alignment.aligned[1]
 
@@ -125,8 +130,8 @@ class PDBTopologyMapper:
         # For each matching segment
         for reference_indices, indices in zip(reference_segment_indices, segment_indices):
 
-            reference_residues_segment = self.ref_residues[reference_indices[0]:reference_indices[1]]
-            residues_segment = self.residues[indices[0]:indices[1]]
+            reference_residues_segment = self.ref_resnames[reference_indices[0]:reference_indices[1]]
+            residues_segment = self.resnames[indices[0]:indices[1]]
             
             # Save each residue in the matching segment
             for reference_residue, residue in zip(reference_residues_segment, residues_segment):

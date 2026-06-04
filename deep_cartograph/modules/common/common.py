@@ -8,9 +8,10 @@ import numpy as np
 import pandas as pd
 import importlib.util
 from pathlib import Path, PurePath
-from typing import Any, Dict, List, Union, Tuple, Optional
 from pydantic import ValidationError
 from pydantic import BaseModel
+from typing import Any, Dict, List, Union, Tuple, Optional, Type
+
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -191,7 +192,10 @@ def read_configuration(configuration_path: str) -> Dict[str, Any]:
     
     return configuration
 
-def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, output_folder: str) -> Dict[str, Any]:
+def validate_configuration(configuration: Dict[str, Any], 
+                           schema: Type[BaseModel], 
+                           output_folder: str
+                           ) -> Dict[str, Any]:
     """
     Validate the configuration dictionary with the given schema and dump the validated configuration to
     the output folder.
@@ -201,7 +205,7 @@ def validate_configuration(configuration: Dict[str, Any], schema: BaseModel, out
 
     configuration : Dict[str, Any]
         Configuration dictionary
-    schema : BaseModel
+    schema : Type[BaseModel]
         Pydantic schema to validate the configuration
     output_folder : str
         Path to the output folder
@@ -553,7 +557,7 @@ def read_list(path_to_read: str) -> list:
 
     return list_read
 
-def get_unique_path(path: str):
+def get_unique_path(path: str) -> str:
     """
     Returns a unique path. 
     If it exists, it creates a new path with a suffix number.
@@ -599,7 +603,7 @@ def get_unique_path(path: str):
             return path
         
         # If path is a folder
-        elif os.path.isdir(path):
+        else:
 
             # Find the name
             name = pure_path.name

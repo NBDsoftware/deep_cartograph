@@ -59,7 +59,7 @@ class Assembler:
         self.topology_path: str = topology_path
         
         # Path to the reference topology file used by PLUMED (FIT TO TEMPLATE command)
-        self.fit_template_path: str = fit_template_path
+        self.fit_template_path: Optional[str] = fit_template_path
 
         # List of features to be tracked
         self.features_list: List[str] = features_list
@@ -67,7 +67,7 @@ class Assembler:
         # Asses the need for Fit to template (if there are coordinates in the feature list)
         self.fit_to_template_needed: bool = any(feat.startswith("coord") for feat in features_list)
         
-        if self.fit_to_template_needed and not self.fit_template_path:
+        if self.fit_to_template_needed and self.fit_template_path is None:
             logger.error("Features contain coordinates but no fit template path was provided.")
             logger.error("Please provide a fit template path or remove coordinate features.")
             sys.exit(1)

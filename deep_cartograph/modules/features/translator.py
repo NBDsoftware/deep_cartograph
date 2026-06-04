@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Optional
 
 from deep_cartograph.modules.bio import PDBTopologyMapper
 # Set logger
@@ -86,7 +86,7 @@ class Translator:
         
         return translated_features
             
-    def translate_atom(self, atom: str) -> str:
+    def translate_atom(self, atom: str) -> Optional[str]:
         """ 
         Translate atom from the reference topology to the new topology
         
