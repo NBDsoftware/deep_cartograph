@@ -346,10 +346,6 @@ def parse_arguments():
         '-topology', dest='topology', type=str, required=True,
         help="Path to topology file."
     )
-    parser.add_argument(
-        '-colvars', dest='colvars_path', type=str, required=True,
-        help="Path to the output colvars file that the PLUMED input will produce."
-    )
     
     # Optional arguments
     parser.add_argument(
@@ -391,9 +387,8 @@ def main():
     # Run Compute Features tool
     _ = compute_features(
         configuration = configuration, 
-        trajectory = args.trajectory,
-        topology = args.topology,
-        colvars_path = args.colvars_path,
+        trajectories = args.trajectory,
+        topologies = args.topology,
         traj_stride = args.traj_stride,
         output_folder = output_folder)
 
