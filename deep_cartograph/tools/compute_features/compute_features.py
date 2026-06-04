@@ -131,6 +131,11 @@ def compute_features(
     
     logger.debug(f"The reference feature list contains {len(ref_features_list)} features:")
     logger.debug(ref_features_list)
+    
+    # If the reference feature list is empty, exit
+    if len(ref_features_list) == 0:
+        logger.error("The reference feature list is empty. Please check your feature selection and the reference topology. Exiting...")
+        sys.exit(1)
  
     # Find feature names for each topology
     features_lists = []
@@ -154,7 +159,6 @@ def compute_features(
         # Translate features to new topology
         logger.debug(f"Translating features from reference topology {Path(reference_topology).name} to topology {Path(topology).name}")
         features_list = features.Translator(ref_plumed_topology, plumed_topology, ref_features_list).run()
-        features_lists.append(features_list)
         
         if logger.isEnabledFor(logging.DEBUG):
             # Find indices of None values in feature list
@@ -164,6 +168,15 @@ def compute_features(
                 logger.debug(f"There are {len(absent_features)} absent features in {top_name}: {absent_features}")
             else:
                 logger.debug(f"No absent features in {top_name}. All reference features were translated successfully.")
+        
+        # If no features were translated, exit NOTE: we might need to change this to skipping the topology instead of exiting
+        num_translated = sum(feature is not None for feature in features_list)
+        if num_translated == 0:
+            logger.error(f"No features could be translated to topology {top_name}. Please check your feature selection and the topology files. Exiting...")
+            sys.exit(1) 
+        
+        # Append to list of features lists
+        features_lists.append(features_list)
 
     # Keep just the features available in all topologies
     masks = np.array([[x is not None for x in lst] for lst in features_lists])
@@ -184,7 +197,12 @@ def compute_features(
             logger.debug(f"{len(common_features_lists[0])} features were kept")
         else: 
             logger.debug("No features were discarded. All reference features are present in all topologies.")
-        
+    
+    # Check that there are common features to compute
+    if len(common_features_lists[0]) == 0:
+        logger.error("There are no common features to compute. Please check your feature selection and the topology files. Exiting...")
+        sys.exit(1)
+
     # Compute the features for each traj and topology
     colvars_paths = []
     for i in range(len(topologies)):

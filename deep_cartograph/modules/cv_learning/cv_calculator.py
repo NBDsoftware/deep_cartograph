@@ -548,6 +548,8 @@ class CVCalculator:
         if topology is None:
             logger.warning('Topology not provided. Skipping PLUMED files creation.')
             return
+        
+        topology_name = Path(topology).name
 
         from deep_cartograph.modules.plumed.input.builder import ComputeCVBuilder, ComputeEnhancedSamplingBuilder
         from deep_cartograph.modules.features import Translator as FeatureTranslator
@@ -568,6 +570,13 @@ class CVCalculator:
         ref_plumed_topology_path = os.path.join(output_folder, 'ref_plumed_topology.pdb')
         md.create_pdb(self.ref_topology_path, ref_plumed_topology_path)
         features_list = FeatureTranslator(ref_plumed_topology_path, plumed_topology_path, self.features_ref_labels).run()
+        
+        # Check all features were translated successfully
+        if None in features_list:
+            failed_features = [self.features_ref_labels[i] for i, feat in enumerate(features_list) if feat is None]
+            logger.error(f'Failed to translate the following features from the reference topology to the topology {topology_name}: {failed_features}')
+            logger.error('Please check the topologies and the feature list. Skipping PLUMED files creation.')
+            return
         
         # If features contain coordinates, we need to fit the structure to the reference topology
         need_fit_template = any(feat.startswith("coord") for feat in features_list)
