@@ -1,22 +1,26 @@
 import os
 import copy
+import torch
 import shutil
 import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from abc import ABC, abstractmethod
 from scipy.sparse import block_diag
 from sklearn.decomposition import PCA       
-from typing import Dict, List, Tuple, Union, Literal, Optional
+from typing import Dict, List, Tuple, Union, Literal, Optional, Generic, TypeVar
 
 from deep_cartograph.modules.plumed.colvars import create_dataframe_from_files
 import deep_cartograph.modules.md as md
+
+CVType = TypeVar('CVType')
 
 # Set logger
 logger = logging.getLogger(__name__)
 
 # Base class for collective variables calculators
-class CVCalculator:
+class CVCalculator(ABC, Generic[CVType]):
     """
     Base class for collective variables calculators.
     """
@@ -48,11 +52,11 @@ class CVCalculator:
         self.ref_topology_path: Optional[str] = None
         
         # Training data
-        self.training_data: Optional[pd.DataFrame] = None
+        self.training_data: Optional[torch.Tensor] = None
         self.training_data_labels: Optional[np.array] = None
         
         # Validation data (optional, taken from training data if not provided)
-        self.validation_data: Optional[pd.DataFrame] = None
+        self.validation_data: Optional[torch.Tensor] = None
 
         # Projection data labels
         self.projection_data_labels: Optional[np.array] = None
@@ -65,6 +69,7 @@ class CVCalculator:
         self.num_features: int = 0
         
         # General CV attributes
+        self.cv: Optional[CVType] = None
         self.cv_dimension: int = self.configuration.get('dimension')
         self.cv_labels: List[str] = []
         self.cv_name: str = None
@@ -229,7 +234,7 @@ class CVCalculator:
         
         # Filtered validation data used to validate / compute the CVs
         logger.info('Reading validation data from colvars files...')
-        self.validation_data = create_dataframe_from_files( 
+        validation_df = create_dataframe_from_files( 
             colvars_paths = val_colvars_paths,
             topology_paths = val_topology_paths,
             reference_topology = ref_topology_path,   
@@ -237,6 +242,8 @@ class CVCalculator:
             file_label = None,
             **self.training_reading_settings
         )
+        
+        self.validation_data = torch.from_numpy(validation_df.values)
     
     def load_training_data(self,
         train_colvars_paths: List[str],
@@ -268,7 +275,7 @@ class CVCalculator:
         
         # Filtered training data used to train / compute the CVs
         logger.info('Reading training data from colvars files...')    
-        self.training_data = create_dataframe_from_files( 
+        training_df = create_dataframe_from_files( 
             colvars_paths = train_colvars_paths,
             topology_paths = train_topology_paths,
             reference_topology = self.ref_topology_path,   
@@ -277,24 +284,25 @@ class CVCalculator:
             **self.training_reading_settings
         )
         
-        self.training_data_labels = self.training_data.pop('traj_label').to_numpy()
+        self.training_data_labels = training_df.pop('traj_label').to_numpy()
         
         # List of features used for training (features in the colvars files after filtering) 
-        self.features_ref_labels: List[str] = self.training_data.columns.tolist()
+        self.features_ref_labels: List[str] = training_df.columns.tolist()
         self.num_features: int = len(self.features_ref_labels)
         logger.info(f'Number of features: {self.num_features}')
         
         # Compute training data statistics
         stats = ['mean', 'std', 'min', 'max']
-        stats_df = self.training_data.agg(stats).T
+        stats_df = training_df.agg(stats).T
         self.features_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         self.features_norm_mean, self.features_norm_range = self.prepare_normalization()
+        
+        self.training_data = torch.from_numpy(training_df.values)
 
     def cv_ready(self) -> bool:
         """
         Checks if the CV is ready to be used.
         """
-        
         return self.cv is not None
         
     def prepare_normalization(self) -> Tuple[np.array, np.array]:
@@ -372,6 +380,11 @@ class CVCalculator:
             Projected training data or None if the CV computation failed
         """
         
+        # Check there is training data to compute the CV
+        if self.training_data is None:
+            logger.error('Training data not loaded. Cannot compute CV.')
+            return None
+        
         self.create_output_folders()
         
         # Overwrite the dimension from the configuration if provided
@@ -384,27 +397,30 @@ class CVCalculator:
         self.set_labels()
        
         # If the CV was computed successfully
-        projected_training_data = None
+        projection_df = None
         if self.cv is not None:
             
             self.normalize_cv()
 
             # Project the normalized training data onto the CV space
-            projected_training_data = self.project_data(self.training_data, normalize_data=False)
+            projection_tensor = self.project_data(self.training_data, normalize_data=False)
             
             self.save_model()
             
             self.sensitivity_analysis()
+            
+            projection_df = pd.DataFrame(projection_tensor.numpy(), columns=self.cv_labels)
 
-        return projected_training_data
+        return projection_df
         
+    @abstractmethod 
     def compute_cv(self):
         """
         Computes the collective variables. Implement in subclasses.
         """
-        
         raise NotImplementedError
 
+    @abstractmethod
     def save_weights(self, weights_path: str):
         """
         Saves the collective variable to a text file. Implement in subclasses.
@@ -415,7 +431,6 @@ class CVCalculator:
         weights_path : str
             Path to the output file where the weights will be saved
         """
-        
         raise NotImplementedError   
     
     def save_model(self):
@@ -436,28 +451,28 @@ class CVCalculator:
         if self.ref_topology_path is not None:
             md.create_pdb(self.ref_topology_path, os.path.join(self.model_output_folder, 'ref_topology.pdb'))
 
+    @abstractmethod
     def get_cv_parameters(self) -> Dict:
         """
         Returns the parameters for the CV. Implement in subclasses.
         """
-        
         raise NotImplementedError
     
+    @abstractmethod
     def get_cv_type(self) -> str:
         """
         Returns the type of the CV. Implement in subclasses.
         """
-        
         raise NotImplementedError
     
+    @abstractmethod
     def project_data(self, 
-                     data: Optional[pd.DataFrame], 
+                     data: torch.Tensor, 
                      normalize_data: bool = True
-        ) -> Union[pd.DataFrame, None]:
+        ) -> torch.Tensor:
         """
         Projects the data onto the CV space. Implement in subclasses.
         """
-        
         raise NotImplementedError
     
     def project_colvars(self, 
@@ -488,7 +503,7 @@ class CVCalculator:
             return None
 
         # Read the colvars file and translate the features
-        colvars_data = create_dataframe_from_files(
+        colvars_df = create_dataframe_from_files(
             colvars_paths = colvars_paths,
             topology_paths = topology_paths,
             reference_topology = self.ref_topology_path,
@@ -497,11 +512,17 @@ class CVCalculator:
         )
         
         # Extract the trajectory labels
-        self.projection_data_labels = colvars_data.pop('traj_label').to_numpy()
+        self.projection_data_labels = colvars_df.pop('traj_label').to_numpy()
+        
+        # Extract the column names
+        column_names = colvars_df.columns.tolist()
 
         # Project the data onto the CV space
-        projected_data = self.project_data(colvars_data)
+        projected_data = self.project_data(torch.from_numpy(colvars_df.values))
         
+        # Set the cv labels to the projected data
+        projected_data = pd.DataFrame(projected_data.numpy(), columns=self.cv_labels)
+
         return projected_data
         
     def set_labels(self):
@@ -659,6 +680,7 @@ class CVCalculator:
         # Erase the temporary reference topology
         os.remove(ref_plumed_topology_path)
         
+    @abstractmethod
     def sensitivity_analysis(self):
         """
         Perform a sensitivity analysis of the CV on the training data.
@@ -736,37 +758,49 @@ class LinearCalculator(CVCalculator):
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
-        # Normalize the training data
-        self.training_data: pd.DataFrame = self.normalize_data(self.training_data, self.features_norm_mean, self.features_norm_range)
+        if self.training_data is None:
+            logger.error('Training data not loaded. Cannot normalize training data.')
+            raise ValueError('Training data not loaded. Cannot normalize training data.')
+
+        # Normalize the training data in linear models, non-linear ones incorporate normalization in the model itself
+        self.training_data = self.normalize_data(
+            self.training_data, 
+            torch.tensor(self.features_norm_mean, dtype=torch.float32), 
+            torch.tensor(self.features_norm_range, dtype=torch.float32)
+        )
         
     def normalize_data(self, 
-                       data: pd.DataFrame,
-                       normalizing_mean: np.array,
-                       normalizing_range: np.array,
-        ) -> pd.DataFrame:
+                       data: torch.Tensor,
+                       normalizing_mean: torch.Tensor,
+                       normalizing_range: torch.Tensor,
+        ) -> torch.Tensor:
         """
         Use the normalization mean and range to normalize the data.
         
         Parameters
         ----------
         
-        data : pd.DataFrame
+        data : torch.Tensor
             Data to normalize
         
-        normalizing_mean : np.array
+        normalizing_mean : torch.Tensor
             Mean values for normalization
         
-        normalizing_range : np.array
+        normalizing_range : torch.Tensor
             Range values for normalization
             
         Returns
         -------
         
-        normalized_data : pd.DataFrame
+        normalized_data : torch.Tensor
             Normalized data
         """
+        
+        # In-place subtraction and division
+        data.sub_(normalizing_mean)
+        data.div_(normalizing_range)
 
-        return (data - normalizing_mean) / normalizing_range
+        return data
     
     def save_weights(self, weights_path: str):
         """
@@ -778,7 +812,6 @@ class LinearCalculator(CVCalculator):
         weights_path : str
             Path to the output file where the weights will be saved
         """
-        
         if self.cv is None:
             logger.error('CV has not been computed. Cannot save weights.')
             raise ValueError('CV has not been computed. Cannot save weights.')
@@ -846,27 +879,28 @@ class LinearCalculator(CVCalculator):
         return 'linear'
     
     def project_data(self, 
-                     data: Optional[pd.DataFrame], 
+                     data: torch.Tensor, 
                      normalize_data: bool = True
-        ) -> Union[pd.DataFrame, None]:
+        ) -> torch.Tensor:
         """
         Projects the data onto the normalized CV space.
         
         Parameters
         ----------
-        data : pd.DataFrame
+        data : torch.Tensor
             Data to project onto the CV space
 
         normalize_data : bool
-            Whether to normalize the data before projection, not needed when re
+            Whether to normalize the data before projection
 
         Returns
         -------
-        projected_data : pd.DataFrame
-            Projected data or None if the projection fails
+        projected_data : torch.Tensor
+            Projected data
         """
         
         if data is None:
+            logger.debug('No data provided for projection. Returning None.')
             return None
 
         logger.debug(f"Projecting data onto {cv_names_map[self.cv_name]} ...")
@@ -883,9 +917,12 @@ class LinearCalculator(CVCalculator):
                 raise ValueError('Feature normalization parameters have not been computed. Cannot normalize data.')
         
             # Normalize the data
-            data = self.normalize_data(data, self.features_norm_mean, self.features_norm_range)
+            data = self.normalize_data(data, 
+                        torch.tensor(self.features_norm_mean, dtype=torch.float32),
+                        torch.tensor(self.features_norm_range, dtype=torch.float32)
+            )
         
-        projected_data = data @ self.cv
+        projected_data = data @ torch.tensor(self.cv, dtype=torch.float32)
 
         # Check the CV normalization parameters have been computed
         if self.cv_norm_mean is None or self.cv_norm_range is None:
@@ -893,21 +930,27 @@ class LinearCalculator(CVCalculator):
             raise ValueError('CV normalization parameters have not been computed. Cannot normalize projected data.')
         
         # Normalize the projected data
-        projected_data = self.normalize_data(projected_data, self.cv_norm_mean, self.cv_norm_range)
-
-        # Set the cv labels to the projected training data
-        projected_data.columns = self.cv_labels
+        projected_data = self.normalize_data(
+            projected_data, 
+            torch.tensor(self.cv_norm_mean, dtype=torch.float32),
+            torch.tensor(self.cv_norm_range, dtype=torch.float32)
+        )
 
         return projected_data
             
     def normalize_cv(self):
         
+        if self.training_data is None:
+            logger.error('Training data not loaded. Cannot compute CV statistics for normalization.')
+            raise ValueError('Training data not loaded. Cannot compute CV statistics for normalization.')
+
         # Project the normalized training data onto the CV space
-        projected_training_data = pd.DataFrame(self.training_data @ self.cv) # NOTE: is this needed or already a dataframe?
+        projected_tensor = self.training_data @ torch.tensor(self.cv, dtype=torch.float32)
+        projected_training_df = pd.DataFrame(projected_tensor.numpy(), columns=self.cv_labels)
         
         # Compute statistics of the projected training data
         stats = ['min', 'max']
-        stats_df = projected_training_data.agg(stats).T 
+        stats_df = projected_training_df.agg(stats).T 
         self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         
         # Max min normalization between -1 and 1
@@ -1282,9 +1325,11 @@ class NonLinear(CVCalculator):
         if self.feats_norm_mode is None:
             self.cv_options = {'norm_in' : None}
         else:
-            self.cv_options = {'norm_in' : {'mode' : 'mean_std',
-                                            'mean': torch.tensor(self.features_norm_mean),
-                                            'range': torch.tensor(self.features_norm_range)}}
+            self.cv_options = {'norm_in' : 
+                {'mode' : 'mean_std',
+                'mean': torch.tensor(self.features_norm_mean, dtype=torch.float32),
+                'range': torch.tensor(self.features_norm_range, dtype=torch.float32)}
+            }
 
         # Optimizer
         self.opt_name = self.optimizer_config['name']
@@ -1717,23 +1762,29 @@ class NonLinear(CVCalculator):
         return "non-linear"
 
     def project_data(self, 
-                     data: pd.DataFrame,
+                     data: torch.Tensor,
                      normalize_data: bool = True
-                     ) -> pd.DataFrame:
+                     ) -> torch.Tensor:
         """
         Projects the given data onto the CV space.
         
         Parameters
         ----------
         
-        data : pd.DataFrame
-            Data to be projected onto the CV space.
-            
-        normalize_data : bool, optional
-            Whether to normalize the data before projection. This argument is ignored for non-linear CVs,
-            as the normalization is handled within the model itself. Default is True.
+            data : torch.Tensor
+                Data to be projected onto the CV space.
+                
+            normalize_data : bool, optional
+                Whether to normalize the data before projection. 
+                This argument is ignored for non-linear CVs, as the normalization 
+                is handled within the model itself. Default is True.
+        
+        Returns
+        ------- 
+        
+            projected_data : torch.Tensor
+                Data projected onto the CV space.
         """
-        import torch 
         
         if self.cv is None:
             logger.error('No collective variable model to project data.')
@@ -1751,17 +1802,15 @@ class NonLinear(CVCalculator):
                 logger.debug('Model device not found, defaulting to CPU.')
                 self.cv.device = torch.device('cpu')
                 
-            # Move data to the device of the model (GPU or CPU) - make sure the data type matches the model
-            data_on_model_device = torch.tensor(data.values, dtype=torch.float32).to(self.cv.device)
+            # Move data to the device of the model (GPU or CPU)
+            # make sure the data type matches the model
+            data_on_model_device = data.to(self.cv.device)
+
             # Project the data onto the CV space
             projected_tensor = self.cv(data_on_model_device)
             
-        # Move to CPU and convert to numpy array
-        projected_array = projected_tensor.cpu().numpy()
-            
-        projected_data = pd.DataFrame(projected_array, columns=self.cv_labels)   
-        
-        return projected_data  
+        # Move to CPU and return the projected data 
+        return projected_tensor.cpu() 
 
     def sensitivity_analysis(self):
         """  
@@ -1811,11 +1860,15 @@ class PCACalculator(LinearCalculator):
         Compute Principal Component Analysis (PCA) on the input features. 
         """
         
+        if self.training_data is None:
+            logger.error('No training data available to compute PCA.')
+            return
+        
         # Create PCA object
         pca = PCA(n_components=self.cv_dimension)
         
         # Fit the PCA model
-        pca.fit(self.training_data.to_numpy())
+        pca.fit(self.training_data.numpy())
         
         # Save the eigenvectors as CVs
         self.cv = pca.components_.T
@@ -1855,7 +1908,7 @@ class TICACalculator(LinearCalculator):
         from mlcolvar.utils.timelagged import create_timelagged_dataset
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration.get('lag_time'))
+        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
         
     def compute_cv(self):
         """
@@ -1916,9 +1969,7 @@ class HTICACalculator(LinearCalculator):
         from mlcolvar.utils.timelagged import create_timelagged_dataset
         
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        # NOTE: Are we duplicating the data here? :(
-        # NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data.to_numpy(), lag_time=self.configuration.get('lag_time'))
+        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
 
     def compute_cv(self):
         """
@@ -2032,22 +2083,20 @@ class AECalculator(NonLinear):
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
-        import torch 
         from mlcolvar.data import DictDataset
         
-        # Create DictDataset NOTE: we have to find another solution as this will duplicate the data
-        train_data_dict = {"data": torch.Tensor(self.training_data.values)}
+        # Create DictDataset
+        train_data_dict = {"data": self.training_data}
         self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
 
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
 
-        import torch 
         from mlcolvar.data import DictDataset
 
         # Create DictDataset
         if self.validation_data is not None:
-            val_data_dict = {"data": torch.Tensor(self.validation_data.values)}
+            val_data_dict = {"data": self.validation_data}
             self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
         
     def set_encoder_layers(self) -> List:
@@ -2154,7 +2203,7 @@ class DeepTICACalculator(NonLinear):
         
         from mlcolvar.utils.timelagged import create_timelagged_dataset
 
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
     
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
@@ -2296,22 +2345,20 @@ class VAECalculator(NonLinear):
         
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
-
-        import torch 
+ 
         from mlcolvar.data import DictDataset
         
         # Create DictDatase
-        train_data_dict = {"data": torch.Tensor(self.training_data.values)}
+        train_data_dict = {"data": self.training_data}
         self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
         
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
         
-        import torch
         from mlcolvar.data import DictDataset
         
         # Create validation DictDataset
-        val_data_dict = {"data": torch.Tensor(self.validation_data.values)}
+        val_data_dict = {"data": self.validation_data}
         self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
             
         
