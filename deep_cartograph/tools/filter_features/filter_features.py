@@ -58,12 +58,12 @@ def filter_features(
     csv_summary : bool, optional (default: True)
         If `True`, saves a CSV summary with filter values for each collective variable.
 
-    waypoint_topologies : List[str], optional (default: None)
-        List of topologies corresponding to the waypoint colvars files.
-
     topologies : List[str], optional (default: None)
         Topologies corresponding to the colvars files.  
         If provided, they are used to translate feature names to the reference topology.
+
+    waypoint_topologies : List[str], optional (default: None)
+        List of topologies corresponding to the waypoint colvars files.
 
     reference_topology : str, optional (default: None)
         Reference topology for feature name translation.  

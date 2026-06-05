@@ -2,12 +2,12 @@ import os
 import sys
 import time
 import argparse
-import numpy as np
 import logging.config
 from pathlib import Path
 from typing import Dict, Union, List, Optional
 
 from deep_cartograph.yaml_schemas.compute_features import ComputeFeaturesSchema
+from deep_cartograph.modules.features.common import find_common_features
 import deep_cartograph.modules.features as features
 import deep_cartograph.modules.plumed as plumed 
 import deep_cartograph.modules.md as md
@@ -27,6 +27,7 @@ def compute_features(
     trajectories: Union[List[str], str],
     topologies: Union[List[str], str],
     reference_topology: Optional[str] = None,
+    reference_features: Optional[List[str]] = None,
     traj_stride: Optional[int] = None,   
     output_folder: str = "compute_features",
 ) -> List[str]:
@@ -46,18 +47,22 @@ def compute_features(
             Must be in the same order as `trajectories`.
             If a single path is provided as a string, it will be converted to a list.
         
-        reference_topology (Optional[str]): 
+        reference_topology (Optional[str]):
             Path to the reference topology file.
             Used to extract features from user selections.
-            Defaults to the first topology in `topologies`.
+            Defaults to the first topology in `topologies` if not provided. 
             Accepted format: `.pdb`.
             
-        traj_stride (int, optional):
+        reference_features (Optional[List[str]]):
+            List of features to compute in the reference topology
+            If not given they will be extracted from the reference topology using the features configuration
+            
+        traj_stride (Optional[int]):
             Stride for reading the trajectory. Default: 1 (read all frames).
             Note: This parameter is also specified in the configuration file.
             If both are provided, the function argument takes precedence.
         
-        output_folder (str, optional): 
+        output_folder (Optional[str]):
             Path to the output folder where computed features will be stored.
             Default: `"compute_features"`.
 
@@ -110,13 +115,24 @@ def compute_features(
     if not files_exist(*topologies):
         logger.error(f"Topology file missing. Exiting...")
         sys.exit(1)
-        
-    # Set reference topology
-    if not reference_topology:
+    
+    if reference_topology is None:
         reference_topology = topologies[0]
-    elif not os.path.exists(reference_topology):
+        logger.info(f"No reference topology provided. Using the first topology as reference: {reference_topology}")
+
+    if not os.path.exists(reference_topology):
         logger.error(f"Reference topology file missing. Exiting...")
         sys.exit(1)
+        
+    if reference_features is None:
+        args = { 
+            'features_configuration': configuration['plumed_settings']['features'],
+            'topologies': topologies,
+            'reference_topology': reference_topology,
+            'output_folder': os.path.join(output_folder, 'common_features') 
+        }
+        reference_features = find_common_features(**args)
+            
         
     # Enforce trajectory stride from function argument
     if traj_stride:
@@ -125,104 +141,20 @@ def compute_features(
     # Create a reference plumed topology file
     ref_plumed_topology = os.path.join(output_folder, 'ref_topology.pdb')
     md.create_pdb(reference_topology, ref_plumed_topology)
-    
-    # Find list of features to compute from reference topology - user selection of features refers to this topology
-    ref_features_list = md.get_features_list(configuration['plumed_settings']['features'], ref_plumed_topology)
-    
-    logger.debug(f"The reference feature list contains {len(ref_features_list)} features:")
-    logger.debug(ref_features_list)
-    
-    # If the reference feature list is empty, exit
-    if len(ref_features_list) == 0:
-        logger.error("The reference feature list is empty. Please check your feature selection and the reference topology. Exiting...")
-        sys.exit(1)
- 
-    # Find feature names for each topology
-    features_lists = []
-    for i in range(len(topologies)):
-        
-        topology = topologies[i]
-        trajectory = trajectories[i]
-        
-        # Find top and traj names
-        top_name = Path(topology).stem
-        traj_name = Path(trajectory).stem
-        
-        # Create output folder
-        traj_output_folder = os.path.join(output_folder, traj_name)
-        os.makedirs(traj_output_folder, exist_ok=True)
-
-        # Create new topology file
-        plumed_topology = os.path.join(traj_output_folder, 'plumed_topology.pdb')
-        md.create_pdb(topology, plumed_topology)
-        
-        # Translate features to new topology
-        logger.debug(f"Translating features from reference topology {Path(reference_topology).name} to topology {Path(topology).name}")
-        features_list = features.Translator(ref_plumed_topology, plumed_topology, ref_features_list).run()
-        
-        if logger.isEnabledFor(logging.DEBUG):
-            # Find indices of None values in feature list
-            absent_features_idxs = [i for i, feature in enumerate(features_list) if feature is None]
-            absent_features = [ref_features_list[i] for i in absent_features_idxs]
-            if absent_features:
-                logger.debug(f"There are {len(absent_features)} absent features in {top_name}: {absent_features}")
-            else:
-                logger.debug(f"No absent features in {top_name}. All reference features were translated successfully.")
-        
-        # If no features were translated, exit NOTE: we might need to change this to skipping the topology instead of exiting
-        num_translated = sum(feature is not None for feature in features_list)
-        if num_translated == 0:
-            logger.error(f"No features could be translated to topology {top_name}. Please check your feature selection and the topology files. Exiting...")
-            sys.exit(1) 
-        
-        # Append to list of features lists
-        features_lists.append(features_list)
-
-    # Keep just the features available in all topologies
-    masks = np.array([[x is not None for x in lst] for lst in features_lists])
-    mask =  masks.all(axis=0)
-    common_features_lists = [[lst[i] for i in range(len(lst)) if mask[i]] for lst in features_lists]
-    
-    # Check if all common feature lists have the same length
-    if not all(len(lst) == len(common_features_lists[0]) for lst in common_features_lists):
-        logger.error("Feature lists are not the same length, something went wrong when finding common features. Exiting...")
-        sys.exit(1)
-        
-    if logger.isEnabledFor(logging.DEBUG):
-        # Find list of discarded features
-        discarded_features = [ref_features_list[i] for i in range(len(ref_features_list)) if not mask[i]]
-        if len(discarded_features) > 0:
-            logger.debug(f"{len(discarded_features)} features were discarded because they are not present in all topologies:")
-            logger.debug(discarded_features)
-            logger.debug(f"{len(common_features_lists[0])} features were kept")
-        else: 
-            logger.debug("No features were discarded. All reference features are present in all topologies.")
-    
-    # Check that there are common features to compute
-    if len(common_features_lists[0]) == 0:
-        logger.error("There are no common features to compute. Please check your feature selection and the topology files. Exiting...")
-        sys.exit(1)
 
     # Compute the features for each traj and topology
     colvars_paths = []
-    for i in range(len(topologies)):
-
-        topology = topologies[i]
-        trajectory = trajectories[i]
+    for topology, trajectory in zip(topologies, trajectories):
         
         # Find top and traj names
         top_name = Path(topology).stem
         traj_name = Path(trajectory).stem
         
-        features_list = common_features_lists[i]
-        
-        logger.info(f"Computing features for {traj_name} with topology {top_name}...")
-
-        traj_output_folder = os.path.join(output_folder, traj_name)
-
-        plumed_input_path = os.path.join(traj_output_folder, 'plumed_input.dat')
+        traj_output_folder   = os.path.join(output_folder, traj_name)
+        os.makedirs(traj_output_folder, exist_ok=True)
+        plumed_input_path    = os.path.join(traj_output_folder, 'plumed_input.dat')
         plumed_topology_path = os.path.abspath(os.path.join(traj_output_folder, 'plumed_topology.pdb'))
-        colvars_path = os.path.join(traj_output_folder, 'colvars.dat')
+        colvars_path         = os.path.join(traj_output_folder, 'colvars.dat')
         colvars_paths.append(colvars_path)
         
         # Skip if colvars file already exists
@@ -230,6 +162,16 @@ def compute_features(
             logger.info(f"Skipping {top_name}. Colvars file already exists.")
             continue
         
+        md.create_pdb(topology, plumed_topology_path)
+        logger.debug(f"Translating features from reference topology to topology {Path(topology).name}")
+        features_list = features.Translator(ref_plumed_topology, plumed_topology_path, reference_features).run()
+        
+        # Check there are no empty features
+        if None in features_list:
+            raise ValueError(f"Some common reference features could not be translated to topology {top_name}. This should not happen, please check the common features and this topology. Exiting...")
+        
+        logger.info(f"Computing features for {traj_name} with topology {top_name}...")
+
         # If features contain coordinates, we need to fit the structure to the reference topology
         need_fit_template = any(feat.startswith("coord") for feat in features_list)
         if need_fit_template:

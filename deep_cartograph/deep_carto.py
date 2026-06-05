@@ -24,6 +24,7 @@ from deep_cartograph.modules.common import (
     read_features_list,
     read_configuration
 )
+from deep_cartograph.modules.features.common import find_common_features
 
 ########
 # TOOL #
@@ -163,6 +164,12 @@ def deep_cartograph(
 
     if supplementary_traj_data:
         supplementary_trajs, supplementary_tops = check_data(supplementary_traj_data, supplementary_top_data)
+        
+    if validation_trajectory_data:
+        val_trajs, val_tops = check_data(validation_trajectory_data, validation_topology_data)
+    
+    if waypoints_data:
+        transition_waypoints = find_files(waypoints_data)
     
     if len(trajectories)+len(seed_trajectories) == 0:
         logger.error("No trajectory files found in the provided trajectory data paths.")
@@ -207,7 +214,20 @@ def deep_cartograph(
     topologies.extend(augmented_tops)
     trajectory_names.extend(trajectory_seed_names)
     
-    # STEP 2: Compute features
+    # STEP 2.0: Find common features between all topologies
+    # -----------------------------------------------------
+    all_topologies = topologies + (supplementary_tops if supplementary_traj_data else [])
+    all_topologies += val_tops if validation_trajectory_data else []
+    all_topologies += transition_waypoints if waypoints_data else []
+    args = { 
+        'features_configuration': configuration['compute_features']['plumed_settings']['features'],
+        'topologies': all_topologies,
+        'reference_topology': reference_topology,
+        'output_folder': os.path.join(output_folder, 'common_features') 
+    }
+    ref_common_features = find_common_features(**args)
+    
+    # STEP 2.1: Compute features
     # ------------------------
     # Compute features for main trajectories
     args = {
@@ -215,18 +235,19 @@ def deep_cartograph(
         'trajectories': trajectories, 
         'topologies': topologies, 
         'reference_topology': reference_topology,
+        'reference_features': ref_common_features,
         'output_folder': os.path.join(output_folder, 'compute_features')
     }
     traj_colvars_paths = compute_features(**args)
     
     # Compute features for validation trajectories
     if validation_trajectory_data:
-        val_trajs, val_tops = check_data(validation_trajectory_data, validation_topology_data)
         args = {
             'configuration': configuration['compute_features'], 
             'trajectories': val_trajs, 
             'topologies': val_tops, 
             'reference_topology': reference_topology,
+            'reference_features': ref_common_features,
             'output_folder': os.path.join(output_folder, 'compute_val_features')
         }
         validation_colvars_paths = compute_features(**args)
@@ -242,7 +263,8 @@ def deep_cartograph(
             'trajectories': supplementary_trajs, 
             'topologies': supplementary_tops, 
             'reference_topology': reference_topology,
-            'traj_stride': 1,  # Use all frames for supplementary data - typically smaller datasets
+            'reference_features': ref_common_features,
+            'traj_stride': 1,  # Use all frames for sup data - typically smaller datasets
             'output_folder': os.path.join(output_folder, 'compute_ref_features')
         }
         supplementary_colvars_paths = compute_features(**args)
@@ -253,13 +275,13 @@ def deep_cartograph(
         
     # Compute features for waypoints data
     if waypoints_data:
-        transition_waypoints = find_files(waypoints_data) # NOTE: we should only read files with a certain extension
         args = {
             'configuration': configuration['compute_features'],
             'trajectories': transition_waypoints,
             'topologies': transition_waypoints,
             'reference_topology': reference_topology,
-            'traj_stride': 1,  # Use all frames for waypoints data
+            'reference_features': ref_common_features,
+            'traj_stride': 1,  # Use all frames for waypoints data - typically smaller datasets
             'output_folder': os.path.join(output_folder, 'compute_waypoint_features')
         }
         waypoint_colvars_paths = compute_features(**args)

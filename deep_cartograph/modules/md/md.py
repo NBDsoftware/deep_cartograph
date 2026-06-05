@@ -710,6 +710,10 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
     if len(features_labels) == 0:
         raise ValueError("No features found, please check the features section of the configuration file and the topology.")
     
+    # Log reference features list
+    logger.debug(f"The feature list contains {len(features_labels)} features:")
+    logger.debug(features_labels)
+ 
     return features_labels
     
 # Working with trajectories
