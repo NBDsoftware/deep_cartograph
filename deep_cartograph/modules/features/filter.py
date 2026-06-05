@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class Filter:
 
     def __init__(self, 
-                 colvars_paths: List[str], 
                  settings: Dict, 
+                 colvars_paths: List[str], 
                  waypoint_colvars_paths: Optional[List[str]] = None,
                  topologies: Optional[List[str]] = None,
                  waypoint_topologies: Optional[List[str]] = None,
@@ -36,11 +36,11 @@ class Filter:
         Input
         -----
         
-            colvars_paths
-                Path to colvars files with the time series of the features
-                
             settings
                 Filtering options
+
+            colvars_paths
+                Path to colvars files with the time series of the features
             
             waypoint_colvars_paths (Optional)
                 List of paths to colvars files containing the value of the features for intermediate 
