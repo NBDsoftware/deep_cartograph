@@ -2,7 +2,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Union, Optional
 
 import logging
 
@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 # -------------
 #
 # Returns the corresponding PLUMED driver shell command
-def get_driver_command(plumed_input: str, traj_path: str = None, num_atoms: int = None, output_path: str = None) -> str:
+def get_driver_command(
+    plumed_input: str, 
+    traj_path: Optional[str] = None, 
+    num_atoms: Optional[int] = None, 
+    output_path: Optional[str] = None
+    ) -> str:
     '''
     Function that creates a PLUMED DRIVER Shell command. It returns the command as a string
 
@@ -77,7 +82,12 @@ def get_driver_command(plumed_input: str, traj_path: str = None, num_atoms: int 
 
     return driver_command 
 
-def run_plumed(plumed_command: str, working_dir: Union[str, None] = None, plumed_settings: Dict = {}, plumed_timeout: int = 604800) -> None:
+def run_plumed(
+    plumed_command: str, 
+    working_dir: Optional[str] = None, 
+    plumed_settings: Optional[Dict] = {}, 
+    plumed_timeout: Optional[int] = 604800
+    ) -> None:
     """
     Runs PLUMED through command line, setting up the necessary environment variables and modules.
 
