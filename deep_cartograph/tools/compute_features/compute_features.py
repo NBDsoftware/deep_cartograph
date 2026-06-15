@@ -281,12 +281,12 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-trajectory', dest='trajectory', type=str, required=True,
-        help="Path to trajectory file, for which the features are computed."
+        '-trajectory', dest='trajectory', type=str, required=True, nargs='+',
+        help="Path to trajectory files, for which the features are computed."
     )
     parser.add_argument(
-        '-topology', dest='topology', type=str, required=True,
-        help="Path to topology file."
+        '-topology', dest='topology', type=str, required=True, nargs='+',
+        help="Path to topology files."
     )
     
     # Optional arguments

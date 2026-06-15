@@ -260,7 +260,7 @@ def merge_configurations(common_config: Dict, specific_config: Optional[Dict]) -
 
 
 # Features utils
-def read_features_list(features_path: Optional[str]) -> Union[List[str], str]:
+def read_features_list(features_path: Optional[str]) -> Optional[List[str]]:
     """
     Read the feature list to use
 
@@ -273,7 +273,7 @@ def read_features_list(features_path: Optional[str]) -> Union[List[str], str]:
     Returns
     -------
 
-    feature_constraints : Union[List[str], str]
+    feature_constraints : Optional[List[str]]
         List of features to use or regex to select the features
     """
 
@@ -292,33 +292,49 @@ def read_features_list(features_path: Optional[str]) -> Union[List[str], str]:
 
 
 # Input validation
-def find_files(path: str) -> List[str]:
+def find_files(paths: Union[List[str], str]) -> List[str]:
     """
-    Function that finds all files in a folder.
+    Function that finds all files in a path or list of paths. 
+    
+    For each path, if it is a file, it is added to the list. If it is a folder,
+    all the files in the folder are added to the list. If it is a list of paths,
+    all the files in the list are added to the list. 
+    
+    If it is a string, it can be a file path or a folder path.
 
     Inputs
     ------
 
-        path: Path to the folder
+        paths: Paths to files or folders
 
     Returns
     -------
 
         file_paths: List of file paths
     """
+    
+    # If paths is a string, we convert it to a list
+    if isinstance(paths, str):
+        paths = [paths]
 
-    if os.path.isdir(path):
-        # List the files in the folder
-        file_paths = [os.path.join(path, f) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
-    elif os.path.isfile(path):
-        # Single file
-        file_paths = [path]
-    elif not os.path.exists(path):
-        logger.error(f"Path not found: {path}")
-        sys.exit(1)
-    else:
-        logger.error(f"Path should be a file or a folder: {path}")
-        sys.exit(1)
+    file_paths: List[str] = []
+    for path in paths:
+        
+        # Check if the path exists  
+        if not os.path.exists(path):
+            logger.error(f"Path not found: {path}")
+            sys.exit(1)
+        
+        # Check if the path is a file or a folder
+        if os.path.isdir(path):
+            # List the files in the folder
+            file_paths = [os.path.join(path, f) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+        elif os.path.isfile(path):
+            # List single file
+            file_paths = [path]
+        else:
+            logger.error(f"Path should be a file or a folder: {paths}")
+            sys.exit(1)
 
     # Remove any hidden files
     file_paths = [f for f in file_paths if not Path(f).name.startswith('.')]
@@ -328,8 +344,8 @@ def find_files(path: str) -> List[str]:
 
     return file_paths
 
-def check_data(trajectory_data: Optional[str], 
-               topology_data: Optional[str]
+def check_data(trajectory_data: Optional[Union[List[str], str]], 
+               topology_data: Optional[Union[List[str], str]]
     ) -> Tuple[List[str], List[str]]:
     """
     Function that checks the existence of the necessary input data files.
@@ -338,10 +354,10 @@ def check_data(trajectory_data: Optional[str],
     ------
     
     trajectory_data
-        Path to trajectory or folder with trajectories.
+        Path to trajectory, trajectories or folder with trajectories.
         
     topology_data
-        Path to topology or folder with topology files for the trajectories. 
+        Path to topology, topologies or folder with topologies for the trajectories. 
         If a single topology file is provided, it is used for all trajectories.
         If a folder is given, each trajectory should have a corresponding topology file with the same name.
         

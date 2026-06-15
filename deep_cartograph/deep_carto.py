@@ -4,7 +4,7 @@ import time
 import argparse
 import logging.config
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Union
 
 from deep_cartograph.yaml_schemas.deep_cartograph import DeepCartograph
 from deep_cartograph.tools import (
@@ -32,16 +32,16 @@ from deep_cartograph.modules.features.common import find_common_features
 
 def deep_cartograph(
     configuration: Dict,
-    trajectory_data: Optional[str] = None,
-    topology_data: Optional[str] = None,
-    validation_trajectory_data: Optional[str] = None,
-    validation_topology_data: Optional[str] = None,
-    seed_trajectory_data: Optional[str] = None,
-    seed_topology_data: Optional[str] = None,
-    supplementary_traj_data: Optional[str] = None,
-    supplementary_top_data: Optional[str] = None,
+    trajectory_data: Optional[Union[List[str], str]] = None,
+    topology_data: Optional[Union[List[str], str]] = None,
+    validation_trajectory_data: Optional[Union[List[str], str]] = None,
+    validation_topology_data: Optional[Union[List[str], str]] = None,
+    seed_trajectory_data: Optional[Union[List[str], str]] = None,
+    seed_topology_data: Optional[Union[List[str], str]] = None,
+    supplementary_traj_data: Optional[Union[List[str], str]] = None,
+    supplementary_top_data: Optional[Union[List[str], str]] = None,
     reference_topology: Optional[str] = None,
-    waypoints_data: Optional[str] = None,
+    waypoints_data: Optional[Union[List[str], str]] = None,
     dimension: Optional[int] = None,
     cvs: Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]] = None,
     restart: bool = False,
@@ -424,48 +424,50 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-traj_data', dest='trajectory_data', required=False,    # NOTE: do they have to be aligned? Specify here
+        '-traj_data', dest='trajectory_data', required=False, nargs='+',
         help=(
-            "Path to trajectory or folder with trajectories with data to train CVs. "
+            "List of trajectory paths or path to folder with trajectories with data to train CVs. "
             "These trajectories will not be modified before using them to train CVs. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
     parser.add_argument(
-        '-top_data', dest='topology_data', required=False,
+        '-top_data', dest='topology_data', required=False, nargs='+',
         help=(
-            "Path to topology or folder with topology files for the trajectories. "
+            "List of topology paths or path to folder with topologies for the trajectories. "
             "If a folder is provided, each topology should have the same name as the "
-            "corresponding trajectory in -traj_data. Accepted format: .pdb."
+            "corresponding trajectory in -traj_data. If a single topology file is provided, it will be used for all trajectories. "
+            "Accepted format: .pdb."
         )
     )
     parser.add_argument(
-        '-val_traj_data', dest='validation_trajectory_data', required=False,
+        '-val_traj_data', dest='validation_trajectory_data', required=False, nargs='+',
         help=(
-            "Path to trajectory or folder with trajectories with data to validate CVs during training. "
+            "List of trajectory paths or path to folder with trajectories with data to validate CVs during training. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
     parser.add_argument(
-        '-val_top_data', dest='validation_topology_data', required=False,
+        '-val_top_data', dest='validation_topology_data', required=False, nargs='+',
         help=(
-            "Path to topology or folder with topology files for the validation trajectories. "
+            "List of topology paths or path to folder with topologies for the validation trajectories. "
             "If a folder is provided, each topology should have the same name as the "
-            "corresponding trajectory in -val_traj_data. Accepted format: .pdb."
+            "corresponding trajectory in -val_traj_data. If a single topology file is provided, it will be used for all validation trajectories. "
+            "Accepted format: .pdb."
         )
     )
     parser.add_argument(
-        '-seed_traj_data', dest='seed_trajectory_data', required=False,
+        '-seed_traj_data', dest='seed_trajectory_data', required=False, nargs='+',
         help=(
-            "Path to trajectory or folder with trajectories with data to augment using the trajectory augmentation tool. "
+            "List of trajectory paths or path to folder with trajectories with data to augment using the trajectory augmentation tool. "
             "These trajectories will be augmented through interpolation before using them to train CVs. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
     parser.add_argument(
-        '-seed_top_data', dest='seed_topology_data', required=False,
+        '-seed_top_data', dest='seed_topology_data', required=False, nargs='+',
         help=(
-            "Path to topology or folder with topology files for the seed trajectories. "
+            "List of topology paths or path to folder with topologies for the seed trajectories. "
             "If a folder is provided, each topology should have the same name as the "
             "corresponding trajectory in -seed_traj_data. Accepted format: .pdb."
         )
@@ -473,16 +475,16 @@ def parse_arguments():
 
     # Optional input files
     parser.add_argument(
-        '-sup_traj_data', dest='supplementary_traj_data', required=False,
+        '-sup_traj_data', dest='supplementary_traj_data', required=False, nargs='+',
         help=(
-            "Path to supplementary trajectory or folder with supplementary trajectories. "
+            "List of supplementary trajectory paths or path to folder with supplementary trajectories. "
             "Used to project onto the CV alongside the training data but not used for computing CVs."
         )
     )
     parser.add_argument(
-        '-sup_top_data', dest='supplementary_top_data', required=False,
+        '-sup_top_data', dest='supplementary_top_data', required=False, nargs='+',
         help=(
-            "Path to supplementary topology or folder with supplementary topologies. "
+            "List of supplementary topology paths or folder with supplementary topologies. "
             "If a folder is provided, each topology should match the corresponding "
             "supplementary trajectory in -sup_traj_data."
         )
@@ -495,7 +497,7 @@ def parse_arguments():
         )
     )
     parser.add_argument(
-        '-waypoints_data', dest='waypoints_data', type=str, required=False,
+        '-waypoints_data', dest='waypoints_data', type=str, required=False, nargs='+',
         help="""Path to the folder containing intermediate conformations that define the transition of interest. If given,
         features that do not change their value across these structures will be filtered out."""
     )
