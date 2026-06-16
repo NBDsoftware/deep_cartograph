@@ -386,7 +386,12 @@ def difference_filter(features_df: pd.DataFrame) -> List[bool]:
     
     For sinusoidal features, both the sine and cosine components are considered 
     to compute the variation.
+    
+    For coordinate features the distance is computed using the euclidean distance between 
+    the coordinates of the atoms. 
     """
+    from scipy.spatial import distance_matrix
+    
     angle_threshold = np.pi / 8  # 22.5 degrees
     distance_threshold = 0.2     # 0.2 nm or 2 Angstroms
     
@@ -395,14 +400,22 @@ def difference_filter(features_df: pd.DataFrame) -> List[bool]:
         logger.warning("Features dataframe is empty. Returning empty list.")
         return []
     
+    atoms_touched = set()  # Keep track of atoms already processed for coordinate features
+    
     feature_names = list(features_df.columns)
     results = pd.DataFrame(columns=['name', 'above_threshold'])
     results['name'] = feature_names
     for name in feature_names:
         
-        if 'sin_' in name:
+        feature_parts = name.split('-')
+        if not len(feature_parts) > 1:
+            logger.error(f"Feature name {name} does not contain a '-' character. Skipping this feature.")
+            continue
+        feature_type = feature_parts[0]
+        
+        if 'sin' == feature_type:
             # Deal here with sin/cosine features
-            cosine_name = name.replace('sin_', 'cos_')
+            cosine_name = name.replace('sin', 'cos')
             if cosine_name in feature_names:
                 # Get the samples for the sine and cosine components
                 sine_timeseries = features_df[name].to_numpy()
@@ -421,14 +434,48 @@ def difference_filter(features_df: pd.DataFrame) -> List[bool]:
             results.loc[results['name'] == name, 'above_threshold'] = delta >= angle_threshold
             results.loc[results['name'] == cosine_name, 'above_threshold'] = delta >= angle_threshold
 
-        elif 'cos_' in name:
+        elif 'cos' == feature_type:
             continue  # Skip cosine components, they are handled with the sine components 
         
-        elif 'tor' in name:
+        elif 'tor' == feature_type:
             # Deal here with torsion angles
             torsion_timeseries = features_df[name].to_numpy()
             delta = np.max(torsion_timeseries) - np.min(torsion_timeseries)
             results.loc[results['name'] == name, 'above_threshold'] = delta >= angle_threshold
+        elif 'coord' == feature_type:
+            # Deal here with coordinates
+            coordinate_definition = feature_parts[1].split('.')
+            atom_definition = coordinate_definition[0]
+            
+            # Do this once for each atom
+            if atom_definition not in atoms_touched:
+                atoms_touched.add(atom_definition)
+                
+                # Get the names for the x, y, z coordinate features of the atom
+                x_name = f"coord-{atom_definition}.x"
+                y_name = f"coord-{atom_definition}.y"
+                z_name = f"coord-{atom_definition}.z"
+                
+                # For each axis, get the time series or add a zero array if the axis is not present
+                x_timeseries = features_df[x_name].to_numpy() if x_name in feature_names else np.zeros(features_df.shape[0])
+                y_timeseries = features_df[y_name].to_numpy() if y_name in feature_names else np.zeros(features_df.shape[0])
+                z_timeseries = features_df[z_name].to_numpy() if z_name in feature_names else np.zeros(features_df.shape[0])
+                
+                # Construct the matrix of (x, y, z) coordinates for each sample
+                coordinates = np.vstack((x_timeseries, y_timeseries, z_timeseries)).T
+                
+                # Compute the pairwise distance matrix between all samples
+                dist_matrix = distance_matrix(coordinates, coordinates)
+                
+                # Get the maximum distance between all samples
+                delta = np.max(dist_matrix)
+                
+                # Check if the distance is big enough
+                is_big_enough = delta >= distance_threshold
+                results.loc[results['name'] == x_name, 'above_threshold'] = is_big_enough
+                results.loc[results['name'] == y_name, 'above_threshold'] = is_big_enough
+                results.loc[results['name'] == z_name, 'above_threshold'] = is_big_enough
+                 
         else:
             # Deal with other features
             feature_timeseries = features_df[name].to_numpy()

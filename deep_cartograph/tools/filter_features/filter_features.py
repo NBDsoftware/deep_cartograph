@@ -89,6 +89,7 @@ def filter_features(
     logger.info("- Hartigan's dip test filter. Keeps features that are not unimodal.")
     logger.info("- Shannon entropy filter. Keeps features with entropy greater than a threshold.")
     logger.info("- Standard deviation filter. Keeps features with standard deviation greater than a threshold.")
+    logger.info("- Waypoint filter. Keeps features that change their value across the waypoint structures.")
     logger.info("Note that the all features must be in the same units to apply the entropy and standard deviation filters meaningfully.")
 
     # Start timer
