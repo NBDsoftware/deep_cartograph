@@ -668,7 +668,7 @@ def plot_data(y_data: Dict[str, np.array],
     return
 
 def plot_sensitivity_results(results: Dict[str, np.array], 
-                             modes: Literal['barh', 'violin', 'scatter'], 
+                             modes: List[Literal['barh', 'violin', 'scatter']], 
                              output_folder: str):
     """
     Plot the sensitivity analysis results.

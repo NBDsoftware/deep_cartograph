@@ -688,6 +688,40 @@ class CVCalculator(ABC, Generic[CVType]):
         """
         raise NotImplementedError("Sensitivity analysis not implemented for this CV calculator.")
     
+    def compute_atom_sensitivities(self,
+                                   feature_labels: List[str],
+                                   feature_sensitivities: np.ndarray
+    ) -> Dict[int, float]:
+        """ 
+        Compute the per-atom sensitivities by taking the maximum sensitivity per atom of
+        the associated features. This is useful to identify which atoms are the most relevant for 
+        the CV. 
+        
+        The function returns a Dictionary with the atom index as key and the corresponding per-atom sensitivity as value.
+        The atom index follows the MDAnalysis convention (0-based).
+        """ 
+        from deep_cartograph.modules.md import atom_entity_to_index
+
+        per_atom_sensitivities: Dict[int, float] = {}
+        for feature, sensitivity in zip(feature_labels, feature_sensitivities):
+            
+            # Find atoms involved in the feature
+            feature_entities = feature.split('-')
+            feature_atoms = feature_entities[1:]  # Skip the feature type (coord, dist, angle, dihedral)
+            feature_atoms[-1] = feature_atoms[-1].split('.')[0]  # Remove any suffix after the last atom index (e.g., .x, .y, .z)
+            
+            # Convert feature atom entities to atom indices
+            atom_indices = [atom_entity_to_index(atom, self.ref_topology_path) for atom in feature_atoms] # type: ignore
+            
+            # Update the per-atom sensitivities with the maximum sensitivity for each atom
+            for atom_index in atom_indices:
+                if atom_index in per_atom_sensitivities:
+                    per_atom_sensitivities[atom_index] = max(per_atom_sensitivities[atom_index], sensitivity)
+                else:
+                    per_atom_sensitivities[atom_index] = sensitivity
+                
+        return per_atom_sensitivities
+        
     # Getters  
     def get_labels(self) -> List[str]:
         """
@@ -963,6 +997,7 @@ class LinearCalculator(CVCalculator):
         """
         
         from deep_cartograph.modules.figures import plot_sensitivity_results
+        from deep_cartograph.modules.md import map_sensitivity_to_structure
         
         # For a linear CV, the sensitivity of each feature is given by the absolute value of its coefficient in the CV weights
         cv_sensitivities = np.abs(self.cv)
@@ -971,8 +1006,8 @@ class LinearCalculator(CVCalculator):
         for cv_index in range(cv_sensitivities.shape[1]):
             
             # Create directory for sensitivity analysis results
-            sensitivity_output_path = os.path.join(self.sensitivity_output_folder, f'sensitivity_analysis_{cv_index+1}')
-            os.makedirs(sensitivity_output_path, exist_ok=True)
+            sensitivity_output_path = self.sensitivity_output_folder / f'sensitivity_analysis_{cv_index+1}'
+            sensitivity_output_path.mkdir(parents=True, exist_ok=True)
             
             sensitivities = cv_sensitivities[:, cv_index]
             logger.debug(f'Shape of sensitivities for CV dimension {cv_index}: {sensitivities.shape}')
@@ -980,7 +1015,7 @@ class LinearCalculator(CVCalculator):
             # Order the sensitivities from lowest to highest, order the feature labels accordingly
             indices = np.argsort(sensitivities)
             sensitivities = sensitivities[indices]
-            feature_labels = np.array(self.features_ref_labels)[indices]
+            feature_labels = list(np.array(self.features_ref_labels)[indices])
         
             # Create a Dictionary with the results
             results = {
@@ -996,11 +1031,19 @@ class LinearCalculator(CVCalculator):
                
             # Save the sensitivities to a file
             sensitivity_df = pd.DataFrame({'sensitivity': sensitivities}, index = feature_labels)
-            sensitivity_path = os.path.join(sensitivity_output_path, 'sensitivity_analysis.csv')
+            sensitivity_path = os.path.join(str(sensitivity_output_path), 'sensitivity_analysis.csv')
             sensitivity_df.to_csv(sensitivity_path)
 
             # Plot the top sensitivities
-            plot_sensitivity_results(results, modes=['barh'], output_folder=sensitivity_output_path)
+            plot_sensitivity_results(results, modes=['barh'], output_folder=str(sensitivity_output_path),)
+            
+            # Find one sensitivity value per atom by taking the maximum sensitivity of the features that involve that atom
+            logger.info('Computing per-atom sensitivities...')
+            per_atom_sensitivities = self.compute_atom_sensitivities(feature_labels, sensitivities)
+
+            # If possible, map the sensitivities to the 3D structure for visualization
+            logger.info('Mapping sensitivities to the 3D structure...')
+            map_sensitivity_to_structure(per_atom_sensitivities, self.ref_topology_path, str(sensitivity_output_path),) # type: ignore
 
         return
 
@@ -1819,6 +1862,7 @@ class NonLinear(CVCalculator):
         from mlcolvar.explain import sensitivity_analysis
         
         from deep_cartograph.modules.figures import plot_sensitivity_results
+        from deep_cartograph.modules.md import map_sensitivity_to_structure
         
         # Compute the sensitivity analysis
         results = sensitivity_analysis(self.cv, self.training_input_dtset, metric="mean_abs_val", 
@@ -1826,12 +1870,20 @@ class NonLinear(CVCalculator):
         
         # Save the sensitivities to a file
         sensitivity_df = pd.DataFrame({'sensitivity': results['sensitivity']['Dataset']}, index = results['feature_names'])
-        sensitivity_path = os.path.join(self.sensitivity_output_folder, 'sensitivity_analysis.csv')
+        sensitivity_path = os.path.join(str(self.sensitivity_output_folder), 'sensitivity_analysis.csv')
         sensitivity_df.to_csv(sensitivity_path)
         
         # Plot the sensitivity results
-        modes = ['barh', 'violin']
-        plot_sensitivity_results(results, modes=modes, output_folder=self.sensitivity_output_folder)
+        modes: List[Literal['barh', 'violin', 'scatter']] = ['barh', 'violin']
+        plot_sensitivity_results(results, modes = modes, output_folder = str(self.sensitivity_output_folder))
+
+        # Find one sensitivity value per atom by taking the maximum sensitivity of the features that involve that atom
+        logger.info('Computing per-atom sensitivities...')
+        per_atom_sensitivities = self.compute_atom_sensitivities(results['feature_names'], np.array(sensitivity_df['sensitivity'].values))
+
+        # If possible, map the sensitivities to the 3D structure for visualization
+        logger.info('Mapping sensitivities to the 3D structure...')
+        map_sensitivity_to_structure(per_atom_sensitivities, self.ref_topology_path, str(self.sensitivity_output_folder)) # type: ignore
 
 
 # Specific Collective Variable calculators

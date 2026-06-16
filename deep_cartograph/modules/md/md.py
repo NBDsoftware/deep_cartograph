@@ -1565,6 +1565,87 @@ def dRMSD(trajectory_path: str, topology_path: str, selection: str, selection_st
     
     return np.array(drmsd_values)
 
+def atom_entity_to_index(atom_entity: str, topology_path: str) -> int:
+    """
+    Convert an atom entity name to its corresponding MDAnalysis atom index in the topology file.
+
+    Input
+    -----
+        atom_entity   (str): atom entity name (e.g., "@CA_256").
+        topology_path (str): path to the topology file.
+    
+    Returns
+    -------
+        atom_index (int): corresponding atom index in the topology.
+    """
+    
+    # Find atom name and resid from the entity name
+    atom_name = atom_entity.split('_')[0][1:]  # Remove '@' and get the atom name
+    resid = int(atom_entity.split('_')[1])      # Get the resid
+    
+    # Load topology
+    u = mda.Universe(topology_path)
+    
+    # Select the atom based on name and resid
+    atom = u.select_atoms(f"name {atom_name} and resid {resid}")
+    
+    # Check if the atom was found
+    if len(atom) == 0:
+        logger.error(f"Atom entity '{atom_entity}' not found in topology '{topology_path}'.")
+        raise ValueError(f"Atom entity '{atom_entity}' not found in topology '{topology_path}'.")
+    
+    # Return the index of the atom (MDAnalysis indices start at 0)
+    return int(atom.indices[0])
+
+def map_sensitivity_to_structure(
+    per_atom_sensitivities: Dict[int, float],
+    topology_path: str,
+    output_folder: str
+    ) -> None:
+    """
+    Map sensitivity values to the B-factor column of a PDB structure for visualization in 
+    PyMOL or VMD.
+    
+    The default value of the B-factor column will be 0.0 and the sensitivity value will be
+    scaled between 0.0 and 100.0 and added to the B-factor of the atoms
+    """ 
+    
+    # Take all the sensitivity values and scale them between 0.0 and 100.0
+    sens_values = np.array(list(per_atom_sensitivities.values()))
+    
+    # Check all sensitivity values are positive
+    if np.any(sens_values < 0):
+        logger.warning("Some sensitivity values are negative. They will be set to 0.0 for visualization.")
+        sens_values[sens_values < 0] = 0.0
+
+    # Find indices of atoms and min/max sensitivity values
+    atom_indices = list(per_atom_sensitivities.keys())
+    min_sens = np.min(sens_values)
+    max_sens = np.max(sens_values)
+    
+    # Scale the sensitivity value to be between 0.0 and 100.0
+    for atom_index in atom_indices:
+        sens_value = per_atom_sensitivities[atom_index]
+        scaled_value = (sens_value - min_sens) / (max_sens - min_sens) * 100.0
+        per_atom_sensitivities[atom_index] = scaled_value
+
+    # Load topology
+    u = mda.Universe(topology_path)
+    
+    # New structure file with sensitivity values in the B-factor column
+    new_structure_path = os.path.join(output_folder, "sensitivity_structure.pdb")
+    
+    # Create a new PDB file with the sensitivity values in the B-factor column
+    with mda.Writer(new_structure_path, n_atoms=u.atoms.n_atoms, format='PDB') as writer:
+        for atom in u.atoms:
+            if atom.index in per_atom_sensitivities:
+                atom.bfactor = per_atom_sensitivities[atom.index]
+            else:
+                atom.bfactor = 0.0  # Default value for atoms not in the sensitivity dictionary
+        writer.write(u)
+    
+    return 
+
 # Other
 def to_entity_name(mda_selection: str) -> str:
     """ 
