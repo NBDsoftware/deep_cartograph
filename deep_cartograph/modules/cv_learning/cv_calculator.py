@@ -846,9 +846,6 @@ class LinearCalculator(CVCalculator):
         weights_path : str
             Path to the output file where the weights will be saved
         """
-        if self.cv is None:
-            logger.error('CV has not been computed. Cannot save weights.')
-            raise ValueError('CV has not been computed. Cannot save weights.')
             
         np.save(weights_path, self.cv)
         logger.debug(f'CV weights saved to {weights_path}')
@@ -863,6 +860,12 @@ class LinearCalculator(CVCalculator):
         
         # Save the cv weights
         weights_path = os.path.join(self.model_output_folder, 'cv_weights.npy')
+        
+        if self.cv is None:
+            logger.error('No Linear CV weights to save. Please compute the CV before saving the model.')
+            raise ValueError('No Linear CV weights to save. Please compute the CV before saving the model.')
+        
+        # Save the weights of the Linear CV
         self.save_weights(weights_path)
 
         # Check the cv normalization parameters have been computed
@@ -1886,17 +1889,18 @@ class UMAP(CVCalculator):
     Uniform Manifold Approximation and Projection (UMAP) calculator.
     """
     
-    def __init__(self, configuration: Dict | None = None, output_path: str | None = None):
+    def __init__(self, configuration: Optional[Dict] = None, output_path: Optional[str] = None):
         super().__init__(configuration, output_path)
-    
+
         self.cv_name = 'umap'
-        
+
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-        
+
         # UMAP-specific parameters
         self.n_neighbors = self.configuration.get('n_neighbors', 15)
         self.min_dist = self.configuration.get('min_dist', 0.1)
         self.metric = self.configuration.get('metric', 'euclidean')
+        self.seed: int = self.configuration.get('seed', 42)
 
     def _load_from_folder(self, folder_path: str):
         """ 
@@ -1923,7 +1927,8 @@ class UMAP(CVCalculator):
         umap_model =  umap.UMAP(n_neighbors=self.n_neighbors,
                                 min_dist=self.min_dist,
                                 n_components=self.cv_dimension,
-                                metric=self.metric)
+                                metric=self.metric,
+                                random_state=self.seed)
         
         # Fit the UMAP model to the data
         self.cv = umap_model.fit(self.training_data.numpy())
@@ -1951,10 +1956,24 @@ class UMAP(CVCalculator):
         
         if self.cv is None:
             logger.error('No UMAP model to save.')
-            return
+            raise ValueError('No UMAP model to save.')
         
         # Save the weights of the UMAP model
         self.save_weights(weights_path)
+        
+        # Check the cv normalization parameters have been computed
+        if self.cv_norm_mean is None or self.cv_norm_range is None:
+            logger.error('CV normalization parameters have not been computed. Cannot save model.')
+            raise ValueError('CV normalization parameters have not been computed. Cannot save model.')
+        np.save(os.path.join(self.model_output_folder, 'cv_norm_mean.npy'), self.cv_norm_mean)
+        np.save(os.path.join(self.model_output_folder, 'cv_norm_range.npy'), self.cv_norm_range)
+        
+        # Check the feature normalization parameters have been computed
+        if self.features_norm_mean is None or self.features_norm_range is None:
+            logger.error('Feature normalization parameters have not been computed. Cannot save model.')
+            raise ValueError('Feature normalization parameters have not been computed. Cannot save model.')
+        np.save(os.path.join(self.model_output_folder, 'features_norm_mean.npy'), self.features_norm_mean)
+        np.save(os.path.join(self.model_output_folder, 'features_norm_range.npy'), self.features_norm_range)
         
         # Zip the model output folder
         model_path = os.path.join(self.output_path, 'model.zip')
@@ -1966,13 +1985,49 @@ class UMAP(CVCalculator):
         logger.info(f'Model saved to {model_path}') 
         
     def sensitivity_analysis(self):
-        """ 
+        """
         Perform a sensitivity analysis of the UMAP model on the training data.
         """
         logger.warning('Sensitivity analysis is not implemented for UMAP models.')
-    
-        
-    def normalize_data(self, 
+
+    def normalize_cv(self):
+        """
+        Compute min/max statistics of the UMAP embedding on the training data.
+        Uses the embedding_ attribute stored after fit() to avoid recomputing.
+        """
+        if self.cv is None:
+            logger.error('No UMAP model available. Cannot compute CV statistics for normalization.')
+            raise ValueError('No UMAP model available.')
+
+        projected_training_df = pd.DataFrame(self.cv.embedding_, columns=self.cv_labels)
+
+        stats = ['min', 'max']
+        stats_df = projected_training_df.agg(stats).T
+        self.cv_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
+
+        self.cv_norm_mean = (self.cv_stats['max'] + self.cv_stats['min']) / 2
+        self.cv_norm_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
+
+    def get_cv_parameters(self) -> Dict:
+        """
+        Get the collective variable parameters.
+        """
+        cv_parameters = {
+            'cv_name': self.cv_name,
+            'cv_dimension': self.cv_dimension,
+            'n_neighbors': self.n_neighbors,
+            'min_dist': self.min_dist,
+            'metric': self.metric,
+        }
+        return cv_parameters
+
+    def get_cv_type(self) -> str:
+        """
+        Returns the type of the collective variable.
+        """
+        return 'umap'
+
+    def normalize_data(self,
                        data: torch.Tensor,
                        normalizing_mean: torch.Tensor,
                        normalizing_range: torch.Tensor,
@@ -2052,7 +2107,21 @@ class UMAP(CVCalculator):
         # Project the data onto the CV space using the UMAP model
         projected_data = self.cv.transform(data.numpy())
         
-        return torch.tensor(projected_data, dtype=torch.float32)
+        # Check the CV normalization parameters have been computed
+        if self.cv_norm_mean is None or self.cv_norm_range is None:
+            logger.error('CV normalization parameters have not been computed. Cannot normalize projected data.')
+            raise ValueError('CV normalization parameters have not been computed. Cannot normalize projected data.')
+        
+        projected_data = torch.tensor(projected_data, dtype=torch.float32)
+
+        # Normalize the projected data
+        projected_data = self.normalize_data(
+            projected_data, 
+            torch.tensor(self.cv_norm_mean, dtype=torch.float32),
+            torch.tensor(self.cv_norm_range, dtype=torch.float32)
+        )
+        
+        return projected_data
             
 # Specific Collective Variable calculators
 class PCACalculator(LinearCalculator):
@@ -2839,7 +2908,8 @@ cv_calculators_map = {
     'tica': TICACalculator,
     'htica': HTICACalculator,
     'deep_tica': DeepTICACalculator,
-    'vae': VAECalculator
+    'vae': VAECalculator,
+    'umap': UMAP
 }
 
 cv_names_map = {
@@ -2848,7 +2918,8 @@ cv_names_map = {
     'tica': 'TICA',
     'htica': 'HTICA',
     'deep_tica': 'DeepTICA',
-    'vae': 'VAE'
+    'vae': 'VAE',
+    'umap': 'UMAP'
 }
 
 cv_components_map = {
@@ -2857,5 +2928,6 @@ cv_components_map = {
     'tica': 'TIC',
     'htica': 'HTIC',
     'deep_tica': 'DeepTIC',
-    'vae': 'VAE'
+    'vae': 'VAE',
+    'umap': 'UMAP'
 }
