@@ -179,6 +179,18 @@ class CommonCollectiveVariable(BaseModel):
     num_subspaces: int = 10
     # Dimension of the sub-spaces (used only with Hierarchical TICA)
     subspaces_dimension: int = 5
+    # Size of local neighborhoods (used only with UMAP)
+    # Controls how UMAP balances local versus global structure in the data
+    # low values of n_neighbors will force UMAP to concentrate on very local 
+    # structure while large values will push UMAP to get the broader structure of the data
+    n_neighbors: int = 15
+    # The min_dist parameter controls how tightly UMAP is allowed to pack points together. 
+    # It provides the minimum distance apart that points are allowed to be in the low dimensional representation. 
+    # Low values of min_dist will result in clumpier embeddings useful for clustering. Larger values of min_dist 
+    # will focus on the preservation of the broad topological structure instead.
+    min_dist: float = 0.1
+    # The metric parameter controls how UMAP measures distance in the input space.
+    metric: str = 'euclidean'
     # Bias method for the PLUMED input file (all Collective Variables)
     bias: Bias = Bias()
 

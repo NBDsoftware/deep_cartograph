@@ -21,6 +21,10 @@ dependencies:
   - scipy
   - plumed==2.9.0         # (Optional) Otherwise use an external installation
   - biopython==1.85       # Other versions may work as well
+  - llvmlite
+  - numba
+  - pynndescent
+  - umap-learn
 
   # Notebooks and plotting
   - seaborn

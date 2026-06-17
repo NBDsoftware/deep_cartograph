@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple, Union, Literal, Optional, Generic, TypeVar
 from deep_cartograph.modules.plumed.colvars import create_dataframe_from_files
 import deep_cartograph.modules.md as md
 
-CVType = TypeVar('CVType')
+CVType = TypeVar('CVType') # NOTE: define here possibilities
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -932,10 +932,6 @@ class LinearCalculator(CVCalculator):
         projected_data : torch.Tensor
             Projected data
         """
-        
-        if data is None:
-            logger.debug('No data provided for projection. Returning None.')
-            return None
 
         logger.debug(f"Projecting data onto {cv_names_map[self.cv_name]} ...")
         
@@ -1829,11 +1825,11 @@ class NonLinear(CVCalculator):
                 Data projected onto the CV space.
         """
         
+        logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
+        
         if self.cv is None:
             logger.error('No collective variable model to project data.')
             raise ValueError('No collective variable model to project data.')
-        
-        logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
         
         # Project the data onto the CV space
         with torch.no_grad():
@@ -1885,7 +1881,179 @@ class NonLinear(CVCalculator):
         logger.info('Mapping sensitivities to the 3D structure...')
         map_sensitivity_to_structure(per_atom_sensitivities, self.ref_topology_path, str(self.sensitivity_output_folder)) # type: ignore
 
+class UMAP(CVCalculator):
+    """ 
+    Uniform Manifold Approximation and Projection (UMAP) calculator.
+    """
+    
+    def __init__(self, configuration: Dict | None = None, output_path: str | None = None):
+        super().__init__(configuration, output_path)
+    
+        self.cv_name = 'umap'
+        
+        logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
+        
+        # UMAP-specific parameters
+        self.n_neighbors = self.configuration.get('n_neighbors', 15)
+        self.min_dist = self.configuration.get('min_dist', 0.1)
+        self.metric = self.configuration.get('metric', 'euclidean')
 
+    def _load_from_folder(self, folder_path: str):
+        """ 
+        Load a UMAP model from a folder.
+        """
+        super()._load_from_folder(folder_path)
+        
+        import joblib 
+        
+        model_path = os.path.join(self.model_output_folder, 'umap_model.joblib')
+        self.cv = joblib.load(model_path)
+        
+    def compute_cv(self):
+        """
+        Compute Uniform Manifold Approximation and Projection (UMAP) on the input features. 
+        """
+        import umap
+        
+        if self.training_data is None:
+            logger.error('No training data available to compute UMAP.')
+            return
+        
+        # Create UMAP object
+        umap_model =  umap.UMAP(n_neighbors=self.n_neighbors,
+                                min_dist=self.min_dist,
+                                n_components=self.cv_dimension,
+                                metric=self.metric)
+        
+        # Fit the UMAP model to the data
+        self.cv = umap_model.fit(self.training_data.numpy())
+        
+        
+    def save_weights(self, weights_path: str):
+        """ 
+        Saves the UMAP model to a pickle file.
+        """
+        import joblib 
+        
+        # Save the UMAP model to a file
+        joblib.dump(self.cv, weights_path)
+    
+    def save_model(self):
+        """
+        Saves the UMAP model to a pickle file.
+        """
+        super().save_model()   
+        
+        from deep_cartograph.modules.common import zip_files
+        
+        # Path to output model
+        weights_path = os.path.join(self.model_output_folder, 'umap_model.joblib')
+        
+        if self.cv is None:
+            logger.error('No UMAP model to save.')
+            return
+        
+        # Save the weights of the UMAP model
+        self.save_weights(weights_path)
+        
+        # Zip the model output folder
+        model_path = os.path.join(self.output_path, 'model.zip')
+        zip_files(model_path, self.model_output_folder)
+        
+        # Remove the unzipped model output folder
+        shutil.rmtree(self.model_output_folder)
+        
+        logger.info(f'Model saved to {model_path}') 
+        
+    def sensitivity_analysis(self):
+        """ 
+        Perform a sensitivity analysis of the UMAP model on the training data.
+        """
+        logger.warning('Sensitivity analysis is not implemented for UMAP models.')
+    
+        
+    def normalize_data(self, 
+                       data: torch.Tensor,
+                       normalizing_mean: torch.Tensor,
+                       normalizing_range: torch.Tensor,
+        ) -> torch.Tensor:
+        """
+        Use the normalization mean and range to normalize the data.
+        
+        Parameters
+        ----------
+        
+        data : torch.Tensor
+            Data to normalize
+        
+        normalizing_mean : torch.Tensor
+            Mean values for normalization
+        
+        normalizing_range : torch.Tensor
+            Range values for normalization
+            
+        Returns
+        -------
+        
+        normalized_data : torch.Tensor
+            Normalized data
+        """
+        
+        # In-place subtraction and division
+        data.sub_(normalizing_mean)
+        data.div_(normalizing_range)
+
+        return data
+
+    def project_data(self, 
+                     data: torch.Tensor, 
+                     normalize_data: bool = True
+                     ) -> torch.Tensor:
+        
+        """ 
+        Projects the data into a lower-dimensional space using the trained UMAP model.
+
+        Parameters
+        ----------
+        
+            data : torch.Tensor
+                Data to be projected onto the CV space.
+                
+            normalize_data : bool, optional
+                Whether to normalize the data before projection. 
+                This argument is ignored for non-linear CVs, as the normalization 
+                is handled within the model itself. Default is True.
+        
+        Returns
+        ------- 
+        
+            projected_data : torch.Tensor
+                Data projected onto the CV space.
+        """
+        
+        logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
+        
+        if self.cv is None:
+            logger.error('No collective variable model to project data.')
+            raise ValueError('No collective variable model to project data.')
+        
+        if normalize_data:
+            # Check the feature normalization parameters have been computed
+            if self.features_norm_mean is None or self.features_norm_range is None:
+                logger.error('Feature normalization parameters have not been computed. Cannot normalize data.')
+                raise ValueError('Feature normalization parameters have not been computed. Cannot normalize data.')
+        
+            # Normalize the data
+            data = self.normalize_data(data, 
+                        torch.tensor(self.features_norm_mean, dtype=torch.float32),
+                        torch.tensor(self.features_norm_range, dtype=torch.float32)
+            )
+        
+        # Project the data onto the CV space using the UMAP model
+        projected_data = self.cv.transform(data.numpy())
+        
+        return torch.tensor(projected_data, dtype=torch.float32)
+            
 # Specific Collective Variable calculators
 class PCACalculator(LinearCalculator):
     """
@@ -2010,6 +2178,7 @@ class HTICACalculator(LinearCalculator):
         
         self.cv_name = 'htica'
         
+        # HTICA-specific parameters
         self.num_subspaces = self.configuration.get('num_subspaces')
         self.subspaces_dimension = self.configuration.get('subspaces_dimension')
         
