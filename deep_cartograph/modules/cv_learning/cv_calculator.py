@@ -2122,6 +2122,17 @@ class UMAP(CVCalculator):
         )
         
         return projected_data
+    
+    def write_plumed_files(self, 
+                           topology: Optional[str], 
+                           output_folder: str, 
+                           waypoint_structures: Optional[List[str]] = None
+        ) -> None:
+        """ 
+        Overwrite of the base class method to write PLUMED input files for UMAP.
+        UMAP is not supported in PLUMED, thus we skip the writing of PLUMED input files for UMAP.
+        """
+        logger.warning(f'PLUMED input files are not generated for {cv_names_map[self.cv_name]} as it is not supported in PLUMED.')
             
 # Specific Collective Variable calculators
 class PCACalculator(LinearCalculator):
