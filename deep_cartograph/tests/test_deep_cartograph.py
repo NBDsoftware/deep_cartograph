@@ -85,6 +85,7 @@ def get_config():
               weight_decay: 0
           save_loss: True
           plot_loss: True
+          model_to_save: last
           kl_annealing:
             type: linear
             start_beta: 0
