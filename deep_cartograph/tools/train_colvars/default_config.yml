@@ -13,7 +13,7 @@
 #     encoder:              (list) Fully connected hidden layers between the input and latent space, e.g. [15, 15]
 #   training:                    Settings for the training of the Collective Variables (when applicable)
 #     general:                    General settings for the training
-#       max_tries:                    (int) Maximum number of tries for the training
+#       num_tries:                    (int) Maximum number of tries for the training
 #       seed:                         (int) Seed for the PyTorch random number generator
 #       lengths:                      (list) Lengths of the training and validation sets, e.g. [0.8, 0.2]
 #       batch_size:                   (int) Batch size for the training
@@ -46,7 +46,7 @@ common:
       dropout: [0.1, 0.1]
   training:
     general:
-      max_tries: 10
+      num_tries: 10
       seed: 42
       lengths: [0.8, 0.2]
       batch_size: 32

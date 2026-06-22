@@ -64,7 +64,7 @@ def get_config():
           stride: 1                
         training: 
           general:
-            max_tries: 10
+            num_tries: 1
             seed: 42
             lengths: [0.8, 0.2]
             batch_size: 256

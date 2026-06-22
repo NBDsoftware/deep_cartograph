@@ -36,7 +36,7 @@ train_colvars:
         batchnorm: [False, False, False, False]
     training: 
       general:
-        max_tries: 1
+        num_tries: 1
         seed: 42
         lengths: [0.8, 0.2]
         batch_size: 128

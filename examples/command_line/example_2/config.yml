@@ -37,7 +37,7 @@ train_colvars:
       pca_lowrank_q: null
     training: 
       general:
-        max_tries: 3
+        num_tries: 3
         seed: 42
         lengths: [0.8, 0.2]
         batch_size: 256

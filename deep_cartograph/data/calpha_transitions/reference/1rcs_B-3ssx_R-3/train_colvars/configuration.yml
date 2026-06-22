@@ -39,7 +39,7 @@ common:
       - 0.8
       - 0.2
       max_epochs: 1000
-      max_tries: 10
+      num_tries: 10
       random_split: false
       save_check_every_n_epoch: 1
       seed: 42

@@ -41,7 +41,7 @@ train_colvars:
       encoder: [5, 3]                        
     training: 
       general:
-        max_tries: 3
+        num_tries: 3
         seed: 42
         lengths: [0.8, 0.2]
         batch_size: 256

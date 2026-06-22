@@ -40,8 +40,8 @@ class Architecture(BaseModel):
 
 class GeneralSettings(BaseModel):
 
-    # Maximum number of tries for the training
-    max_tries: int = 10
+    # Number of independent trainings to run; the one with the lowest score is kept
+    num_tries: int = 10
     # Seed for the PyTorch random number generator
     seed: int = 42
     # Lengths of the training and validation sets, e.g. [0.8, 0.2]

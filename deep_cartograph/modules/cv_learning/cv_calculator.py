@@ -1093,7 +1093,7 @@ class NonLinear(CVCalculator):
         self.model_to_save: Literal['best', 'last'] = self.training_config.get('model_to_save', 'best')
 
         # Training attributes
-        self.max_tries: int = self.general_config.get('max_tries', 5)
+        self.num_tries: int = self.general_config.get('num_tries', 10)
         self.seed: int = self.general_config.get('seed', 42)
         self.training_validation_lengths: List = self.general_config.get('lengths', [])
         self.num_training_samples: Optional[int] = None
@@ -1414,32 +1414,32 @@ class NonLinear(CVCalculator):
 
         raise NotImplementedError("This method should be implemented in subclasses.")
 
-    def get_callbacks(self) -> List:
-        """ 
+    def get_callbacks(self, try_num: int = 1) -> List:
+        """
         Get the callbacks for the training of the Nonlinear model.
         """
-        
+
         from mlcolvar.utils.trainer import MetricsCallback
-    
+
         from lightning.pytorch.callbacks.early_stopping import EarlyStopping
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
-        
+
         general_callbacks = []
-        
+
         # Define MetricsCallback to store the loss
         self.metrics = MetricsCallback()
         general_callbacks.append(self.metrics)
 
         # Define EarlyStopping callback to stop training
         self.early_stopping = EarlyStopping(
-            monitor="valid_loss", 
-            min_delta=self.early_stop_delta, 
-            patience=self.early_stop_patience, 
+            monitor="valid_loss",
+            min_delta=self.early_stop_delta,
+            patience=self.early_stop_patience,
             mode = "min")
         general_callbacks.append(self.early_stopping)
 
         # Define ModelCheckpoint callback to save the best/last model
-        checkpoints_path = os.path.join(self.training_output_folder, 'checkpoints')
+        checkpoints_path = os.path.join(self.training_output_folder, 'checkpoints', f'try_{try_num}')
         self.checkpoint = ModelCheckpoint(
             dirpath=checkpoints_path,                  # Directory to save the checkpoints  
             monitor="valid_loss",                      # Quantity to monitor
@@ -1469,17 +1469,24 @@ class NonLinear(CVCalculator):
         
         self.check_batch_size()
 
-        training_succeeded = False
-        while not training_succeeded and (self.tries < self.max_tries):
-            self.tries += 1
+        # Track the best result across all tries
+        best_global_score = float('inf')
+        best_cv = None
+        best_metrics = None
+        best_cv_score = None  # preserves original tensor/float type for plot_training_metrics
+
+        for try_num in range(1, self.num_tries + 1):
+            self.tries = try_num
             try:
-                
+                # Seed all RNGs for reproducibility (PyTorch, NumPy, Python random)
+                lightning.seed_everything(self.seed + self.tries, verbose=False)
+
                 # --- DATASET AND DATALOADER SETUP ---
                 if self.validation_input_dtset is not None:
                     # Validation and training data are given separately
                     train_loader = DictLoader(self.training_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
                     val_loader = DictLoader(self.validation_input_dtset, batch_size=self.batch_size, shuffle=self.shuffle)
-                    
+
                     # For LR scheduler adjustment, we pass the loader since we don't have a module
                     self._adjust_lr_scheduler_from_loader(train_loader)
                     fit_kwargs = {'train_dataloaders': train_loader, 'val_dataloaders': val_loader}
@@ -1506,31 +1513,45 @@ class NonLinear(CVCalculator):
 
                 # --- TRAINER SETUP AND TRAINING ---
                 trainer = lightning.Trainer(
-                    callbacks=self.get_callbacks(),
+                    callbacks=self.get_callbacks(self.tries),
                     max_epochs=self.max_epochs,
                     logger=False,
                     enable_checkpointing=True,
                     enable_progress_bar=False,
                     check_val_every_n_epoch=self.check_val_every_n_epoch  # We could add gradient_clip_val if needed
                 )
-                logger.debug(f'Starting training try {self.tries}/{self.max_tries}...')
+                logger.debug(f'Starting training try {self.tries}/{self.num_tries}...')
                 trainer.fit(model, **fit_kwargs)
                 logger.debug(f'Training try {self.tries} completed.')
 
-                # Check if loss has decreased to consider the training a success
-                if self.loss_decreased(self.metrics.metrics['valid_loss']):
-                    training_succeeded = self._finalize_training()
-                else:
-                    logger.warning(f'Try {self.tries} failed: validation loss did not decrease. Retrying...')
+                # Warn if loss did not improve, but still evaluate this run
+                if not self.loss_decreased(self.metrics.metrics['valid_loss']):
+                    logger.warning(f'Try {self.tries}: validation loss did not decrease.')
+
+                # Finalize this run: load best/last checkpoint, set self.cv and self.cv_score
+                if self._finalize_training():
+                    try_score = float(self.cv_score)
+                    logger.info(f'Try {self.tries}/{self.num_tries}: score = {try_score:.5f}')
+                    if try_score < best_global_score:
+                        best_global_score = try_score
+                        best_cv_score = self.cv_score
+                        best_cv = self.cv
+                        best_metrics = self.metrics
+                        logger.info(f'  -> New best model (try {self.tries}).')
 
             except Exception as e:
                 logger.error(f'Training try {self.tries} failed with an exception: {e}')
-                if self.tries < self.max_tries: logger.info('Retrying...')
 
-        if not training_succeeded:
-            logger.error(f'{cv_names_map[self.cv_name]} did not converge after {self.max_tries} tries.')
-
-        return training_succeeded
+        # Restore the globally best model
+        if best_cv is not None:
+            self.cv = best_cv
+            self.cv_score = best_cv_score
+            self.metrics = best_metrics
+            logger.info(f'Best model score across {self.num_tries} tries: {best_global_score:.5f}')
+            return True
+        else:
+            logger.error(f'{cv_names_map[self.cv_name]} did not produce a valid model after {self.num_tries} tries.')
+            return False
 
     def _finalize_training(self) -> bool:
         """
@@ -1538,6 +1559,10 @@ class NonLinear(CVCalculator):
         """
         # 1. Gather all available model info first
         
+        if self.metrics is None or self.checkpoint is None:
+            logger.error("Metrics or checkpoint callback is not set. Cannot finalize training.")
+            return False
+
         # Last model info
         last_score = self.metrics.metrics['valid_loss'][-1] if self.metrics.metrics.get('valid_loss') else None
         last_model_path = self.checkpoint.last_model_path
@@ -2727,22 +2752,22 @@ class VAECalculator(NonLinear):
          
         return model
         
-    def get_callbacks(self) -> List:
-        """ 
+    def get_callbacks(self, try_num: int = 1) -> List:
+        """
         Get the callbacks for the VAE training.
-        
+
         Uses the parent class method to get the callbacks and adds the VAE-specific callbacks.
-        
+
         Returns
         -------
-        
+
         callbacks: List
             List of callbacks for the VAE training.
         """
         import deep_cartograph.modules.ml as ml
-        
-        general_callbacks = super().get_callbacks()
-        
+
+        general_callbacks = super().get_callbacks(try_num)
+
         # KL annealing callback
         kl_annealing_args = {
             'type': self.type,
@@ -2754,27 +2779,27 @@ class VAECalculator(NonLinear):
         }
         kl_anneal_callback = ml.KLAAnnealing(**kl_annealing_args)
         general_callbacks.append(kl_anneal_callback)
-        
+
         # If ReduceLROnPlateau is the scheduler, add our custom manager
         if self.lr_scheduler and self.lr_scheduler.get('name') == 'ReduceLROnPlateau':
 
             # The start epoch should be when the kl annealing finishes + 1/4 of the remaining epochs
             start_monitoring_epoch = self.start_epoch + self.n_epochs_anneal + (self.max_epochs - self.start_epoch - self.n_epochs_anneal)//4
-        
+
             lr_plateau_manager = ml.LROnPlateauManager(start_epoch=start_monitoring_epoch)
             general_callbacks.append(lr_plateau_manager)
-        
+
         # If there is a KL annealing stage
         if self.n_epochs_anneal > 0:
-            # Add a callback to start saving the best model after the KL annealing 
-            checkpoints_path = os.path.join(self.training_output_folder, "checkpoints")
+            # Add a callback to start saving the best model after the KL annealing
+            checkpoints_path = os.path.join(self.training_output_folder, 'checkpoints', f'try_{try_num}')
             self.post_annealing_checkpoint = ml.PostAnnealingCheckpoint(
                 monitor="valid_loss",
                 dirpath=checkpoints_path,
                 annealing_end_epoch=self.start_epoch + self.n_epochs_anneal,
             )
             general_callbacks.append(self.post_annealing_checkpoint)
-            
+
         return general_callbacks
     
     def _plot_metric(self, 
