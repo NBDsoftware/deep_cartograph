@@ -30,6 +30,7 @@ setup(name='deep_cartograph',
     entry_points={
         "console_scripts": [
             "deep_carto=deep_cartograph.deep_carto:main",
+            "align_trajectories=deep_cartograph.tools.align_trajectories.align_trajectories:main",
             "analyze_geometry=deep_cartograph.tools.analyze_geometry.analyze_geometry:main",
             "compute_features=deep_cartograph.tools.compute_features.compute_features:main",
             "filter_features=deep_cartograph.tools.filter_features.filter_features:main",

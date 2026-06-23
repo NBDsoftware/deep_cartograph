@@ -30,6 +30,19 @@ class PDBTopologyMapper:
         self.resnames: List[Tuple[int, str]]
 
         self.alignment: Align.Alignment
+        
+        # The format of the mapping is the following:
+
+        #    self.mapping = {
+        #        6: ('A', 'A', 509),
+        #        7: ('A', 'A', 510),
+        #        8: ('M', 'M', 511),
+        #        ...
+        #    }
+
+        #Where the key is the resid of the reference topology (for quick translation lookup) and
+        #the Tuple value is formed by the reference resname, the target topology resname and 
+        #the target topology resid.
         self.mapping: Dict[int, Tuple[str, str, int]]
         
         # Find information per residue of each topology
