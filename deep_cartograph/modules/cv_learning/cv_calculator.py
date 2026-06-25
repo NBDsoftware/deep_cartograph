@@ -1620,7 +1620,22 @@ class NonLinear(CVCalculator):
                 logger.info(f"  -> Best Post-Annealing Score: {best_post_anneal_score:.5f}")
             if last_score is not None:
                 logger.info(f"  -> Last Model Score:          {last_score:.5f}")
-                
+
+            # Sanity check for Deep TICA: the default loss is -sum(eigenvalues).
+            # Since each TICA eigenvalue is bounded by 1, the minimum possible loss
+            # is -cv_dimension. A score below this threshold indicates ill-conditioned
+            # training or numerical instabilities.
+            if self.cv_name == 'deep_tica' and self.cv_score is not None:
+                threshold = -float(self.cv_dimension)
+                if float(self.cv_score) < threshold:
+                    logger.warning(
+                        f"Deep TICA validation loss ({float(self.cv_score):.5f}) is below the theoretical "
+                        f"minimum ({threshold:.5f} = -1 x {self.cv_dimension} dimensions). "
+                        f"This is a sign of ill-conditioned training or numerical instabilities. "
+                        f"Try reducing the learning rate or increasing the 'tica_regularization' parameter."
+                    )
+                    return False
+
             return True
         else:
             logger.error("Training finished, but no valid model checkpoint was found.")
