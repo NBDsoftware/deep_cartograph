@@ -1525,8 +1525,7 @@ class NonLinear(CVCalculator):
                 logger.debug(f'Training try {self.tries} completed.')
 
                 # Warn if loss did not improve, but still evaluate this run
-                if not self.loss_decreased(self.metrics.metrics['valid_loss']):
-                    logger.warning(f'Try {self.tries}: validation loss did not decrease.')
+                self.check_convergence(self.metrics.metrics['valid_loss'])
 
                 # Finalize this run: load best/last checkpoint, set self.cv and self.cv_score
                 if self._finalize_training():
@@ -1627,7 +1626,7 @@ class NonLinear(CVCalculator):
             logger.error("Training finished, but no valid model checkpoint was found.")
             return False
         
-    def loss_decreased(self, loss: List):
+    def check_convergence(self, loss: List):
         """
         Check if the loss has decreased by the end of the training.
 
@@ -1639,10 +1638,7 @@ class NonLinear(CVCalculator):
 
         # Soft convergence condition: Check if the minimum of the validation loss is lower than the initial value
         if min(loss) > loss[0]:
-            logger.warning('Validation loss has not decreased by the end of the training.')
-            return False
-
-        return True
+            logger.warning('Try {self.tries}: validation loss did not decrease during training.')
     
     def plot_training_metrics(self):
         """
