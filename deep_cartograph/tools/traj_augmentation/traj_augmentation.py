@@ -9,6 +9,7 @@ from typing import Dict, Union, List
 from deep_cartograph.yaml_schemas.traj_augmentation import TrajAugmentationSchema
 import deep_cartograph.modules.md as md
 from deep_cartograph.modules.common import ( 
+    check_data,
     get_unique_path, 
     read_configuration,
     validate_configuration, 
@@ -21,8 +22,9 @@ from deep_cartograph.modules.common import (
 
 def traj_augmentation(
     configuration: Dict,
-    trajectories: Union[List[str], str],
-    topologies: Union[List[str], str],  
+    trajectory_data: Union[List[str], str],
+    topology_data: Union[List[str], str],  
+    num_replicas: int = 1,
     output_folder: str = "traj_augmentation",
 ) -> List[str]:
     """
@@ -32,14 +34,19 @@ def traj_augmentation(
         configuration (Dict): 
             Configuration dictionary (see `default_config.yml` for more details).
         
-        trajectories (Union[List[str], str]): 
-            Path(s) to the trajectory files to be augmented.
-            If a single path is provided as a string, it will be converted to a list.
+        trajectory_data (Union[List[str], str]): 
+            Path to a trajectory file or directory containing multiple trajectories.
+            These will be augmented.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        topologies (Union[List[str], str]): 
-            Path(s) to the topology files corresponding to the trajectories.
-            Must be in the same order as `trajectories`.
-            If a single path is provided as a string, it will be converted to a list.
+        topology_data (Union[List[str], str]):
+            Path to a topology file or directory with topology files for trajectories.
+            - If a single topology file is provided, it is used for all trajectories.
+            - If a directory is provided, each topology file must match a trajectory filename.
+            Accepted format: `.pdb`.
+            
+        num_replicas (int, optional):
+            Number of replicas to generate for each trajectory. Only used if noise_std is not null. Default: `1`.
         
         output_folder (str, optional): 
             Path to the output folder where the augmented trajectories will be saved.
@@ -66,6 +73,9 @@ def traj_augmentation(
     # Validate configuration
     configuration = validate_configuration(configuration, TrajAugmentationSchema, output_folder)
     
+    # Check main data
+    trajectories, topologies = check_data(trajectory_data, topology_data)
+
     if isinstance(trajectories, str):
         trajectories = [trajectories]
     if isinstance(topologies, str):
@@ -172,12 +182,21 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-trajectory', dest='trajectory', type=str, required=True,
-        help="Path to trajectory file, for which the features are computed."
+        '-traj_data', dest='trajectory_data', required=False, nargs='+',
+        help=(
+            "List of trajectory paths or path to folder with trajectories. "
+            "These trajectories will be augmented. "
+            "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
+        )
     )
     parser.add_argument(
-        '-topology', dest='topology', type=str, required=True,
-        help="Path to topology file."
+        '-top_data', dest='topology_data', required=False, nargs='+',
+        help=(
+            "List of topology paths or path to folder with topologies for the trajectories. "
+            "If a folder is provided, each topology should have the same name as the "
+            "corresponding trajectory in -traj_data. If a single topology file is provided, it will be used for all trajectories. "
+            "Accepted format: .pdb."
+        )
     )
     
     parser.add_argument(
@@ -199,10 +218,8 @@ def main():
 
     args = parse_arguments()
 
-    # Determine output folder, if restart is False, create a unique output folder
+    # Create output folder if it does not exist
     output_folder = args.output_folder if args.output_folder else 'traj_augmentation'
-    if not args.restart:
-        output_folder = get_unique_path(output_folder)
     os.makedirs(output_folder, exist_ok=True)
     
     # Set logger
@@ -215,8 +232,8 @@ def main():
     # Run traj_augmentation
     _ = traj_augmentation(
         configuration = configuration, 
-        trajectory = args.trajectory,
-        topology = args.topology,
+        trajectory_data = args.trajectory_data,
+        topology_data = args.topology_data,
         output_folder = output_folder)
 
 if __name__ == "__main__":

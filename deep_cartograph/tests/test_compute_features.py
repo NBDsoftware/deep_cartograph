@@ -76,8 +76,8 @@ def test_compute_features():
     # Call API
     colvars_paths = compute_features(
                     configuration=get_config_virtual_dihedrals(),
-                    trajectories=[trajectory_path],
-                    topologies=[topology_path],
+                    trajectory_data=[trajectory_path],
+                    topology_data=[topology_path],
                     output_folder=output_path)
     
     # Read colvars file as pandas dataframe

@@ -249,7 +249,7 @@ def main():
         '-traj_data', dest='trajectory_data', required=False, nargs='+',
         help=(
             "List of trajectory paths or path to folder with trajectories with data to train CVs. "
-            "These trajectories will not be modified before using them to train CVs. "
+            "These trajectories will be aligned to the reference topology or to the first topology in the list. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
@@ -267,7 +267,7 @@ def main():
     parser.add_argument(
         '-ref_top', dest='reference_topology', required=False,
         help=(
-            "Path to reference topology file. Used to find features from user selections. "
+            "Path to reference topology file (.pdb) to align the trajectories and topologies. "
             "Defaults to the first topology in topology_data. Accepted format: .pdb."
         )
     )

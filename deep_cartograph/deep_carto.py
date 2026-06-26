@@ -54,59 +54,59 @@ def deep_cartograph(
         configuration (Dict): 
             Configuration dictionary (refer to `default_config.yml` for details).
         
-        trajectory_data (str): 
+        trajectory_data (Union[List[str], str]):
             Path to a trajectory file or directory containing multiple trajectories.
             These will be used to compute the collective variables.
             Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        topology_data (str): 
+        topology_data (Union[List[str], str]):
             Path to a topology file or directory with topology files for trajectories.
             - If a single topology file is provided, it is used for all trajectories.
             - If a directory is provided, each topology file must match a trajectory filename.
             Accepted format: `.pdb`.
             
-        validation_trajectory_data (str):
+        validation_trajectory_data (Union[List[str], str]):
             Path to a trajectory file or directory containing multiple trajectories
             to use for validating the collective variables during training.
             Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        validation_topology_data (str):
+        validation_topology_data (Union[List[str], str]):
             Path to a topology file or directory with topology files for validation trajectories.
             - If a single topology file is provided, it is used for all validation trajectories.    
             - If a directory is provided, each topology file must match a validation trajectory filename.
             Accepted format: `.pdb`.    
             
-        seed_trajectory_data (str):
+        seed_trajectory_data (Union[List[str], str]):
             Path to a trajectory file or directory containing multiple trajectories
             to augment using the trajectory augmentation tool.
             Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        seed_topology_data (str):
+        seed_topology_data (Union[List[str], str]):
             Path to a topology file or directory with topology files for seed trajectories.
             - If a single topology file is provided, it is used for all seed trajectories.
             - If a directory is provided, each topology file must match a seed trajectory filename.
             Accepted format: `.pdb`.
         
-        supplementary_traj_data (Optional[str]): 
+        supplementary_traj_data (Optional[Union[List[str], str]]):
             Path to a supplementary trajectory file or directory.
             These trajectories will be projected onto the CV but not used for computing CVs.
             Example: experimental structures, coarse-grained simulations.
             Default: `None`.
             Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        supplementary_top_data (Optional[str]): 
+        supplementary_top_data (Optional[Union[List[str], str]]):
             Path to a supplementary topology file or directory.
             - If a single topology file is provided, it is used for all supplementary trajectories.
             - If a directory is provided, each supplementary trajectory must have a matching topology file.
             Default: `None`.
             Accepted format: `.pdb`.
         
-        reference_topology (Optional[str]): 
+        reference_topology (Optional[str]):
             Path to a reference topology file used to determine features from user selections.
             Default: first topology file in `topology_data`.
             Accepted format: `.pdb`.
             
-        waypoints_data (Optional[str]):
+        waypoints_data (Optional[Union[List[str], str]]):
             Path to the folder containing intermediate conformations that define the transition of interest.
             If given, features that do not change their value across these structures will be filtered out.
             Default: `None`.
@@ -232,8 +232,8 @@ def deep_cartograph(
     # Compute features for main trajectories
     args = {
         'configuration': configuration['compute_features'], 
-        'trajectories': trajectories, 
-        'topologies': topologies, 
+        'trajectory_data': trajectories, 
+        'topology_data': topologies, 
         'reference_topology': reference_topology,
         'reference_features': ref_common_features,
         'output_folder': os.path.join(output_folder, 'compute_features')
@@ -244,8 +244,8 @@ def deep_cartograph(
     if validation_trajectory_data:
         args = {
             'configuration': configuration['compute_features'], 
-            'trajectories': val_trajs, 
-            'topologies': val_tops, 
+            'trajectory_data': val_trajs, 
+            'topology_data': val_tops, 
             'reference_topology': reference_topology,
             'reference_features': ref_common_features,
             'output_folder': os.path.join(output_folder, 'compute_val_features')
@@ -260,8 +260,8 @@ def deep_cartograph(
         sup_trajectory_names = [Path(traj).stem for traj in supplementary_trajs]
         args = {
             'configuration': configuration['compute_features'], 
-            'trajectories': supplementary_trajs, 
-            'topologies': supplementary_tops, 
+            'trajectory_data': supplementary_trajs, 
+            'topology_data': supplementary_tops, 
             'reference_topology': reference_topology,
             'reference_features': ref_common_features,
             'traj_stride': 1,  # Use all frames for sup data - typically smaller datasets
@@ -277,8 +277,8 @@ def deep_cartograph(
     if waypoints_data:
         args = {
             'configuration': configuration['compute_features'],
-            'trajectories': transition_waypoints,
-            'topologies': transition_waypoints,
+            'trajectory_data': transition_waypoints,
+            'topology_data': transition_waypoints,
             'reference_topology': reference_topology,
             'reference_features': ref_common_features,
             'traj_stride': 1,  # Use all frames for waypoints data - typically smaller datasets

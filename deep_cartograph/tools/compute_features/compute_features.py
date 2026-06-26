@@ -12,7 +12,7 @@ import deep_cartograph.modules.features as features
 import deep_cartograph.modules.plumed as plumed 
 import deep_cartograph.modules.md as md
 from deep_cartograph.modules.common import ( 
-    get_unique_path, 
+    check_data, 
     read_configuration,
     validate_configuration, 
     files_exist
@@ -24,8 +24,8 @@ from deep_cartograph.modules.common import (
 
 def compute_features(
     configuration: Dict,
-    trajectories: Union[List[str], str],
-    topologies: Union[List[str], str],
+    trajectory_data: Union[List[str], str],
+    topology_data: Union[List[str], str],
     reference_topology: Optional[str] = None,
     reference_features: Optional[List[str]] = None,
     traj_stride: Optional[int] = None,   
@@ -38,14 +38,16 @@ def compute_features(
         configuration (Dict): 
             Configuration dictionary (see `default_config.yml` for more details).
         
-        trajectories (Union[List[str], str]): 
-            Path(s) to the trajectory files to be analyzed.
-            If a single path is provided as a string, it will be converted to a list.
+        trajectory_data (Union[List[str], str]): 
+            Path to a trajectory file or directory containing multiple trajectories.
+            For which features will be computed.
+            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
         
-        topologies (Union[List[str], str]): 
-            Path(s) to the topology files corresponding to the trajectories.
-            Must be in the same order as `trajectories`.
-            If a single path is provided as a string, it will be converted to a list.
+        topology_data (Union[List[str], str]): 
+            Path to a topology file or directory with topology files for trajectories.
+            - If a single topology file is provided, it is used for all trajectories.
+            - If a directory is provided, each topology file must match a trajectory filename.
+            Accepted format: `.pdb`.
         
         reference_topology (Optional[str]):
             Path to the reference topology file.
@@ -97,6 +99,9 @@ def compute_features(
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
+    
+    # Check main data
+    trajectories, topologies = check_data(trajectory_data, topology_data)
     
     if isinstance(trajectories, str):
         trajectories = [trajectories]
@@ -281,12 +286,21 @@ def parse_arguments():
         help="Path to configuration file (.yml)."
     )
     parser.add_argument(
-        '-trajectory', dest='trajectory', type=str, required=True, nargs='+',
-        help="Path to trajectory files, for which the features are computed."
+        '-traj_data', dest='trajectory_data', type=str, required=True, nargs='+',
+        help=(
+            "List of trajectory paths or path to folder with trajectories for which features are computed. "
+            "These trajectories will not be modified before using them to train CVs. "
+            "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
+        )
     )
     parser.add_argument(
-        '-topology', dest='topology', type=str, required=True, nargs='+',
-        help="Path to topology files."
+        '-top_data', dest='topology_data', type=str, required=True, nargs='+',
+        help=(
+            "List of topology paths or path to folder with topologies for which features are computed. "
+            "If a folder is provided, each topology should have the same name as the "
+            "corresponding trajectory in -traj_data. If a single topology file is provided, it will be used for all trajectories. "
+            "Accepted format: .pdb."
+        )
     )
     
     # Optional arguments
@@ -313,10 +327,8 @@ def main():
 
     args = parse_arguments()
 
-    # Determine output folder, if restart is False, create a unique output folder
+    # Create output folder if it does not exist
     output_folder = args.output_folder if args.output_folder else 'compute_features'
-    if not args.restart:
-        output_folder = get_unique_path(output_folder)
     os.makedirs(output_folder, exist_ok=True)
     
     # Set logger
@@ -329,8 +341,8 @@ def main():
     # Run Compute Features tool
     _ = compute_features(
         configuration = configuration, 
-        trajectories = args.trajectory,
-        topologies = args.topology,
+        trajectory_data = args.trajectory_data,
+        topology_data = args.topology_data,
         traj_stride = args.traj_stride,
         output_folder = output_folder)
 
