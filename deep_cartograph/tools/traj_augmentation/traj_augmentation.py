@@ -94,27 +94,35 @@ def traj_augmentation(
         logger.error(f"Topology file missing. Exiting...")
         sys.exit(1)
 
-    # For each trajectory, perform augmentation and relaxation
+    # For each trajectory, perform augmentation across all replicas
     augmented_trajectories = []
     augmented_topologies = []
+    base_seed = configuration['random_seed']
     for traj_path, top_path in zip(trajectories, topologies):
         traj_name = Path(traj_path).stem
         logger.info(f"Processing trajectory: {traj_name}")
 
-        # Trajectory augmentation
-        new_traj_path, new_top_path = md.interpolate_trajectory(
-                                        topology_file=top_path,
-                                        trajectory_file=traj_path,
-                                        num_frames=configuration['num_frames'],
-                                        keep_original_frames=configuration['keep_original_frames'],
-                                        interpolation_method=configuration['interpolation_method'],
-                                        noise_std=configuration['noise_std'],
-                                        atom_selection=configuration['atom_selection'],
-                                        traj_format=configuration['traj_format'],
-                                        prepare_trajectory=configuration['prepare_trajectory'],
-                                        output_path=output_folder)
-        augmented_trajectories.append(new_traj_path)
-        augmented_topologies.append(new_top_path)
+        for replica in range(num_replicas):
+            replica_seed = base_seed + replica
+            suffix = f"_rep{replica}" if num_replicas > 1 else ""
+            logger.info(f"  Replica {replica} (seed={replica_seed})")
+
+            # Trajectory augmentation
+            new_traj_path, new_top_path = md.interpolate_trajectory(
+                                            topology_file=top_path,
+                                            trajectory_file=traj_path,
+                                            num_frames=configuration['num_frames'],
+                                            keep_original_frames=configuration['keep_original_frames'],
+                                            interpolation_method=configuration['interpolation_method'],
+                                            noise_std=configuration['noise_std'],
+                                            random_seed=replica_seed,
+                                            atom_selection=configuration['atom_selection'],
+                                            traj_format=configuration['traj_format'],
+                                            prepare_trajectory=configuration['prepare_trajectory'],
+                                            output_path=output_folder,
+                                            suffix=suffix)
+            augmented_trajectories.append(new_traj_path)
+            augmented_topologies.append(new_top_path)
     
     # End timer
     elapsed_time = time.time() - start_time
@@ -198,6 +206,10 @@ def parse_arguments():
             "Accepted format: .pdb."
         )
     )
+    parser.add_argument(
+        '-n', '-num_replicas', dest='num_replicas', type=int, default=1, required=False,
+        help="Number of replicas to generate for each trajectory. Only used if noise_std is not null. Default: 1."
+    )
     
     parser.add_argument(
         '-output', dest='output_folder', type=str, required=False,
@@ -234,6 +246,7 @@ def main():
         configuration = configuration, 
         trajectory_data = args.trajectory_data,
         topology_data = args.topology_data,
+        num_replicas = args.num_replicas,
         output_folder = output_folder)
 
 if __name__ == "__main__":

@@ -1016,16 +1016,18 @@ def load_universe(topology_file: str,
     return u
 
 def interpolate_trajectory(
-    topology_file: str,         
+    topology_file: str,
     trajectory_file: str,
     num_frames: int,
     keep_original_frames: bool = True,
     interpolation_method: Optional[Literal['akima', 'pchip']] = 'pchip',
     noise_std: Optional[float] = None,
+    random_seed: int = 42,
     atom_selection: str = 'all',
     traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc',
     prepare_trajectory: bool = False,
     output_path: Optional[str] = None,
+    suffix: str = "",
     ) -> Tuple[str, str]:
     """
     Interpolates a trajectory to a specified number of frames using the given interpolation method.
@@ -1049,6 +1051,8 @@ def interpolate_trajectory(
         is None, no interpolation is performed and the original frames are used.
     noise_std : float, optional
         Standard deviation of Gaussian noise to add to the interpolated coordinates. Default is None (no noise added).
+    random_seed : int, optional
+        Seed for the random number generator to ensure reproducibility when adding noise. Default is 42
     atom_selection : str, optional
         MDAnalysis atom selection string (default "all").
     traj_format : str, optional
@@ -1057,24 +1061,26 @@ def interpolate_trajectory(
         Whether to apply unwrapping and centering transformations to the trajectory. Default is False.
     output_path : str, optional
         Path to save the interpolated trajectory. If None, saves in the current directory.
+    suffix : str, optional
+        Suffix appended to the output file names before the extension (e.g. "_rep0"). Default is "".
 
     Returns
     -------
-    
+
     tuple (new_trajectory_path, new_topology_path)
         new_trajectory_path : str
             Path to the interpolated trajectory file.
         new_topology_path : str
             Path to the topology file for the interpolated trajectory.
-    """ 
-    
+    """
+
     from scipy.interpolate import Akima1DInterpolator, PchipInterpolator
     from MDAnalysis.coordinates.memory import MemoryReader
-    
+
     # Get the trajectory name without extension
     traj_name = Path(trajectory_file).stem
-    new_traj_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.{traj_format}")
-    new_top_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}.pdb")
+    new_traj_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}{suffix}.{traj_format}")
+    new_top_path = os.path.join(output_path if output_path else ".", f"{traj_name}_augmented_{interpolation_method}{suffix}.pdb")
 
     # Check if the output files already exist
     if os.path.exists(new_traj_path) and os.path.exists(new_top_path):
@@ -1109,6 +1115,8 @@ def interpolate_trajectory(
     
     # Add noise if specified
     if noise_std is not None:
+        # Seed for reproducibility
+        np.random.seed(random_seed)
         noise = np.random.normal(0, noise_std, new_coords.shape)
         new_coords += noise
     
@@ -1530,8 +1538,8 @@ def dRMSD(trajectory_path: str, topology_path: str, selection: str, selection_st
     
     # Compute distances between selected atoms along the trajectory and the reference
     traj_colvars_paths = compute_features(configuration=config,
-                                          trajectories=[trajectory_path, reference_path],
-                                          topologies=[topology_path, reference_path],
+                                          trajectory_data=[trajectory_path, reference_path],
+                                          topology_data=[topology_path, reference_path],
                                           reference_topology=reference_path,
                                           output_folder=os.path.join(output_path, 'compute_features'))
 

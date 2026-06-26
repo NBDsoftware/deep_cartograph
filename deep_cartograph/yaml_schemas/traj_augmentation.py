@@ -12,6 +12,8 @@ class TrajAugmentationSchema(BaseModel):
     interpolation_method: Optional[Literal['akima', 'pchip']] = 'pchip'
     # Standard deviation of the gaussian noise added to the new trajectory frames (None means no noise is added)
     noise_std: Optional[float] = None
+    # Random seed for reproducibility when adding noise (default is 42)
+    random_seed: int = 42
     # Selection of atoms to write in the new trajectory - MDAnalysis selection syntax
     atom_selection: str = "all"
     # Output trajectory format
