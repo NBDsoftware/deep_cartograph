@@ -1632,7 +1632,7 @@ class NonLinear(CVCalculator):
                         f"Deep TICA validation loss ({float(self.cv_score):.5f}) is below the theoretical "
                         f"minimum ({threshold:.5f} = -1 x {self.cv_dimension} dimensions). "
                         f"This is a sign of ill-conditioned training or numerical instabilities. "
-                        f"Try reducing the learning rate or increasing the 'tica_regularization' parameter."
+                        f"Try reducing the learning rate, increasing the tica regularization or the batch size."
                     )
                     return False
 
