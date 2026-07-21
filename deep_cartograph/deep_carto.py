@@ -203,8 +203,8 @@ def deep_cartograph(
     # ---------------------------------
     args = {
         'configuration': configuration['traj_augmentation'],
-        'trajectories': seed_trajectories,
-        'topologies': seed_topologies,
+        'trajectory_data': seed_trajectories,
+        'topology_data': seed_topologies,
         'output_folder': os.path.join(output_folder, 'traj_augmentation')
     }
     augmented_trajs, augmented_tops = traj_augmentation(**args)

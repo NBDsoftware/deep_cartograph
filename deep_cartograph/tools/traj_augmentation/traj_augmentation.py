@@ -75,11 +75,6 @@ def traj_augmentation(
     
     # Check main data
     trajectories, topologies = check_data(trajectory_data, topology_data)
-
-    if isinstance(trajectories, str):
-        trajectories = [trajectories]
-    if isinstance(topologies, str):
-        topologies = [topologies]
         
     # Check the number of trajectories and topologies is the same
     if len(trajectories) != len(topologies):

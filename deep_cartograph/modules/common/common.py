@@ -297,10 +297,7 @@ def find_files(paths: Union[List[str], str]) -> List[str]:
     Function that finds all files in a path or list of paths. 
     
     For each path, if it is a file, it is added to the list. If it is a folder,
-    all the files in the folder are added to the list. If it is a list of paths,
-    all the files in the list are added to the list. 
-    
-    If it is a string, it can be a file path or a folder path.
+    all the files in the folder are added to the list. 
 
     Inputs
     ------
@@ -328,10 +325,10 @@ def find_files(paths: Union[List[str], str]) -> List[str]:
         # Check if the path is a file or a folder
         if os.path.isdir(path):
             # List the files in the folder
-            file_paths = [os.path.join(path, f) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+            file_paths.extend([os.path.join(path, f) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))])
         elif os.path.isfile(path):
             # List single file
-            file_paths = [path]
+            file_paths.append(path)
         else:
             logger.error(f"Path should be a file or a folder: {paths}")
             sys.exit(1)
@@ -348,7 +345,8 @@ def check_data(trajectory_data: Optional[Union[List[str], str]],
                topology_data: Optional[Union[List[str], str]]
     ) -> Tuple[List[str], List[str]]:
     """
-    Function that checks the existence of the necessary input data files.
+    Function that checks the existence of the trajectory and topology data. 
+    It also checks that the number of trajectory files is the same as the number of topology files.
     
     Inputs
     ------

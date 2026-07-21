@@ -83,6 +83,9 @@ def compute_features(
     # Start timer
     start_time = time.time()
     
+    # Check main data
+    trajectories, topologies = check_data(trajectory_data, topology_data)
+
     # If the output exists already, skip the step
     skip_step = True
     colvars_paths = [os.path.join(os.path.join(output_folder, Path(traj).stem), 'colvars.dat') for traj in trajectories]
@@ -99,14 +102,6 @@ def compute_features(
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
-    
-    # Check main data
-    trajectories, topologies = check_data(trajectory_data, topology_data)
-    
-    if isinstance(trajectories, str):
-        trajectories = [trajectories]
-    if isinstance(topologies, str):
-        topologies = [topologies]
         
     # Check the number of trajectories and topologies is the same
     if len(trajectories) != len(topologies):
