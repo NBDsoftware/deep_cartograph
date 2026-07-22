@@ -102,19 +102,6 @@ def compute_features(
 
     # Validate configuration
     configuration = validate_configuration(configuration, ComputeFeaturesSchema, output_folder)
-        
-    # Check the number of trajectories and topologies is the same
-    if len(trajectories) != len(topologies):
-        logger.error(f"Number of trajectories ({len(trajectories)}) and topologies ({len(topologies)}) do not match. Exiting...")
-        sys.exit(1) 
-        
-    # Check if files exist
-    if not files_exist(*trajectories):
-        logger.error(f"Trajectory file missing. Exiting...")
-        sys.exit(1)
-    if not files_exist(*topologies):
-        logger.error(f"Topology file missing. Exiting...")
-        sys.exit(1)
     
     if reference_topology is None:
         reference_topology = topologies[0]
@@ -132,7 +119,6 @@ def compute_features(
             'output_folder': os.path.join(output_folder, 'common_features') 
         }
         reference_features = find_common_features(**args)
-            
         
     # Enforce trajectory stride from function argument
     if traj_stride:
