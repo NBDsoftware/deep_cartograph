@@ -112,7 +112,7 @@ def optimize_clustering(features: np.ndarray, settings: Dict):
 def cluster_data(features: np.ndarray, 
                  settings: Dict, 
                  initial_centroids: np.ndarray = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+                ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Cluster the data in features using the clustering settings provided in the settings dictionary.
 
@@ -156,7 +156,11 @@ def cluster_data(features: np.ndarray,
 
     return cluster_labels, centroids
 
-def kmeans_clustering(feature_matrix: np.ndarray, num_clusters: int, n_init: int, initial_centroids: np.ndarray = None) -> np.ndarray:
+def kmeans_clustering(feature_matrix: np.ndarray,
+                      num_clusters: int, 
+                      n_init: int, 
+                      initial_centroids: np.ndarray = None
+                      ) -> np.ndarray:
 
     """
     Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
@@ -282,7 +286,11 @@ def hdbscan_clustering(feature_matrix: np.array,
 
     return clusters, centroids
 
-def hierarchical_clustering(feature_matrix: np.array, cutoff: float, num_clusters: int = None, linkage: str = 'complete') -> Tuple[np.array, np.array]:
+def hierarchical_clustering(feature_matrix: np.array, 
+                            cutoff: Optional[float], 
+                            num_clusters: Optional[int] = None, 
+                            linkage: Literal["ward", "complete", "average", "single"] = 'complete'
+                            ) -> Tuple[np.array, np.array]:
     """
     Cluster points based on the euclidian distance between features. The clustering is performed
     using the hierarchical clustering algorithm.
@@ -334,7 +342,10 @@ def hierarchical_clustering(feature_matrix: np.array, cutoff: float, num_cluster
 
     return clustered_points, centroids
 
-def find_centroids(data: pd.DataFrame, centroids: np.array, clustering_features: list) -> pd.DataFrame:
+def find_centroids(data: pd.DataFrame,
+                   centroids: np.array, 
+                   clustering_features: list
+                   ) -> pd.DataFrame:
     """
     Function that finds the closest sample to each centroid and adds a column named 'centroid' 
     marking the samples that are centroids.

@@ -1396,10 +1396,33 @@ def create_rmsd_waypoint_reference(waypoint_structures: List[str],
 
 def RMSD(trajectory_path: str, 
          topology_path: str, 
-         selection: str, 
-         fitting_selection: str, 
+         selection: str = "backbone",
+         fitting_selection: str = "backbone", 
          reference_path: Optional[str] = None
     ) -> np.array:
+    """ 
+    Calculate the RMSD of the trajectory with respect to a reference structure or the first frame 
+    of the trajectory if not given. The RMSD is calculated for the atoms in the selection
+    after fitting the trajectory using the atoms in the fitting_selection.
+    
+    The function handles different numbering systems between the trajectory and the reference structure
+    by mapping the topologies and creating consistent selections for both. It then uses the MDAnalysis
+    RMSD class to perform the fitting and calculate the RMSD values for each frame.
+    
+    Input
+    -----
+    
+        trajectory_path   (str): path to the trajectory file.
+        topology_path     (str): path to the topology file.
+        selection         (str): selection of atoms to calculate the RMSD.
+        fitting_selection (str): selection of atoms to use for fitting the trajectory to the reference.
+        reference_path    (str): path to the reference structure file. If None, the first frame of the trajectory 
+                                 is used as reference.
+    
+    Output
+    ------
+        rmsd (np.array): array with the RMSD values for each frame
+    """
     
     u = mda.Universe(topology_path, trajectory_path)
     ref_structure = reference_path if reference_path else topology_path
@@ -1455,13 +1478,15 @@ def RMSD(trajectory_path: str,
  
 def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selection: str) -> np.array:
     """
-    Calculate the RMSF of the trajectory with respect to the average structure
+    Calculate the RMSF of the trajectory with respect to the average structure of the trajectory. The RMSF is 
+    calculated for the atoms in the selection after fitting the trajectory using the atoms in the fitting_selection. 
 
     Input
     -----
-        trajectory_path (str): path to the trajectory file.
-        topology_path   (str): path to the topology file.
-        selection       (str): selection of atoms to calculate the RMSF.
+        trajectory_path   (str): path to the trajectory file.
+        topology_path     (str): path to the topology file.
+        selection         (str): selection of atoms to calculate the RMSF.
+        fitting_selection (str): selection of atoms to use for fitting the trajectory to the average structure.
     
     Output
     ------
@@ -1498,7 +1523,7 @@ def RMSF(trajectory_path: str, topology_path: str, selection: str, fitting_selec
 
 def dRMSD(trajectory_path: str, topology_path: str, selection: str, selection_stride: int, reference_path: str, output_path: str) -> np.array:
     """
-    Calculate the dRMSD of the trajectory with respect to a reference structure
+    Calculate the distance-RMSD of the trajectory with respect to a reference structure
 
     Input
     -----
