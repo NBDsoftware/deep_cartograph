@@ -3,6 +3,13 @@ from setuptools import setup, find_packages
 setup(name='deep_cartograph', 
     version='0.1.0', 
     packages=find_packages(),
+    package_data={
+        "deep_cartograph": [
+            "log_config/*.ini",
+            "default_config.yml",
+            "tools/*/default_config.yml",
+        ],
+    },
     python_requires=">=3.8,<=3.10",
     install_requires=[
         'numpy',
