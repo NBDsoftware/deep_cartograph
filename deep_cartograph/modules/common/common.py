@@ -355,10 +355,16 @@ def check_data(trajectory_data: Optional[Union[List[str], str]],
         Path to trajectory, trajectories or folder with trajectories.
         
     topology_data
-        Path to topology, topologies or folder with topologies for the trajectories. 
+        Path to topology, topologies or folder with topologies for the trajectories.
         If a single topology file is provided, it is used for all trajectories.
         If a folder is given, each trajectory should have a corresponding topology file with the same name.
-        
+
+    Notes
+    -----
+    This function is idempotent: calling it on its own output is safe. A single topology
+    expanded into N identical paths by a previous call is treated as the single-topology
+    case rather than triggering the name-matching branch.
+
     Returns
     -------
     
@@ -374,7 +380,14 @@ def check_data(trajectory_data: Optional[Union[List[str], str]],
     traj_file_paths = find_files(trajectory_data) if trajectory_data is not None else []
     
     top_file_paths = find_files(topology_data) if topology_data is not None else []
-    
+
+    # If all topology paths point to the same file, treat this as the single-topology
+    # case. This makes check_data idempotent: a single topology already expanded to N
+    # identical copies by a previous call (see expansion below) must not trigger the
+    # name-matching branch, which expects distinct per-trajectory topologies.
+    if len(set(top_file_paths)) == 1:
+        top_file_paths = top_file_paths[:1]
+
     if len(top_file_paths) > 1:
         
         # Check if each trajectory file has a corresponding topology file with the same name
