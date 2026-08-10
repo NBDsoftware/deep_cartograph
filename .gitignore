@@ -6,5 +6,5 @@ _pycache_/
 .vscode/
 *.egg-info/
 output*/
-debug/
+debug*/
 lightning_logs/
