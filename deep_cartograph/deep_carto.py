@@ -44,6 +44,7 @@ def deep_cartograph(
     waypoints_data: Optional[Union[List[str], str]] = None,
     dimension: Optional[int] = None,
     cvs: Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]] = None,
+    n_models: Optional[int] = None,
     restart: bool = False,
     output_folder: Optional[str] = None,
 ) -> None:
@@ -116,11 +117,20 @@ def deep_cartograph(
             If provided, this overrides the value in the configuration file.
             Default: `None`.
         
-        cvs (Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]]): 
+        cvs (Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]]):
             List of collective variables to train or compute.
             If provided, this overrides the configuration file settings.
             Default: `None`.
-        
+
+        n_models (Optional[int]):
+            Number of models to train as an ensemble, for the neural network CVs
+            ("ae", "vae", "deep_tica"). The training trajectories are split into `n_models`
+            disjoint folds and member i is trained on every fold except fold i, so each member
+            differs by the data it did not see. Each model is saved in its own `{cv_name}_{i}`
+            folder. The supplementary projection and clustering steps run on the first member.
+            If provided, this overrides the configuration file settings.
+            Default: `None` (a single model per CV).
+
         restart (bool): 
             If `True`, restarts the workflow from the last completed step.
             Deletes step folders that need to be recomputed.
@@ -320,6 +330,7 @@ def deep_cartograph(
         'features_list': filtered_features,
         'dimension': dimension,
         'cvs': cvs,
+        'n_models': n_models,
         'frames_per_sample': configuration['compute_features']['plumed_settings']['traj_stride'],
         'output_folder': os.path.join(output_folder, 'train_colvars')
     }
@@ -517,6 +528,12 @@ def parse_arguments():
              "Overrides the configuration input YML."
     )
     parser.add_argument(
+        '-n_models', dest='n_models', type=int, required=False,
+        help="Number of models to train as an ensemble, for the neural network CVs (ae, vae, deep_tica). "
+             "The training trajectories are split into n_models disjoint folds and each member is trained "
+             "on all folds but its own. Overrides the configuration input YML."
+    )
+    parser.add_argument(
         '-out', '-output', dest='output_folder', required=False,
         help="Path to the output folder."
     )
@@ -565,6 +582,7 @@ def main():
         waypoints_data=args.waypoints_data,
         dimension=args.dimension,
         cvs=args.cvs,
+        n_models=args.n_models,
         restart=args.restart,
         output_folder=output_folder
     )

@@ -54,7 +54,12 @@ class CVCalculator(ABC, Generic[CVType]):
         # Training data
         self.training_data: Optional[torch.Tensor] = None
         self.training_data_labels: Optional[np.array] = None
-        
+
+        # Ensemble training - subset of the training data used to fit the model.
+        # When fit_traj_indices is None the model is fitted on all the training data.
+        self.fit_traj_indices: Optional[List[int]] = None
+        self.fit_data: Optional[torch.Tensor] = None
+
         # Validation data (optional, taken from training data if not provided)
         self.validation_data: Optional[torch.Tensor] = None
 
@@ -77,7 +82,11 @@ class CVCalculator(ABC, Generic[CVType]):
 
         # Parent output path
         self.parent_output_path: str = output_path
-        
+
+        # Name of the output folder created inside the parent output path.
+        # If None, the cv name is used. Set to '{cv_name}_{i}' for ensemble members.
+        self.output_folder_name: Optional[str] = None
+
         # Plumed files - used to construct plumed zip files
         self.plumed_files: List[str] = []
         
@@ -88,6 +97,18 @@ class CVCalculator(ABC, Generic[CVType]):
         # Remove temporary unzipped model folder if it exists
         if self.temp_model_path and os.path.exists(self.temp_model_path):
             shutil.rmtree(self.temp_model_path)
+
+    @property
+    def fit_tensor(self) -> Optional[torch.Tensor]:
+        """
+        Data the model is fitted on: the fold-restricted subset when training an ensemble
+        member, otherwise all the training data.
+
+        Note this is resolved lazily instead of assigning fit_data eagerly, because
+        LinearCalculator.load_training_data reassigns self.training_data to a normalized
+        tensor after calling super(), which would leave an eagerly set fit_data stale.
+        """
+        return self.training_data if self.fit_data is None else self.fit_data
             
     @classmethod
     def load(cls, model_path: str, output_path: str):
@@ -194,7 +215,7 @@ class CVCalculator(ABC, Generic[CVType]):
         
         # Create output folder for this CV
         parent_path = Path(self.parent_output_path)
-        self.output_path = parent_path / self.cv_name
+        self.output_path = parent_path / (self.output_folder_name or self.cv_name)
         self.output_path.mkdir(parents=True, exist_ok=True)
 
         # Create output folders to sensitivity_analysis, training and model
@@ -291,13 +312,55 @@ class CVCalculator(ABC, Generic[CVType]):
         self.num_features: int = len(self.features_ref_labels)
         logger.info(f'Number of features: {self.num_features}')
         
-        # Compute training data statistics
+        # Compute training data statistics - always from all the training data, also when
+        # fitting an ensemble member on a subset of it
+        self.compute_feature_statistics(training_df)
+
+        self.training_data = torch.from_numpy(training_df.values)
+
+        # Restrict the data used to fit the model to the requested folds (ensemble training)
+        self.restrict_fit_data()
+
+    def compute_feature_statistics(self, features_df: pd.DataFrame):
+        """
+        Computes the feature statistics and the normalization mean/range used to normalize
+        the input features.
+
+        Kept separate from the data loading so that the statistics can be computed from the
+        whole training data while the model is fitted on a subset of it (ensemble training).
+
+        Parameters
+        ----------
+
+        features_df : pd.DataFrame
+            Dataframe with the features used to compute the statistics
+        """
+
         stats = ['mean', 'std', 'min', 'max']
-        stats_df = training_df.agg(stats).T
+        stats_df = features_df.agg(stats).T
         self.features_stats = {stat: stats_df[stat].to_numpy() for stat in stats}
         self.features_norm_mean, self.features_norm_range = self.prepare_normalization()
-        
-        self.training_data = torch.from_numpy(training_df.values)
+
+    def restrict_fit_data(self):
+        """
+        Restricts the data used to fit the model to the trajectories in self.fit_traj_indices.
+
+        Used to train an ensemble of models, where each member is fitted on all but one
+        disjoint fold of the training trajectories. The full training data is kept in
+        self.training_data so that every member can still project all the trajectories.
+
+        Does nothing if no fold restriction was requested.
+        """
+
+        if self.fit_traj_indices is None or self.training_data is None:
+            return
+
+        # training_data_labels holds the index of the colvars file each sample comes from
+        fit_mask = np.isin(self.training_data_labels, self.fit_traj_indices)
+        self.fit_data = self.training_data[torch.from_numpy(fit_mask)]
+
+        logger.info(f'Fitting on {len(self.fit_data)} of {len(self.training_data)} training samples '
+                    f'(trajectories {sorted(self.fit_traj_indices)}).')
 
     def cv_ready(self) -> bool:
         """
@@ -1280,13 +1343,13 @@ class NonLinear(CVCalculator):
         Check the number of samples in the training and validation sets. 
         """
         
-        if self.validation_input_dtset is not None: 
+        if self.validation_input_dtset is not None:
             # Validation data given separately
             self.num_validation_samples = len(self.validation_data)
-            self.num_training_samples = len(self.training_data)
+            self.num_training_samples = len(self.fit_tensor)
         else:
             # We extract validation from training data
-            total_samples = len(self.training_data)
+            total_samples = len(self.fit_tensor)
             self.num_training_samples = int(total_samples * self.training_validation_lengths[0])
             self.num_validation_samples = total_samples - self.num_training_samples
             
@@ -2421,9 +2484,9 @@ class AECalculator(NonLinear):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
         from mlcolvar.data import DictDataset
-        
-        # Create DictDataset
-        train_data_dict = {"data": self.training_data}
+
+        # Create DictDataset - fitted on the fold subset when training an ensemble member
+        train_data_dict = {"data": self.fit_tensor}
         self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
 
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
@@ -2435,9 +2498,9 @@ class AECalculator(NonLinear):
         if self.validation_data is not None:
             val_data_dict = {"data": self.validation_data}
             self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
-        
+
     def set_encoder_layers(self) -> List:
-        """ 
+        """
         Set the layers for the encoder of the Autoencoder
         
         Return
@@ -2541,13 +2604,14 @@ class DeepTICACalculator(NonLinear):
         from mlcolvar.utils.timelagged import create_timelagged_dataset
 
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
-    
+        # Fitted on the fold subset when training an ensemble member
+        self.training_input_dtset = create_timelagged_dataset(self.fit_tensor, lag_time=self.configuration.get('lag_time'))
+
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
-    
+
         from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
+
         # Create validation time-lagged dataset
         if self.validation_data is not None:
             self.validation_input_dtset = create_timelagged_dataset(self.validation_data, lag_time=self.configuration.get('lag_time'))
@@ -2684,11 +2748,11 @@ class VAECalculator(NonLinear):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
  
         from mlcolvar.data import DictDataset
-        
-        # Create DictDatase
-        train_data_dict = {"data": self.training_data}
+
+        # Create DictDataset - fitted on the fold subset when training an ensemble member
+        train_data_dict = {"data": self.fit_tensor}
         self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
-        
+
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
         

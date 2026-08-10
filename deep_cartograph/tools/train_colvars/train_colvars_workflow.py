@@ -12,7 +12,7 @@ from deep_cartograph.modules.figures import figures
 from deep_cartograph.yaml_schemas.train_colvars import TrainColvarsSchema
 from deep_cartograph.modules.common import package_is_installed, validate_configuration, files_exist, merge_configurations 
 
-from deep_cartograph.modules.cv_learning import cv_calculators_map
+from deep_cartograph.modules.cv_learning import cv_calculators_map, NonLinear
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class TrainColvarsWorkflow:
                  features_list: Optional[List[str]] = None,
                  cv_dimension: Optional[int] = None,
                  cvs: Optional[List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']]] = None,
+                 num_models: Optional[int] = None,
                  frames_per_sample: Optional[int] = 1,
                  output_folder: Optional[str] = 'train_colvars'):
         """
@@ -61,10 +62,16 @@ class TrainColvarsWorkflow:
                         projected_trajectory.csv
                         trajectory.png       
                 
-                sensitivity_analysis/           # sensitivity analysis results        
+                sensitivity_analysis/           # sensitivity analysis results
                 training/                       # Training data and model scores
                     checkpoints/
                 model.zip                       # Trained model
+
+        When an ensemble of N > 1 models is requested for a neural network CV, the CV folder is
+        replicated once per ensemble member as cv_name_0/, cv_name_1/, ..., cv_name_N-1/. The
+        training trajectories are split into N disjoint folds and member i is fitted on every
+        fold except fold i, while the feature statistics, the validation data and the projected
+        trajectories stay identical in scope for every member.
         """
         
         # Set output folder
@@ -100,7 +107,81 @@ class TrainColvarsWorkflow:
         self.cv_dimension: int = cv_dimension
         self.cv_labels: List[str] = None
         self.cv_type: str = None
-        
+
+        # Ensemble related attributes - resolved per CV, as num_models can be overridden per CV
+        self.num_models: Optional[int] = num_models
+        self.cv_num_models: Dict[str, int] = {}
+        self.cv_member_folders: Dict[str, List[str]] = {}
+        for cv_name in self.cvs_list:
+            self.cv_num_models[cv_name] = self._resolve_num_models(cv_name)
+            self.cv_member_folders[cv_name] = self._member_folders(cv_name)
+
+    def _resolve_num_models(self, cv_name: str) -> int:
+        """
+        Resolves the number of ensemble members to train for the given cv.
+
+        The value given through the API/CLI takes precedence over the configuration, which can
+        itself be overridden per CV. Ensembles only apply to the neural network CVs, and cannot
+        have more members than there are training trajectories to build folds from.
+        """
+
+        merged_configuration = merge_configurations(self.configuration['common'], self.configuration.get(cv_name, {}))
+        num_models = self.num_models if self.num_models else merged_configuration.get('training', {}).get('general', {}).get('num_models', 1)
+
+        # Ensembles are only supported for the neural network CVs
+        if not issubclass(cv_calculators_map[cv_name], NonLinear):
+            if num_models > 1:
+                logger.warning(f"Ensemble training is not supported for {cv_name}. Training a single model.")
+            return 1
+
+        if num_models < 1:
+            logger.warning(f"Invalid number of models ({num_models}) requested for {cv_name}. Training a single model.")
+            return 1
+
+        # Each member holds out one disjoint fold of the training trajectories
+        num_trajectories = len(self.train_colvars_paths)
+        if num_models > num_trajectories:
+            logger.warning(f"""Requested {num_models} ensemble members for {cv_name} but only {num_trajectories}
+                           training trajectories are available to build disjoint folds from.
+                           Reducing the ensemble to {num_trajectories} members.""")
+            return max(1, num_trajectories)
+
+        return num_models
+
+    def _member_folders(self, cv_name: str) -> List[str]:
+        """
+        Returns the output folder name of each ensemble member of the given cv.
+
+        A single model keeps the plain cv name, so the output layout is unchanged when no
+        ensemble is requested.
+        """
+
+        num_models = self.cv_num_models[cv_name]
+
+        if num_models == 1:
+            return [cv_name]
+
+        return [f'{cv_name}_{member_index}' for member_index in range(num_models)]
+
+    def get_fit_traj_indices(self, cv_name: str, member_index: int) -> Optional[List[int]]:
+        """
+        Returns the indices of the training trajectories that the given ensemble member is
+        fitted on: all the trajectories except the ones in its own fold.
+
+        Returns None when a single model is trained, so that it is fitted on all the data.
+        """
+
+        num_models = self.cv_num_models[cv_name]
+
+        if num_models == 1:
+            return None
+
+        # Split the training trajectories into num_models disjoint folds
+        folds = np.array_split(np.arange(len(self.train_colvars_paths)), num_models)
+        held_out_fold = folds[member_index]
+
+        return [index for index in range(len(self.train_colvars_paths)) if index not in held_out_fold]
+
     def _validate_files(self):
         """Checks if provided input files exist."""
         
@@ -187,76 +268,91 @@ class TrainColvarsWorkflow:
         """
         
         workflow_finished = True
-        
+
         for cv_name in self.cvs_list:
-            cv_model_exists = self.check_cv_model(cv_name)
-            cv_trajs_exist = self.check_cv_trajectories(cv_name)
-            
-            if not (cv_model_exists and cv_trajs_exist):
-                workflow_finished = False
+            # Every ensemble member has to be complete
+            for member_folder in self.cv_member_folders[cv_name]:
+                cv_model_exists = self.check_cv_model(member_folder)
+                cv_trajs_exist = self.check_cv_trajectories(member_folder)
+
+                if not (cv_model_exists and cv_trajs_exist):
+                    workflow_finished = False
+                    break
+
+            if not workflow_finished:
                 break
-        
+
         return workflow_finished
-    
+
     def get_output_paths(self) -> Dict:
         """
         Get the output paths of the workflow.
+
+        The dictionary is keyed by cv name. 'output_folder', 'model_path' and 'traj_paths' refer
+        to the first ensemble member, which is the one the downstream steps of the deep cartograph
+        workflow operate on. The full ensemble is listed in 'ensemble_output_folders' and
+        'ensemble_model_paths'.
         """
-        
+
         output_paths = {}
-        
+
         for cv_name in self.cvs_list:
-            cv_output_folder = os.path.join(self.output_folder, cv_name)
-            model_path = self.get_output_cv_model_path(cv_name)
-            traj_paths = self.get_output_cv_trajectories(cv_name)
-            
+            member_folders = self.cv_member_folders[cv_name]
+
             output_paths[cv_name] = {
-                'output_folder': cv_output_folder,
-                'model_path': model_path,
-                'traj_paths': traj_paths
+                'output_folder': os.path.join(self.output_folder, member_folders[0]),
+                'model_path': self.get_output_cv_model_path(member_folders[0]),
+                'traj_paths': self.get_output_cv_trajectories(member_folders[0]),
+                'ensemble_output_folders': [os.path.join(self.output_folder, folder) for folder in member_folders],
+                'ensemble_model_paths': [self.get_output_cv_model_path(folder) for folder in member_folders]
             }
-        
+
         return output_paths
-    
-    def check_cv_model(self, cv_name: str) -> bool:
+
+    def check_cv_model(self, member_folder: str) -> bool:
         """
-        Check if the model for the given cv has been trained.
+        Check if the model in the given cv output folder has been trained.
         """
-        
-        model_path = self.get_output_cv_model_path(cv_name)
-        
+
+        model_path = self.get_output_cv_model_path(member_folder)
+
         cv_model_exists = files_exist(model_path, verbose=False)
 
         return cv_model_exists
-    
-    def check_cv_trajectories(self, cv_name: str) -> bool:
+
+    def check_cv_trajectories(self, member_folder: str) -> bool:
         """
-        Check if the trajectory along the given cv has been computed.
+        Check if the trajectories along the cv in the given output folder have been computed.
         """
-        
+
         # Get the trajectory paths along the given cv
-        traj_paths = self.get_output_cv_trajectories(cv_name)
+        traj_paths = self.get_output_cv_trajectories(member_folder)
 
         cv_trajs_exist = files_exist(*traj_paths, verbose=False)
 
         return cv_trajs_exist
 
-    def get_output_cv_model_path(self, cv_name: str) -> str:
+    def get_output_cv_model_path(self, member_folder: str) -> str:
         """
-        Returns the path to the trained model for the given cv.
+        Returns the path to the trained model in the given cv output folder.
+
+        member_folder is the cv name for a single model, or '{cv_name}_{i}' for ensemble member i.
         """
-        cv_output_folder = os.path.join(self.output_folder, cv_name)
+        cv_output_folder = os.path.join(self.output_folder, member_folder)
         model_path = os.path.join(cv_output_folder, 'model.zip')
-        
+
         return model_path
-    
-    def get_output_cv_trajectories(self, cv_name: str) -> List[str]:
+
+    def get_output_cv_trajectories(self, member_folder: str) -> List[str]:
         """
-        Returns the list of trajectories along the given cv.
+        Returns the list of trajectories along the cv in the given output folder.
+
+        Every ensemble member projects all the training trajectories, including the ones in the
+        fold it was not fitted on.
         """
-        cv_output_folder = os.path.join(self.output_folder, cv_name)
+        cv_output_folder = os.path.join(self.output_folder, member_folder)
         traj_data_folder = os.path.join(cv_output_folder, 'traj_data')
-        
+
         traj_paths = []
         for traj_index in range(len(self.train_colvars_paths)):
             traj_output_folder = os.path.join(traj_data_folder, self.trajectory_names[traj_index])
@@ -281,131 +377,185 @@ class TrainColvarsWorkflow:
             return self.get_output_paths()
         
         logger.info(f"Collective variables to compute: {self.cvs_list}")
-        
+
         # For each requested collective variable
         for cv_name in self.cvs_list:
-            
+
             if cv_name != "pca" and not package_is_installed('mlcolvar', 'torch', 'lightning'):
                 logger.warning(f"Missing packages for {cv_name}. Skipping this CV. If you want to use it, please install mlcolvar, torch and lightning.")
                 continue
-            
-            cv_output_folder = os.path.join(self.output_folder, cv_name)
-            
+
             # Merge common and CV-specific configurations
             merged_configuration = merge_configurations(self.configuration['common'], self.configuration.get(cv_name, {}))
-            
-            # Construct the corresponding CV calculator
+
+            num_models = self.cv_num_models[cv_name]
+            if num_models > 1:
+                logger.info(f"Training an ensemble of {num_models} {cv_name} models.")
+
+            # Train each ensemble member, on all the training trajectories but its own fold
+            for member_index, member_folder in enumerate(self.cv_member_folders[cv_name]):
+                self.train_cv_member(cv_name, member_index, member_folder, merged_configuration)
+
+        return self.get_output_paths()
+
+    def train_cv_member(self,
+                        cv_name: str,
+                        member_index: int,
+                        member_folder: str,
+                        merged_configuration: Dict
+        ):
+        """
+        Trains one model for the given cv and writes its output folder.
+
+        When an ensemble is requested, the model is fitted only on the training trajectories
+        outside its own fold, but the feature statistics are still computed from all the
+        training data and all the trajectories are projected onto the resulting CV.
+
+        Parameters
+        ----------
+
+        cv_name
+            Name of the collective variable to train
+
+        member_index
+            Index of the ensemble member, 0 when a single model is trained
+
+        member_folder
+            Name of the output folder for this member ('{cv_name}' or '{cv_name}_{i}')
+
+        merged_configuration
+            Configuration for this cv, with the common settings already merged in
+        """
+
+        cv_output_folder = os.path.join(self.output_folder, member_folder)
+
+        num_models = self.cv_num_models[cv_name]
+        fit_traj_indices = self.get_fit_traj_indices(cv_name, member_index)
+
+        # Construct the corresponding CV calculator
+        args = {
+            'configuration': merged_configuration,
+            'output_path': self.output_folder
+        }
+        cv_calculator = cv_calculators_map[cv_name](**args)
+
+        # Write this member to its own output folder
+        cv_calculator.output_folder_name = member_folder
+
+        if num_models > 1:
+            held_out = [self.trajectory_names[index] for index in range(len(self.train_colvars_paths))
+                        if index not in fit_traj_indices]
+            logger.info(f"Ensemble member {member_index + 1}/{num_models} of {cv_name}, holding out: {held_out}")
+
+            # Restrict the data used to fit the model - has to be set before loading the data
+            cv_calculator.fit_traj_indices = fit_traj_indices
+
+            # Vary the seed across members, so they also differ in initialization and split
+            cv_calculator.seed += member_index
+
+        # Load training data
+        args = {
+            'train_colvars_paths': self.train_colvars_paths,
+            'train_topology_paths': self.train_topology_paths,
+            'ref_topology_path': self.ref_topology_path,
+            'features_list': self.features_list
+        }
+        cv_calculator.load_training_data(**args)
+        
+        # Load validation data if provided
+        if self.val_colvars_paths:
             args = {
-                'configuration': merged_configuration,
-                'output_path': self.output_folder
-            }
-            cv_calculator = cv_calculators_map[cv_name](**args)
-            
-            # Load training data
-            args = {
-                'train_colvars_paths': self.train_colvars_paths,
-                'train_topology_paths': self.train_topology_paths,
+                'val_colvars_paths': self.val_colvars_paths,
+                'val_topology_paths': self.val_topology_paths,
                 'ref_topology_path': self.ref_topology_path,
                 'features_list': self.features_list
             }
-            cv_calculator.load_training_data(**args)
+            cv_calculator.load_validation_data(**args)
+        
+        # Run the CV calculator - obtain a dataframe with the projected training data
+        projected_train_df = cv_calculator.run(self.cv_dimension)
+
+        # Update CV info
+        self.cv_dimension = cv_calculator.get_cv_dimension()
+        self.cv_labels = cv_calculator.get_labels()
+        self.cv_type = cv_calculator.get_cv_type()
             
-            # Load validation data if provided
-            if self.val_colvars_paths:
-                args = {
-                    'val_colvars_paths': self.val_colvars_paths,
-                    'val_topology_paths': self.val_topology_paths,
-                    'ref_topology_path': self.ref_topology_path,
-                    'features_list': self.features_list
-                }
-                cv_calculator.load_validation_data(**args)
+        if projected_train_df is not None:
             
-            # Run the CV calculator - obtain a dataframe with the projected training data
-            projected_train_df = cv_calculator.run(self.cv_dimension)
-
-            # Update CV info
-            self.cv_dimension = cv_calculator.get_cv_dimension()
-            self.cv_labels = cv_calculator.get_labels()
-            self.cv_type = cv_calculator.get_cv_type()
+            # Return file labels to the projected training data
+            projected_train_df['traj_label'] = cv_calculator.training_data_labels
+            
+            # Iterate over the trajectories used for training
+            for traj_index in range(len(self.train_colvars_paths)):
                 
-            if projected_train_df is not None:
-                
-                # Return file labels to the projected training data
-                projected_train_df['traj_label'] = cv_calculator.training_data_labels
-                
-                # Iterate over the trajectories used for training
-                for traj_index in range(len(self.train_colvars_paths)):
-                    
-                    # Get the colvars, trajectory and topology files
-                    colvars = self.train_colvars_paths[traj_index]
-                    topology = self.train_topology_paths[traj_index] if self.train_topology_paths else None
-                    traj_name = self.trajectory_names[traj_index]
+                # Get the colvars, trajectory and topology files
+                colvars = self.train_colvars_paths[traj_index]
+                topology = self.train_topology_paths[traj_index] if self.train_topology_paths else None
+                traj_name = self.trajectory_names[traj_index]
 
-                    # Log
-                    logger.info(f"Processing trajectory: {traj_name}")
-                    logger.info(f"Corresponding colvars file: {colvars}")
-                    logger.info(f"Corresponding topology file: {topology}")
-                    
-                    # Output folder for the current trajectory
-                    traj_output_folder = os.path.join(cv_output_folder, 'traj_data', traj_name)
-                    os.makedirs(traj_output_folder, exist_ok=True)
-                    
-                    # Create plumed inputs for this CV and topology
-                    plumed_inputs_folder = os.path.join(traj_output_folder, 'plumed_inputs')
-                    os.makedirs(plumed_inputs_folder, exist_ok=True)
-                    cv_calculator.write_plumed_files(topology, plumed_inputs_folder, self.waypoint_structures)
+                # Log
+                logger.info(f"Processing trajectory: {traj_name}")
+                logger.info(f"Corresponding colvars file: {colvars}")
+                logger.info(f"Corresponding topology file: {topology}")
+                
+                # Output folder for the current trajectory
+                traj_output_folder = os.path.join(cv_output_folder, 'traj_data', traj_name)
+                os.makedirs(traj_output_folder, exist_ok=True)
+                
+                # Create plumed inputs for this CV and topology
+                plumed_inputs_folder = os.path.join(traj_output_folder, 'plumed_inputs')
+                os.makedirs(plumed_inputs_folder, exist_ok=True)
+                cv_calculator.write_plumed_files(topology, plumed_inputs_folder, self.waypoint_structures)
 
-                    # Get the projected data for this colvars file
-                    projected_train_df_i = projected_train_df[projected_train_df['traj_label'] == traj_index]
-                    projected_train_df_i.drop('traj_label', axis=1, inplace=True)
-                    
-                    fes_output_folder = os.path.join(traj_output_folder, 'fes')
-                    self.create_fes_plots(
+                # Get the projected data for this colvars file
+                projected_train_df_i = projected_train_df[projected_train_df['traj_label'] == traj_index]
+                projected_train_df_i.drop('traj_label', axis=1, inplace=True)
+                
+                fes_output_folder = os.path.join(traj_output_folder, 'fes')
+                self.create_fes_plots(
+                    data = projected_train_df_i,
+                    output_folder = fes_output_folder
+                )
+                
+                # Add a column with the frame of each sample
+                projected_train_df_i['frame'] = np.arange(len(projected_train_df_i)) * self.frames_per_sample
+
+                # 2D plots of the input data projected onto the CV space
+                if cv_calculator.get_cv_dimension() == 2:
+
+                    # Colored by frame
+                    figures.gradient_scatter_plot(
                         data = projected_train_df_i,
-                        output_folder = fes_output_folder
-                    )
+                        column_labels = cv_calculator.get_labels(),
+                        color_label = 'frame',
+                        settings = self.figures_configuration['traj_projection'],
+                        file_path = os.path.join(traj_output_folder,'trajectory.png'))
+
+                # Erase the frame column
+                projected_train_df_i.drop('frame', axis=1, inplace=True)
+                
+                # Save the projected input data
+                projected_train_df_i.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
+
+            if self.sup_topology_paths is not None:
+                # For each supplementary system
+                for sup_index in range(len(self.sup_topology_paths)):
                     
-                    # Add a column with the frame of each sample
-                    projected_train_df_i['frame'] = np.arange(len(projected_train_df_i)) * self.frames_per_sample
-
-                    # 2D plots of the input data projected onto the CV space
-                    if cv_calculator.get_cv_dimension() == 2:
-
-                        # Colored by frame
-                        figures.gradient_scatter_plot(
-                            data = projected_train_df_i,
-                            column_labels = cv_calculator.get_labels(),
-                            color_label = 'frame',
-                            settings = self.figures_configuration['traj_projection'],
-                            file_path = os.path.join(traj_output_folder,'trajectory.png'))
-
-                    # Erase the frame column
-                    projected_train_df_i.drop('frame', axis=1, inplace=True)
+                    sup_topology = self.sup_topology_paths[sup_index]
+                    if self.sup_names is None:
+                        sup_name = Path(sup_topology).stem
+                    else:
+                        sup_name = self.sup_names[sup_index]
                     
-                    # Save the projected input data
-                    projected_train_df_i.to_csv(os.path.join(traj_output_folder,'projected_trajectory.csv'), index=False, float_format='%.4f')
-
-                if self.sup_topology_paths is not None:
-                    # For each supplementary system
-                    for sup_index in range(len(self.sup_topology_paths)):
-                        
-                        sup_topology = self.sup_topology_paths[sup_index]
-                        if self.sup_names is None:
-                            sup_name = Path(sup_topology).stem
-                        else:
-                            sup_name = self.sup_names[sup_index]
-                        
-                        # Output folder for the sup system
-                        sup_output_folder = os.path.join(cv_output_folder, 'traj_data', sup_name)
-                        os.makedirs(sup_output_folder, exist_ok=True)
-                        
-                        # Plumed input 
-                        plumed_inputs_folder = os.path.join(sup_output_folder, 'plumed_inputs')
-                        os.makedirs(plumed_inputs_folder, exist_ok=True)
-                        cv_calculator.write_plumed_files(sup_topology, plumed_inputs_folder, self.waypoint_structures)
+                    # Output folder for the sup system
+                    sup_output_folder = os.path.join(cv_output_folder, 'traj_data', sup_name)
+                    os.makedirs(sup_output_folder, exist_ok=True)
                     
-            else:
-                logger.warning(f"Projected colvars dataframe is empty for {cv_name}. Skipping this CV.")
-                continue
-            
-        return self.get_output_paths()
+                    # Plumed input 
+                    plumed_inputs_folder = os.path.join(sup_output_folder, 'plumed_inputs')
+                    os.makedirs(plumed_inputs_folder, exist_ok=True)
+                    cv_calculator.write_plumed_files(sup_topology, plumed_inputs_folder, self.waypoint_structures)
+                
+        else:
+            logger.warning(f"Projected colvars dataframe is empty for {cv_name}. Skipping this CV.")
+            return

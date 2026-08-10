@@ -42,6 +42,9 @@ class GeneralSettings(BaseModel):
 
     # Number of independent trainings to run; the one with the lowest score is kept
     num_tries: int = 10
+    # Number of models to train as an ensemble (neural-network CVs only). Each member is trained
+    # on all but one disjoint fold of the training trajectories.
+    num_models: int = 1
     # Seed for the PyTorch random number generator
     seed: int = 42
     # Lengths of the training and validation sets, e.g. [0.8, 0.2]

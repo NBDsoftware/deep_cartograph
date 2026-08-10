@@ -129,6 +129,8 @@ filter_features:
 #     training:                    Settings for the training of the Collective Variables (when applicable)
 #       general:                    General settings for the training
 #         num_tries:                    (int) Maximum number of tries for the training
+#         num_models:                   (int) Number of models to train as an ensemble (neural-network CVs only).
+#                                             Each member trains on all but one disjoint fold of the training trajectories.
 #         seed:                         (int) Seed for the PyTorch random number generator
 #         lengths:                      (list) Lengths of the training and validation sets, e.g. [0.8, 0.2]
 #         batch_size:                   (int) Batch size for the training
@@ -177,6 +179,7 @@ train_colvars:
     training: 
       general:
         num_tries: 10
+        num_models: 1
         seed: 42
         lengths: [0.8, 0.2]
         batch_size: 264

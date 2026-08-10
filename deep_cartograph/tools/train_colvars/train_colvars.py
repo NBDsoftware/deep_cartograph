@@ -31,6 +31,7 @@ def train_colvars(
     features_list: Optional[List[str]] = None,
     dimension: Optional[int] = None,
     cvs: Optional[List[Literal['pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica']]] = None,
+    n_models: Optional[int] = None,
     frames_per_sample: Optional[int] = 1,
     output_folder: str = 'train_colvars'
 ) -> Dict[str, List[str]]:
@@ -94,19 +95,26 @@ def train_colvars(
     cvs : Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]], default=None
         List of collective variables to train or compute. If `None`, the ones in the configuration are used.
 
+    n_models : Optional[int], default=None
+        Number of models to train as an ensemble, for the neural network CVs ('ae', 'vae', 'deep_tica').
+        The training trajectories are split into `n_models` disjoint folds and member i is trained on
+        every fold except fold i. Each model is saved in its own '{cv_name}_{i}' folder.
+        If `None`, the value in the configuration is used (`training.general.num_models`, default 1).
+
     frames_per_sample : Optional[int], default=1
-        Frames in the trajectory for each sample in the colvars file.  
+        Frames in the trajectory for each sample in the colvars file.
 
     output_folder : str, default='train_colvars'
-        Path to the output folder where the output files will be saved.  
+        Path to the output folder where the output files will be saved.
         If not provided, a folder named 'train_colvars' is created.
 
     Returns
     -------
 
     Dict[str, List[str]]
-        A dictionary where keys are the names of the collective variables and values are lists of paths
-        to the corresponding cv trajectory files.
+        A dictionary keyed by collective variable name. 'output_folder', 'model_path' and
+        'traj_paths' refer to the first ensemble member, and 'ensemble_output_folders' /
+        'ensemble_model_paths' list every member.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -141,6 +149,7 @@ def train_colvars(
         features_list=features_list,
         cv_dimension=dimension,
         cvs=cvs,
+        num_models=n_models,
         frames_per_sample=frames_per_sample,
         output_folder=output_folder
     )
@@ -251,6 +260,12 @@ def parse_arguments():
         help="Collective variables to train or compute (pca, ae, tica, htica, deep_tica)"
     )
     parser.add_argument(
+        '-n_models', dest='n_models', type=int, required=False,
+        help=("Number of models to train as an ensemble, for the neural network CVs (ae, vae, deep_tica). "
+              "The training trajectories are split into n_models disjoint folds and each member is trained "
+              "on all folds but its own. Overrides the configuration input YML.")
+    )
+    parser.add_argument(
         '-out', '-output', dest='output_folder', required=False,
         help="Path to the output folder"
     )
@@ -304,6 +319,7 @@ def main():
         features_list = features_list,
         dimension = args.dimension,
         cvs = args.cvs,
+        n_models = args.n_models,
         frames_per_sample = args.frames_per_sample,
         output_folder = output_folder)
     
