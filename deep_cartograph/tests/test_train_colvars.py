@@ -284,3 +284,88 @@ def test_train_colvars_ensemble():
         shutil.rmtree(output_path)
     except:
         print("Could not remove output folder.")
+
+
+def test_timelagged_pairs_do_not_span_trajectories():
+    """
+    The training data is a concatenation of one block of samples per colvars file, so the pairs
+    of samples at time t and t+lag_time must never link the end of one trajectory with the start
+    of the next one. Such a pair would carry the wrong kinetics.
+    """
+    import numpy as np
+    import torch
+
+    from deep_cartograph.modules.cv_learning.cv_calculator import (
+        DeepTICACalculator,
+        TICACalculator,
+        build_timelagged_dataset,
+    )
+
+    print("Testing time-lagged pair construction...")
+
+    lag_time = 5
+    num_trajectories = 3
+
+    # Inputs
+    topology_path = os.path.join(data_path, "input", "topology", "CA_example.pdb")
+    colvars_path = os.path.join(data_path, "reference", "compute_features", "virtual_dihedrals.dat")
+    filtered_features_path = os.path.join(data_path, "reference", "filter_features", "filtered_virtual_dihedrals.txt")
+
+    with open(filtered_features_path, 'r') as f:
+        filtered_features = [line.strip() for line in f.readlines()]
+
+    # Output files
+    output_path = os.path.join(tests_path, "output_train_colvars_timelagged")
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
+
+    # Split the input colvars file to have several training trajectories
+    split_folder = os.path.join(output_path, "split_colvars")
+    colvars_paths, _ = split_colvars(colvars_path, split_folder, num_trajectories)
+
+    configuration = get_config()['common']
+    configuration['lag_time'] = lag_time
+
+    # Both the linear and the neural network time-lagged CVs have to be safe
+    for calculator_class in (TICACalculator, DeepTICACalculator):
+
+        calculator = calculator_class(configuration=configuration, output_path=output_path)
+        calculator.load_training_data(
+            colvars_paths,
+            [topology_path] * num_trajectories,
+            topology_path,
+            filtered_features
+        )
+
+        _, samples_per_trajectory = np.unique(calculator.training_data_labels, return_counts=True)
+        assert len(samples_per_trajectory) == num_trajectories
+
+        # Every trajectory contributes its own samples minus the lag time, and nothing else
+        expected_pairs = sum(count - lag_time for count in samples_per_trajectory if count > lag_time)
+        assert len(calculator.training_input_dtset) == expected_pairs, \
+            f"{calculator_class.__name__}: {len(calculator.training_input_dtset)} pairs, expected {expected_pairs}"
+
+        # Pairing across the whole concatenation would have given lag_time * (num_trajectories - 1)
+        # extra pairs, so the count above has to be strictly smaller
+        assert expected_pairs < len(calculator.training_data) - lag_time
+
+    # Give each trajectory a distinct constant value, so that a pair whose two samples disagree
+    # is necessarily a pair spanning two trajectories
+    num_samples = 100
+    data = torch.cat([torch.full((num_samples, 1), float(index)) for index in range(num_trajectories)])
+    labels = np.repeat(np.arange(num_trajectories), num_samples)
+
+    dataset = build_timelagged_dataset(data, labels, lag_time)
+
+    assert len(dataset) == num_trajectories * (num_samples - lag_time)
+    assert int((dataset['data'][:, 0] != dataset['data_lag'][:, 0]).sum()) == 0
+
+    # A single trajectory has no boundary to respect, it must be left untouched
+    single_dataset = build_timelagged_dataset(data[:num_samples], labels[:num_samples], lag_time)
+    assert len(single_dataset) == num_samples - lag_time
+
+    # Clean the output folder
+    try:
+        shutil.rmtree(output_path)
+    except:
+        print("Could not remove output folder.")
