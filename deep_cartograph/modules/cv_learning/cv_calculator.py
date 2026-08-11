@@ -19,6 +19,65 @@ CVType = TypeVar('CVType') # NOTE: define here possibilities
 # Set logger
 logger = logging.getLogger(__name__)
 
+
+def build_timelagged_dataset(data: torch.Tensor,
+                             labels: Optional[np.ndarray],
+                             lag_time: int
+    ):
+    """
+    Creates a time-lagged dataset, restricting the (t, t+lag_time) pairs to samples that belong
+    to the same trajectory.
+
+    The data is a concatenation of one block of samples per colvars file and carries no time
+    column, so without the trajectory labels mlcolvar assumes a single continuous time series and
+    pairs the last samples of one trajectory with the first samples of the next one, producing
+    lag_time * (num_trajectories - 1) pairs with meaningless kinetics.
+
+    Parameters
+    ----------
+
+    data
+        Samples of all the trajectories, concatenated one trajectory after the other
+
+    labels
+        Index of the trajectory each sample belongs to, aligned row-for-row with data
+
+    lag_time
+        Lag between the two samples of each pair, in number of samples
+
+    Returns
+    -------
+
+    dataset : DictDataset
+        Dataset with keys 'data', 'data_lag', 'weights' and 'weights_lag'
+    """
+    from mlcolvar.utils.timelagged import create_timelagged_dataset
+
+    if labels is None:
+        logger.warning('Trajectory labels not available. Assuming samples pertain to a single trajectory.')
+        return create_timelagged_dataset(data, lag_time=lag_time)
+
+    # Check that each trajectory has more samples than the lag time, otherwise it contributes no pairs
+    traj_labels, num_samples = np.unique(labels, return_counts=True)
+    for traj_label, count in zip(traj_labels, num_samples):
+        if count <= lag_time:
+            logger.error(f"""Trajectory {traj_label} has {count} samples, not more than the lag
+                           time ({lag_time}). It contributes no time-lagged pair.""")
+            raise ValueError(f'Trajectory {traj_label} has {count} samples, not more than the lag time ({lag_time}).')
+
+    if len(traj_labels) == 1:
+        # Single trajectory case
+        dataset = create_timelagged_dataset(data, lag_time=lag_time)
+    else:
+        # The walker argument discards the pairs whose two samples come from different trajectories
+        dataset = create_timelagged_dataset(data, lag_time=lag_time, walker=labels)
+
+    logger.info(f'Time-lagged dataset: {len(dataset)} pairs from {len(data)} samples '
+                f'across {len(traj_labels)} trajectories (lag time {lag_time}).')
+
+    return dataset
+
+
 # Base class for collective variables calculators
 class CVCalculator(ABC, Generic[CVType]):
     """
@@ -59,9 +118,11 @@ class CVCalculator(ABC, Generic[CVType]):
         # When fit_traj_indices is None the model is fitted on all the training data.
         self.fit_traj_indices: Optional[List[int]] = None
         self.fit_data: Optional[torch.Tensor] = None
+        self.fit_data_labels: Optional[np.array] = None
 
         # Validation data (optional, taken from training data if not provided)
         self.validation_data: Optional[torch.Tensor] = None
+        self.validation_data_labels: Optional[np.array] = None
 
         # Projection data labels
         self.projection_data_labels: Optional[np.array] = None
@@ -109,7 +170,17 @@ class CVCalculator(ABC, Generic[CVType]):
         tensor after calling super(), which would leave an eagerly set fit_data stale.
         """
         return self.training_data if self.fit_data is None else self.fit_data
-            
+
+    @property
+    def fit_labels(self) -> Optional[np.array]:
+        """
+        Index of the trajectory each sample of fit_tensor comes from, aligned row-for-row with it.
+
+        Resolved lazily for the same reason as fit_tensor.
+        """
+        return self.training_data_labels if self.fit_data_labels is None else self.fit_data_labels
+
+
     @classmethod
     def load(cls, model_path: str, output_path: str):
         """
@@ -259,11 +330,14 @@ class CVCalculator(ABC, Generic[CVType]):
             colvars_paths = val_colvars_paths,
             topology_paths = val_topology_paths,
             reference_topology = ref_topology_path,   
-            features_list = features_list,  
-            file_label = None,
+            features_list = features_list,
+            file_label = 'traj_label',
             **self.training_reading_settings
         )
-        
+
+        # Pop the labels before building the tensor, otherwise they leak in as a feature
+        self.validation_data_labels = validation_df.pop('traj_label').to_numpy()
+
         self.validation_data = torch.from_numpy(validation_df.values)
     
     def load_training_data(self,
@@ -358,6 +432,10 @@ class CVCalculator(ABC, Generic[CVType]):
         # training_data_labels holds the index of the colvars file each sample comes from
         fit_mask = np.isin(self.training_data_labels, self.fit_traj_indices)
         self.fit_data = self.training_data[torch.from_numpy(fit_mask)]
+
+        # Keep the labels aligned with the restricted data, they are needed to build the
+        # time-lagged pairs of the CVs that use them
+        self.fit_data_labels = self.training_data_labels[fit_mask]
 
         logger.info(f'Fitting on {len(self.fit_data)} of {len(self.training_data)} training samples '
                     f'(trajectories {sorted(self.fit_traj_indices)}).')
@@ -2304,14 +2382,16 @@ class TICACalculator(LinearCalculator):
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
 
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
-        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag) NOTE: this function returns less samples than expected: N-lag_time-2
-        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
-        
+        # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
+        self.training_input_dtset = build_timelagged_dataset(
+            self.training_data,
+            self.training_data_labels,
+            self.configuration.get('lag_time')
+        )
+
     def compute_cv(self):
         """
-        Compute Time-lagged Independent Component Analysis (TICA) on the input features. 
+        Compute Time-lagged Independent Component Analysis (TICA) on the input features.
         """
         from mlcolvar.core.stats import TICA
         
@@ -2366,14 +2446,16 @@ class HTICACalculator(LinearCalculator):
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-        
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
-        self.training_input_dtset = create_timelagged_dataset(self.training_data, lag_time=self.configuration.get('lag_time'))
+        self.training_input_dtset = build_timelagged_dataset(
+            self.training_data,
+            self.training_data_labels,
+            self.configuration.get('lag_time')
+        )
 
     def compute_cv(self):
         """
-        Compute Hierarchical Time-lagged Independent Component Analysis (TICA) on the input features. 
+        Compute Hierarchical Time-lagged Independent Component Analysis (TICA) on the input features.
         
         Initial space of features (num_features) -> TICA LEVEL 1 (subspaces_dimension x num_subspaces) -> TICA LEVEL 2 (CV_dimension)
         
@@ -2601,20 +2683,24 @@ class DeepTICACalculator(NonLinear):
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
         
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         # Fitted on the fold subset when training an ensemble member
-        self.training_input_dtset = create_timelagged_dataset(self.fit_tensor, lag_time=self.configuration.get('lag_time'))
+        self.training_input_dtset = build_timelagged_dataset(
+            self.fit_tensor,
+            self.fit_labels,
+            self.configuration.get('lag_time')
+        )
 
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
 
-        from mlcolvar.utils.timelagged import create_timelagged_dataset
-
         # Create validation time-lagged dataset
         if self.validation_data is not None:
-            self.validation_input_dtset = create_timelagged_dataset(self.validation_data, lag_time=self.configuration.get('lag_time'))
+            self.validation_input_dtset = build_timelagged_dataset(
+                self.validation_data,
+                self.validation_data_labels,
+                self.configuration.get('lag_time')
+            )
 
     def set_encoder_layers(self) -> List:
         """ 
