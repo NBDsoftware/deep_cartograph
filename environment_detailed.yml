@@ -302,7 +302,7 @@ dependencies:
       - kdepy==1.1.12
       - matplotlib-inline==0.1.7
       - mistune==3.1.3
-      - mlcolvar==1.2.2
+      - mlcolvar
       - multidict==6.4.4
       - nbclient==0.10.2
       - nbconvert==7.16.6
