@@ -24,8 +24,19 @@ class ComputeFeaturesBuilder(Assembler):
                  features_list: List[str], 
                  traj_stride: int,
                  fit_template_path: Optional[str] = None):
-        return super().__init__(plumed_input_path, topology_path, features_list, traj_stride, fit_template_path)
-    
+
+        # Guard against duplicated feature labels
+        # PLUMED fails to parse an input file containing the same label twice, and feature
+        # labels (@atomName_atomResid) are not guaranteed to be unique in a topology.
+        # Callers are expected to hand over a clean list, so this is only a safety net.
+        unique_features_list = list(dict.fromkeys(features_list))
+        if len(unique_features_list) < len(features_list):
+            logger.warning(f"{len(features_list) - len(unique_features_list)} duplicated feature labels were dropped before building the PLUMED input.")
+            logger.debug(f"Dropped duplicated feature labels: "
+                         f"{[feature for feature in unique_features_list if features_list.count(feature) > 1]}")
+
+        return super().__init__(plumed_input_path, topology_path, unique_features_list, traj_stride, fit_template_path)
+
     def build(self, colvars_path: str):
         """ 
         Override the base build method to include the print command.

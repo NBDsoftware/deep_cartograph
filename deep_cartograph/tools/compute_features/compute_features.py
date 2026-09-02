@@ -119,7 +119,21 @@ def compute_features(
             'output_folder': os.path.join(output_folder, 'common_features') 
         }
         reference_features = find_common_features(**args)
-        
+
+    # Drop duplicated feature labels
+    # A label is built from the atom name and residue ID (e.g. @CA_256), which is not
+    # guaranteed to be unique: the topology may contain more than one atom with the same
+    # name and resid. PLUMED aborts if a label appears twice in its input file, so the
+    # duplicated labels are dropped here (keeping the first occurrence and the order).
+    num_features = len(reference_features)
+    unique_reference_features = list(dict.fromkeys(reference_features))
+    if len(unique_reference_features) < num_features:
+        logger.warning(f"{num_features - len(unique_reference_features)} duplicated feature labels were found and dropped. "
+                       "Labels are built from atom names and residue IDs, which may not be unique in the topology.")
+        logger.debug(f"Dropped duplicated feature labels: "
+                     f"{[feature for feature in unique_reference_features if reference_features.count(feature) > 1]}")
+    reference_features = unique_reference_features
+
     # Enforce trajectory stride from function argument
     if traj_stride:
         configuration['plumed_settings']['traj_stride'] = traj_stride
