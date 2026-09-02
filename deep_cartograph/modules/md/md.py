@@ -597,7 +597,9 @@ def get_features_list(features_configuration: Dict, topology_path: str) -> List:
         features_labels (list): list containing the feature labels.
     """
     
-    # NOTE: we should check for duplicates between different groups! :) 
+    # NOTE: this list may contain duplicated labels, both within a group and between groups,
+    # because a label (@atomName_atomResid) is not guaranteed to identify a single atom.
+    # Duplicates are dropped downstream before writing a PLUMED input file.
 
     features_labels = []
     
