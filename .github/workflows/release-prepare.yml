@@ -1,0 +1,65 @@
+name: Release (1/2) prepare
+
+# Step 1 of 2. Type the version once here; this rewrites every in-repo version string and
+# rolls the CHANGELOG on a `release/X.Y.Z` branch, then hands you a link to open the PR.
+# `master` requires pull requests, so the bump cannot be pushed to it directly — merging
+# the PR triggers "Release (2/2) publish", which tags and publishes.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (no leading 'v')"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # need tags to detect a duplicate release
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check the tag does not already exist
+        run: |
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::tag $VERSION already exists"
+            exit 1
+          fi
+
+      - name: Set version everywhere and roll the CHANGELOG
+        run: python scripts/bump_version.py "$VERSION"
+
+      - name: Push the release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "release/$VERSION"
+          git commit -am "release: $VERSION"
+          git push origin "release/$VERSION"
+
+      # Not creating the PR from here on purpose: `gh pr create` needs the org/repo setting
+      # "Allow GitHub Actions to create and approve pull requests", which may be off.
+      - name: Link to open the PR
+        run: |
+          {
+            echo "### Release $VERSION prepared"
+            echo
+            echo "Branch \`release/$VERSION\` pushed. Next:"
+            echo
+            echo "1. [Open the pull request](${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}...release/$VERSION?expand=1) — keep the title \`release: $VERSION\`."
+            echo "2. Merge it. That triggers **Release (2/2) publish**, which tags \`$VERSION\` and publishes the GitHub release."
+          } >> "$GITHUB_STEP_SUMMARY"

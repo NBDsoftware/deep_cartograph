@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "deep_cartograph"
+abstract: >-
+  Deep Cartograph trains and uses machine learning models to compute collective
+  variables from molecular dynamics simulations: featurization with PLUMED,
+  feature filtering, CV training with mlcolvar, projection and clustering in
+  the CV space, and PLUMED inputs for enhanced sampling.
+type: software
+# Maintained by scripts/bump_version.py — do not edit by hand.
+version: "0.1.0"
+license: CC-BY-NC-SA-4.0
+repository-code: "https://github.com/NBDsoftware/deep_cartograph"
+url: "https://nbdsoftware.github.io/deep_cartograph/"
+keywords:
+  - molecular dynamics
+  - collective variables
+  - machine learning
+  - enhanced sampling
+  - PLUMED
+# TODO: add co-authors, and a `doi:` / `preferred-citation:` block once published.
+authors:
+  - family-names: "Navarro"
+    given-names: "Pablo"
+    affiliation: "Nostrum Biodiscovery"
+    orcid: "https://orcid.org/0000-0002-4954-4098"
