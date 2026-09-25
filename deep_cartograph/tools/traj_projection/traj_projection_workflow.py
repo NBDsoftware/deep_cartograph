@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class TrajProjectionWorkflow:
     """
-    Class to train collective variables from colvars files.
+    Class to project trajectories in colvars path format to the CV space of a precomputed model
     """
     def __init__(self, 
                  configuration: Dict, 

@@ -198,7 +198,7 @@ def main():
     import argparse
     from deep_cartograph.modules.common import get_unique_path, read_configuration, check_data
 
-    parser = argparse.ArgumentParser("Deep Cartograph: Analyze geometry", description="Analyze geometry from a trajectory using PLUMED.")
+    parser = argparse.ArgumentParser("Deep Cartograph: Analyze geometry", description="Analyze geometry from a trajectory using MDAnalysis.")
     
     parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     
