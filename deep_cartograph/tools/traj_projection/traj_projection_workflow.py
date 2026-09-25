@@ -1,3 +1,6 @@
+"""
+Workflow class behind the trajectory projection tool.
+"""
 # Import necessary modules
 import os
 import sys
@@ -19,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 class TrajProjectionWorkflow:
     """
-    Class to project trajectories in colvars path format to the CV space of a precomputed model
+    Project trajectories, given as colvars files, onto the CV space of pre-trained models.
+
+    This class does the work behind the `traj_projection` tool.
     """
     def __init__(self, 
                  configuration: Dict, 
@@ -30,18 +35,21 @@ class TrajProjectionWorkflow:
                  model_traj_paths: Optional[List[List[str]]] = None,
                  output_folder: Optional[str] = 'traj_projection'):
         """
-        Initializes the TrajProjectionWorkflow class.
+        Set up the workflow and check that the input files exist.
         
-        The class runs the traj_projection workflow, which consists of:
+        For each model, the workflow:
         
-            1. Load previously trained CV models from model paths
-            2. Project the colvars files onto the CV space defined by each model (coloring by frame index)
-            3. Project the colvars files onto the FES given by the training data in model_traj_paths
+            1. Loads the trained CV model.
+            2. Projects the colvars files onto the CV space and plots each trajectory
+               colored by frame index (2D CVs only).
+            3. If `model_traj_paths` is given, plots the projected data on top of the FES
+               of the training data.
 
         The output folder is organized as follows:
         
         traj_projection/
             cv_name_1/                          # e.g. pca/
+                fes/                            # FES plots (only if model_traj_paths is given)
                 trajectory_1/                   # trajectory folder
                     projected_trajectory.csv
                     trajectory.png      
@@ -55,7 +63,7 @@ class TrajProjectionWorkflow:
             List of paths to the colvars files containing the input data from new trajectories to project (samples of features).
 
         topologies : List[str]
-            List of paths to topologies of new trajectories to project
+            List of paths to topologies of new trajectories to project (can be None).
             
         trajectory_names : List[str]
             List of trajectory names corresponding to the input colvars files.
@@ -64,8 +72,8 @@ class TrajProjectionWorkflow:
             List of paths to the pre-trained collective variable model files.
         
         model_traj_paths : Optional[List[List[str]]]
-            List of paths to the projected data in the CV space of the trajectories used for 
-            training the collective variable model(s). These will be used to compute the background FES.
+            For each model in `model_paths`, the list of projected training trajectories (CSV files).
+            They are used to compute the background FES.
 
         output_folder : Optional[str]
             Path to the output folder where results will be saved. 
@@ -130,25 +138,22 @@ class TrajProjectionWorkflow:
                          sup_data_labels: Optional[List[str]] = None   
         ):
         """
-        Create all the required FES plots
+        Create the FES plots: a 1D plot for each CV component and a 2D plot for each
+        pair of components.
         
-            1D plots for each components
-            2D plots for each pair of components
-        
-        Inputs
-        ------
-        
-        main_data: 
-            Main data to compute the background FES
+        Parameters
+        ----------
+        main_data : pd.DataFrame
+            Data used to compute the background FES, one column per CV component.
             
-        output_folder:
-            Directory where the FES will be saved
+        output_folder : str
+            Folder where the FES plots are saved.
             
-        sup_data:
-            Optional supplementary data to show it as a scatter plot alongside the main data
+        sup_data : List[np.ndarray], optional
+            Extra data sets shown as scatter plots on top of the FES.
 
-        sup_data_labels:
-            Optional labels for the supplementary data
+        sup_data_labels : List[str], optional
+            Labels for the extra data sets.
         """
         
         # 1D plots for each component
@@ -198,14 +203,13 @@ class TrajProjectionWorkflow:
     
     def run(self) -> Dict[str, List[str]]:
         """
-        Run the traj_projection workflow.
+        Project the colvars files onto each model, skipping models whose outputs already exist.
         
         Returns
         -------
-        
-        Dict[str, List[str]]
-            Dictionary with the colvars paths trajectories in the CV space of each model in model_paths.
-
+        Dict[str, Dict[str, List[str]]]
+            For each CV name, a dictionary with the key 'traj_paths': the paths to the projected
+            trajectories (CSV files), one per colvars file.
         """
 
         output_cv_data: Dict[str, List[str]] = {}

@@ -1,7 +1,11 @@
+"""
+Schema for the configuration of the trajectory projection tool.
+"""
 from pydantic import BaseModel
 from typing import List, Union, Literal, Optional
 
 class BiasArgs(BaseModel):
+    """Validates the `args` of the bias section: parameters of the enhanced sampling method."""
     
     # Common args for all bias methods
     
@@ -35,6 +39,7 @@ class BiasArgs(BaseModel):
     compression_threshold: float = 0.1
     
 class Bias(BaseModel):
+    """Validates the `bias` section: enhanced sampling method written to the PLUMED input files."""
     
     # Name of the method
     method: Literal['wt_metadynamics', 'opes_metad', 'opes_metad_explore', 'opes_expanded'] = 'opes_metad'
@@ -42,6 +47,7 @@ class Bias(BaseModel):
     args: BiasArgs = BiasArgs() 
 
 class FesFigure(BaseModel):
+    """Validates the `fes` figure settings: computing and plotting the Free Energy Surface."""
       
     # Calculate the Free Energy Surface
     compute: bool = True
@@ -59,21 +65,23 @@ class FesFigure(BaseModel):
     max_fes: float = 30
 
 class TrajProjection(BaseModel):
+    """Validates the `traj_projection` figure settings: plots of trajectories in the CV space."""
     
-    # Plot the Projected Clustered Trajectory
+    # Plot the Projected Trajectory
     plot: bool = True
-    # Number of bins for the Kernel Density Estimation of the Projected Clustered Trajectory
+    # Number of bins for the Kernel Density Estimation of the Projected Trajectory
     num_bins: int = 100
-    # Bandwidth for the Kernel Density Estimation of the Projected Clustered Trajectory
+    # Bandwidth for the Kernel Density Estimation of the Projected Trajectory
     bandwidth: float = 0.25
-    # Transparency of the points in the Projected Clustered Trajectory
+    # Transparency of the points in the Projected Trajectory
     alpha: float = 0.8
-    # Colormap for the Projected Clustered Trajectory
+    # Colormap for the Projected Trajectory
     cmap: str = "turbo"
-    # Size of the markers in the Projected Clustered Trajectory
+    # Size of the markers in the Projected Trajectory
     marker_size: int = 5
 
 class Figures(BaseModel):
+    """Validates the `figures` section."""
       
     # Settings for the Free Energy Surface calculation
     fes: FesFigure = FesFigure()
@@ -84,6 +92,7 @@ class Figures(BaseModel):
     
 
 class TrajProjectionSchema(BaseModel):
+    """Validates the `traj_projection` section of the configuration."""
     
     # Settings for additional figures
     figures: Figures = Figures()

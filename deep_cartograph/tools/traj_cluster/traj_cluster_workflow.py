@@ -1,3 +1,6 @@
+"""
+Workflow class behind the trajectory clustering tool.
+"""
 # Import necessary modules
 import os
 import sys
@@ -19,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 class TrajClusterWorkflow:
     """
-    Class to cluster trajectories based on collective variables.
+    Cluster trajectory frames in the collective variable (CV) space and save the results.
+
+    This class does the work behind the `traj_cluster` tool.
     """
     def __init__(self, 
                 configuration: Dict, 
@@ -32,15 +37,18 @@ class TrajClusterWorkflow:
                 frames_per_sample: Optional[int] = 1,
                 output_folder: str = 'traj_cluster'):
         """
-        Initializes the TrajClusterWorkflow class.
+        Set up the workflow and check that the input files exist.
         
-        The class runs the traj_cluster workflow, which consists of:
+        The workflow:
 
-            1. Cluster the collective variable data from 'cv_traj_paths'.
-            2. Assign cluster labels to collective variable data in 'sup_cv_traj_paths' if provided. 
-               Looking at cluster of closest point in 'cv_traj_paths'.
-            3. Extract representative structures from trajectories in 'trajectories' and 'sup_trajectories' 
-               based on the clusters.
+            1. Clusters the CV data from 'cv_traj_paths'.
+            2. Assigns each sample in 'sup_cv_traj_paths' (if given) to the cluster of
+               its closest sample in 'cv_traj_paths'.
+            3. Extracts the structures of each cluster from 'trajectories' (centroids only,
+               or also all the frames, depending on 'output_structures' in the configuration).
+
+        The parameters are the same as in `traj_cluster` (see that function for details).
+        Exits the program if an input file is missing or the numbers of files do not match.
         """
         
         # Set output folder
@@ -139,7 +147,9 @@ class TrajClusterWorkflow:
                      
     def extract_centroids(self, data: pd.DataFrame):    
         """ 
-        Extract PDB for centroids from the trajectories based on the traj_df.
+        Save a PDB file for each cluster centroid in the 'centroids' folder.
+
+        `data` must have the 'centroid', 'traj_label', 'frame' and 'cluster' columns.
         """
         
         logger.info("Extracting centroids from the trajectories...")
@@ -169,7 +179,9 @@ class TrajClusterWorkflow:
         
     def extract_cluster_ensembles(self, data: pd.DataFrame, output_folder: str):
         """
-        Extract all cluster ensembles from the trajectories based on the traj_df.
+        Save all the frames of each cluster as an XTC trajectory ('cluster_<label>.xtc') in `output_folder`.
+
+        `data` must have the 'traj_label', 'frame' and 'cluster' columns.
         """     
         
         logger.info("Extracting cluster ensembles from the trajectories...")
@@ -195,7 +207,9 @@ class TrajClusterWorkflow:
     
     def read_cv_traj_data(self, paths: List[str]) -> pd.DataFrame:
         """
-        Reads collective variable trajectory data from given paths into a single DataFrame.
+        Read CV trajectory CSV files into a single DataFrame.
+
+        A 'traj_label' column is added with the index of the file each row comes from.
         """
         data = []
         for traj_index, traj_path in enumerate(paths):
@@ -239,14 +253,13 @@ class TrajClusterWorkflow:
     
     def run(self) -> Dict[str, List[str]]:
         """
-        Run the traj_cluster workflow.
+        Run the clustering and save the results.
         
         Returns
         -------
-        
         Dict[str, List[str]]
-            A dictionary where keys are the names of the trajectories from cv_traj_paths and values are
-            lists of paths to the clustered trajectories in the CV space for each cv trajectory file.
+            For each trajectory name (supplementary ones start with 'sup_'), a list with the path to its
+            CV trajectory CSV file with a cluster label per sample. Empty if 'run' is False in the configuration.
         """
         
         if self.configuration['run'] is False:

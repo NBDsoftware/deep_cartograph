@@ -1,3 +1,6 @@
+"""
+Analyze geometry tool: computes RMSD, RMSF and dRMSD of trajectories and saves plots and CSV files.
+"""
 import os
 import time
 import shutil
@@ -16,28 +19,33 @@ def analyze_geometry(configuration: Dict,
                      ref_topologies: Optional[List[str]], 
                      output_folder: str = 'analyze_geometry') -> None:
     """
-    Function that performs different geometrical analysis of a trajectory using MDAnalysis.
-    
-    - RMSD: Root Mean Square Deviation -> with respect to the first frame or a listed reference structure
-    - RMSF: Root Mean Square Fluctuation
+    Run geometric analyses on each trajectory and save plots and CSV files with the results.
+
+    The available analyses are:
+
+    - RMSD (Root Mean Square Deviation): against the first frame, or against each reference structure.
+    - RMSF (Root Mean Square Fluctuation): per residue.
+    - dRMSD (distance RMSD): against the topology, or against each reference structure.
+
+    RMSD and RMSF are computed with MDAnalysis and dRMSD with PLUMED.
 
     Parameters
     ----------
+    configuration : Dict
+        Configuration dictionary (see `default_config.yml` for more information).
 
-        configuration:
-            A configuration dictionary (see default_config.yml for more information)
-            
-        trajectories:          
-            Path to trajectories that will be analyzed.
-            
-        topology_data:            
-            Path to topology files of the trajectories.
-            
-        ref_topologies:
-            (Optional) List of paths to reference topology files to compute RMSD against.
-            
-        output_folder:       
-            (Optional) Path to the output folder
+    trajectories : List[str]
+        Paths to the trajectories to analyze.
+
+    topologies : List[str]
+        Paths to the topology files of the trajectories (same order as `trajectories`).
+
+    ref_topologies : List[str] or None
+        Paths to reference structures to compute RMSD and dRMSD against. If None,
+        RMSD uses the first frame and dRMSD uses the trajectory topology.
+
+    output_folder : str, optional
+        Path to the output folder. Default: 'analyze_geometry'.
     """
 
     from deep_cartograph.modules.common import validate_configuration, save_data
@@ -144,18 +152,20 @@ def analyze_geometry(configuration: Dict,
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -194,18 +204,19 @@ def set_logger(verbose: bool, log_path: str):
 ########
 
 def main():
+    """Entry point of the analyze geometry command: read the arguments and configuration, then run the tool."""
     
     import argparse
     from deep_cartograph.modules.common import get_unique_path, read_configuration, check_data
 
-    parser = argparse.ArgumentParser("Deep Cartograph: Analyze geometry", description="Analyze geometry from a trajectory using MDAnalysis.")
+    parser = argparse.ArgumentParser("Deep Cartograph: Analyze geometry", description="Analyze the geometry of trajectories (RMSD, RMSF, dRMSD) using MDAnalysis and PLUMED.")
     
     parser.add_argument('-conf', dest='configuration_path', type=str, help="Path to configuration file (.yml)", required=True)
     
     parser.add_argument('-traj_data', dest='trajectory_data', help="Path to trajectory or folder with trajectories to analyze.", required=True)
     parser.add_argument('-top_data', dest='topology_data', help="Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding trajectory in -traj_data.", required=True)
     
-    parser.add_argument('-ref_top_data', dest='ref_topology_data', help="(Optional) Path to reference topology or folder with reference topology files to compute RMSD against.", required=False, default=None)
+    parser.add_argument('-ref_top_data', dest='ref_topology_data', help="(Optional) Path to reference topology or folder with reference topology files to compute RMSD and dRMSD against.", required=False, default=None)
     parser.add_argument('-output', dest='output_folder', help="Path to the output folder", required=False)
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Set the logging level to DEBUG", default=False)
 

@@ -1,3 +1,6 @@
+"""
+Schema for the configuration of the full Deep Cartograph workflow.
+"""
 from pydantic import BaseModel
 
 from deep_cartograph.yaml_schemas.analyze_geometry import AnalyzeGeometrySchema
@@ -9,6 +12,7 @@ from deep_cartograph.yaml_schemas.traj_projection import TrajProjectionSchema
 from deep_cartograph.yaml_schemas.traj_cluster import TrajClusterSchema
 
 class DeepCartograph(BaseModel):
+    """Validates the full Deep Cartograph configuration: one section per tool."""
     
     # Schema for the geometric analysis
     analyze_geometry: AnalyzeGeometrySchema = AnalyzeGeometrySchema()

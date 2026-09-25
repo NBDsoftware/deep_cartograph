@@ -1,3 +1,8 @@
+"""
+Find the set of features that can be computed in all the given topologies
+(e.g. different mutants or constructs of the same protein).
+"""
+
 import os
 import logging
 import numpy as np
@@ -22,30 +27,32 @@ def find_common_features(features_configuration: dict,
     other topologies using a topology mapper, and then keeping only the features that 
     are present in all topologies.
     
-    If there is no common set of features, the function will exit with an error message. 
-    If some features are not present in all topologies, they will be discarded and a warning 
-    message will be logged.
-    
+    If some features are not present in all topologies, they are discarded (listed in
+    the debug log).
+
     Parameters
     ----------
-    
-        features_configuration : dict
-            Configuration dictionary, see "features" in compute features schema for details
-        
-        topologies : List[str]
-            List of paths to topology files.
-        
-        reference_topology : str
-            Path to reference topology file. The features will be translated from this topology to the others.
-        
-        output_folder : str
-            Path to output folder where the reference topology will be saved and used for feature translation.
-    
+    features_configuration : dict
+        Configuration dictionary, see "features" in compute features schema for details
+    topologies : List[str]
+        List of paths to topology files.
+    reference_topology : str
+        Path to reference topology file. The features will be translated from this topology to the others.
+    output_folder : str
+        Path to output folder. A copy of the reference topology ('ref_topology.pdb') is saved
+        there and used for feature translation. It is created if it doesn't exist.
+
     Returns
     -------
-    
-        common_features_list :
-            List of strings with the features that are present in all topologies. These are the features
+    ref_common_features_list : List[str]
+        Features present in all topologies, named as in the reference topology
+        and in the same order as the reference features list.
+
+    Raises
+    ------
+    ValueError
+        If no features can be translated to one of the topologies, or if there
+        are no common features at all.
     """
         
     # Create output folder if it doesn't exist

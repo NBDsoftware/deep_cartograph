@@ -1,3 +1,9 @@
+"""
+Read and check PLUMED colvars (COLVAR) files.
+
+A colvars file is a text table written by PLUMED: a ``#! FIELDS`` header with the column names,
+then one row per saved step.
+"""
 import os
 import re
 import io 
@@ -16,24 +22,23 @@ logger = logging.getLogger(__name__)
 # Functions to handle PLUMED CSV files
 def read_colvars(colvars_path: str,
                  **kwargs) -> pd.DataFrame:
-    '''
-    Function that reads a COLVARS file and returns a pandas DataFrame with the same column 
-    names as in the COLVARS file. The time column in ps will be converted to ns.
+    """
+    Read a colvars file into a DataFrame, using the column names from its header.
 
-    If the logger level is set to DEBUG, information about the column names will be printed.
+    The ``time`` column is converted from ps to ns.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    colvars_path : str
+        Path to the colvars file.
+    **kwargs
+        Extra keyword arguments passed to ``pd.read_csv``.
 
-        colvars_path    (str):          COLVARS file path
-        
-        kwargs          (dict):         keyword arguments passed to pd.read_csv function
-
-    Outputs
+    Returns
     -------
-
-        colvars_df      (pandas DataFrame):      COLVARS data
-    '''
+    colvars_df : pd.DataFrame
+        Contents of the colvars file.
+    """
 
     # Read column names
     column_names = read_column_names(colvars_path)
@@ -60,23 +65,22 @@ def read_colvars(colvars_path: str,
     return colvars_df
 
 def read_column_names(colvars_path: str, features_only: bool = False) -> List[str]:
-    '''
-    Reads the column names from a COLVARS file. 
+    """
+    Read the column names from the header of a colvars file.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    colvars_path : str
+        Path to the colvars file.
+    features_only : bool, optional
+        If True, drop columns that are not features (names containing ``time``, ``bias``,
+        ``labels`` or ``walker``). Default is False.
 
-        colvars_path:          
-            COLVARS file path
-            
-        features_only:
-            If True, only the features are read. If False, all the columns are read.
-
-    Outputs
+    Returns
     -------
-
-        column_names    (list of str):  list with the column names
-    '''
+    column_names : list of str
+        Column names.
+    """
 
     # Read first line of COLVARS file
     with open(colvars_path, 'r') as colvars_file:
@@ -104,36 +108,32 @@ def read_features(
     reference_topology: Union[str, None] = None, 
     stratified_samples: Union[List[int], None] = None
     ) -> pd.DataFrame:
-    """ 
-    Read the time series data of the features from the colvars files.
-    If topologies and reference_topology are given, translate the feature names of each colvars file to the reference topology.
-    If not given, assume the feature names are the same in all colvars files.
-    If stratified_samples is given, only read the samples corresponding to the indices in this list.
-    
-    Inputs
-    ------
+    """
+    Read some features from one or more colvars files and join them in a single DataFrame.
 
-        colvars_paths:          
-            List of paths to the colvars files with the time series data of the features
-        
-        ref_feature_names:     
-            List of feature names to read, should be present in all the colvars files
-        
-        topology_paths:        
-            List of paths to the topology files corresponding to the different colvars files 
-            (to translate the feature names if needed)
-                                
-        reference_topology:     
-            Path to reference topology corresponding to the ref_feature_names. If no reference 
-            topology is given, the first file in topology_paths is used.
-                                
-        stratified_samples:     
-            List of indices of the samples to use starting at 1
-    
-    Outputs
+    If ``topology_paths`` is given, the feature names are translated from the reference topology
+    to each file's topology, so systems with different atom numbering can be combined.
+    Otherwise the names are assumed to be the same in all files.
+    The program exits if a feature is missing.
+
+    Parameters
+    ----------
+    colvars_paths : str or list of str
+        Path(s) to the colvars files.
+    ref_feature_names : list of str
+        Names of the features to read, as defined in the reference topology.
+        They are also used as the column names of the output.
+    topology_paths : list of str, optional
+        Topology of each colvars file, in the same order. Default is None (no translation).
+    reference_topology : str, optional
+        Topology that ``ref_feature_names`` refers to. If None, the first of ``topology_paths`` is used.
+    stratified_samples : list of int, optional
+        Rows to read from each file, counted from 1 (the first data row). Default is None (read all rows).
+
+    Returns
     -------
-
-        features_df:            Dataframe with the time series data of the features
+    features_df : pd.DataFrame
+        Feature values from all files, one after the other.
     """
     from deep_cartograph.modules.features import Translator as FeatureTranslator
 
@@ -201,18 +201,16 @@ def read_features(
     return merged_df
 
 def check(colvars_path: str):
-    ''' 
-    Check colvars file content.
+    """
+    Check a colvars file exists, is not empty and has no NaN values.
 
-    - Check the file is not empty
-    - Check the file doesn't contain NaN values
-    
-    Inputs
-    ------
+    The program exits if any check fails.
 
-        colvars_path   
-            COLVARS file path
-    '''
+    Parameters
+    ----------
+    colvars_path : str
+        Path to the colvars file.
+    """
     # Check that the file exists
     if not os.path.exists(colvars_path):
         logger.error(f"COLVARS file not found: {colvars_path}")
@@ -233,19 +231,17 @@ def check(colvars_path: str):
         
 def is_plumed_file(file_path: str) -> bool:
     """
-    Check if given file is in PLUMED format.
+    Check whether a file is a PLUMED output file (its header starts with ``#! FIELDS``).
 
-    Inputs
-    ------
-    
-    file_path
-        PLUMED output file
+    Parameters
+    ----------
+    file_path : str
+        Path to the file.
 
     Returns
     -------
-    
-    is_plumed
-        Bool indicating whether file_path is a plumed output file
+    is_plumed : bool
+        True if the file is a PLUMED output file.
     """
     headers = pd.read_csv(file_path, sep=" ", skipinitialspace=True, nrows=0)
     is_plumed = True if " ".join(headers.columns[:2]) == "#! FIELDS" else False
@@ -258,33 +254,34 @@ def load_dataframe(
     stride: int = 1,
     **kwargs
 ):
-    """Load dataframe(s) from file(s).
-    In case of PLUMED colvar files automatically handles the column names, 
-    otherwise it is just a wrapper for pd.load_csv function.
+    """
+    Load one or more files into a single DataFrame.
 
-    Inputs
-    ------
-    
-    filenames
-        filenames to be loaded
-        
-    start: int, optional
-        read from this row, default 0
-        
-    stop: int, optional
-        read until this row, default None
-        
-    stride: int, optional
-        read every this number, default 1
-        
-    kwargs:
-        keyword arguments passed to pd.load_csv function
+    PLUMED colvars files are read with ``read_colvars``; other files with ``pd.read_csv``.
+    The ``start``, ``stop`` and ``stride`` rows are applied to each file before joining.
 
-    Outputs
+    Parameters
+    ----------
+    file_paths : str or list of str
+        Path(s) to the files.
+    start : int, optional
+        First row to keep. Default is 0.
+    stop : int, optional
+        Row to stop at (not included). Default is None (until the end).
+    stride : int, optional
+        Keep one of every ``stride`` rows. Default is 1.
+    **kwargs
+        Extra keyword arguments passed to the reading function.
+
+    Returns
     -------
-    
-    pandas.DataFrame
-        Dataframe
+    df : pd.DataFrame
+        Data from all files, one after the other.
+
+    Raises
+    ------
+    TypeError
+        If ``file_paths`` is not a string or a list.
     """
 
     # if it is a single string
@@ -328,48 +325,40 @@ def create_dataframe_from_files(
     **kwargs,
 ) -> pd.DataFrame:
     """
-    Create a dataframes from a list of colvars files. 
-    
-    If feature list is given, filter the features based on this list
-    and keep them in the order of the list. If not given, keep all features
-    in the order they appear in the colvars files. In this case, it is assumed
-    that all colvars files have the same features in the same order. If not, 
-    an error is raised. 
+    Create a single DataFrame of features from one or more colvars files.
 
-    If topology_paths and reference_topology are given, translate the
-    feature names of each colvars file to the reference topology before filtering
-    and concatenating the dataframes. Otherwise, assume the feature names are 
-    the same in all colvars files.
-    
-    
-    Inputs
-    ------
-    
-    colvars_paths
-        Path to colvars files or list of paths to colvars files
-        
-    topology_paths (Optional)
-        List of paths to the topology files corresponding to the different colvars files (to translate the feature names if needed).
-        If not given, assume the feature names are the same in all colvars files.
-    
-    reference_topology (Optional)
-        Path to reference topology to which the filer_args refer. If no reference topology is given, the first file in topology_paths is used.
-    
-    features_list (Optional)
-        List of feature names to filter and keep in this order. If not given, all features are kept
-        and it is assumed that all colvars files have the same feature names in the same order.
-        
-    file_label (Optional)
-        Name of the column to be added with the file label, by default 'traj_label'
-        
-    kwargs (Optional)
-        args passed to pd.load_csv function
+    Columns that are not features (time, bias, labels, walker) are dropped.
+    If ``topology_paths`` is given, feature names are translated from each file's topology to the
+    reference topology; features that cannot be translated are dropped.
+    If ``features_list`` is given, only those features are kept, in that order. Otherwise all files
+    must have the same columns in the same order.
 
-    Outputs
+    Parameters
+    ----------
+    colvars_paths : str or list of str
+        Path(s) to the colvars files.
+    topology_paths : str or list of str, optional
+        Topology of each colvars file, in the same order. Default is None (no translation).
+    reference_topology : str, optional
+        Topology that the output feature names refer to. If None, the first of ``topology_paths`` is used.
+    features_list : list of str, optional
+        Features to keep, in this order. Default is None (keep all).
+    file_label : str, optional
+        If given, add a column with this name holding the index of the source file. Default is None.
+    **kwargs
+        Extra keyword arguments passed to ``load_dataframe`` (e.g. ``start``, ``stop``, ``stride``).
+
+    Returns
     -------
-    
-    pd.DataFrame
-        Pandas dataframe of all the given data
+    df : pd.DataFrame
+        Features from all files, one after the other.
+
+    Raises
+    ------
+    TypeError
+        If ``topology_paths`` and ``colvars_paths`` have different lengths.
+    ValueError
+        If a file has NaN values or is missing a feature from ``features_list``.
     """
     
     from deep_cartograph.modules.features import Translator as FeatureTranslator

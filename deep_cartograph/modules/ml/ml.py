@@ -1,3 +1,8 @@
+"""
+PyTorch Lightning callbacks used during CV training: best-model checkpointing
+after annealing, KL weight (beta) annealing for VAEs and delayed learning-rate reduction.
+"""
+
 # Import modules
 import os
 import logging
@@ -15,6 +20,17 @@ class PostAnnealingCheckpoint(Callback):
     """
     Custom callback to save the best model based on validation loss,
     but only after the beta-annealing phase is complete.
+
+    Only one checkpoint is kept: each new best model replaces the previous one.
+
+    Parameters
+    ----------
+    monitor : str
+        Name of the logged metric to monitor (lower is better), e.g. 'valid_loss'
+    dirpath : str
+        Folder where the checkpoint is saved. It is created if it doesn't exist.
+    annealing_end_epoch : int
+        Epoch from which monitoring starts
     """
     def __init__(self, monitor: str, dirpath: str, annealing_end_epoch: int):
         super().__init__()
@@ -28,6 +44,7 @@ class PostAnnealingCheckpoint(Callback):
         os.makedirs(self.dirpath, exist_ok=True)
 
     def on_validation_epoch_end(self, trainer, pl_module):
+        """Save a checkpoint if the monitored metric improved (only after the annealing phase)."""
         # Only start monitoring after the annealing phase
         if trainer.current_epoch < self.annealing_end_epoch:
             return
@@ -52,44 +69,44 @@ class KLAAnnealing(Callback):
     """
     Callback to anneal the KL divergence weight (beta).
     
-    This callback modifies the beta factor controlling the weight
-    of the KL divergence, and thus regularization of the latent space,
-    during training. Useful to avoid posterior collapse. A phenomena occuring 
-    whenever the VAE learns to minimize the ELBO loss function just by decreasing
-    the KL divergence term and ignoring the reconstruction term. Thus learning an
-    uninformative latent space.
-    
-    Two types of annealing are implemented:
-    - Linear annealing: linearly increases the beta value from start_beta to max_beta
-        over a specified number of epochs, starting from a given epoch.
-    - Sigmoid annealing: increases the beta value following a sigmoid curve
-        from start_beta to max_beta over a specified number of epochs, starting from a given epoch
-    - Cyclical annealing: cycles the beta value between start_beta and max_beta
-        for a specified number of cycles, each with a given length. 
-    
-    Inputs
-    ------
-    
-    type:
-        Type of annealing ('linear', 'sigmoid' or 'cyclical'). Default is 'cyclical'.
-        
-    start_beta: 
-        The initial beta value before annealing starts. Default is 0.0.
-        
-    max_beta: 
+    This callback changes the beta factor that weights the KL divergence term
+    (the regularization of the latent space) during training of a VAE. It helps
+    avoid posterior collapse, where the VAE lowers its loss mainly by shrinking the
+    KL term and ignores the reconstruction, giving an uninformative latent space.
+
+    Three types of annealing are implemented:
+
+    - Linear annealing: linearly increases beta from start_beta to max_beta
+      over n_epochs_anneal epochs, starting after start_epoch.
+    - Sigmoid annealing: increases beta following a sigmoid (S-shaped) curve
+      from start_beta to max_beta over n_epochs_anneal epochs, starting after start_epoch.
+    - Cyclical annealing: repeats a ramp from start_beta to max_beta n_cycles times.
+
+    After the annealing period, beta stays at max_beta (linear and cyclical). The
+    LightningModule must have a 'beta' attribute; the value is also logged as 'beta'.
+
+    Parameters
+    ----------
+    type : {'linear', 'sigmoid', 'cyclical'}, optional
+        Type of annealing. Default is 'cyclical'.
+    start_beta : float, optional
+        The beta value before annealing starts. Default is 0.0.
+    max_beta : float, optional
         The final (or maximum) beta value to reach. Default is 0.01.
-        
-    start_epoch: 
-        The epoch at which to start annealing. Default is 1000.
-        
-    n_cycles:
-        For 'cyclical' type: The number of full cycles to perform. Default is 4.
-        
-    n_epochs_anneal: 
-        'linear' or 'sigmoid' types: The total number of epochs to increase beta 
+    start_epoch : int, optional
+        Annealing starts after this epoch. Default is 1000.
+    n_cycles : int, optional
+        For 'cyclical' type: the number of full cycles to perform. Default is 4.
+    n_epochs_anneal : int, optional
+        'linear' or 'sigmoid' types: the number of epochs to increase beta
         from start_beta to max_beta.
-        'cyclical' type: will be divided by n_cycles to determine cycle length.
+        'cyclical' type: total length of all cycles (divided by n_cycles to get the cycle length).
         Default is 1000.
+
+    Raises
+    ------
+    ValueError
+        If type is not valid, or if n_epochs_anneal < n_cycles for cyclical annealing
     """
     
     def __init__(self, 
@@ -122,7 +139,8 @@ class KLAAnnealing(Callback):
               f"max_beta={self.max_beta})")
 
     def on_train_epoch_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        
+        """Compute beta for the current epoch and set it on the LightningModule."""
+
         # Default beta and current epoch
         beta = self.start_beta
         current_epoch = trainer.current_epoch 
@@ -178,10 +196,11 @@ class KLAAnnealing(Callback):
                       n_epochs_anneal: int
                       ) -> float:
         """
-        Cyclical annealing of beta, cycling between 0 and max_beta.
-        
-        The cycle length will include a first half where beta increases
-        from 0 to max_beta, and a second half where it remains at max_beta.
+        Cyclical annealing of beta, cycling between start_beta and max_beta.
+
+        Each cycle has a first half where beta increases linearly
+        from start_beta to max_beta, and a second half where it remains at max_beta.
+        After n_epochs_anneal epochs, beta stays at max_beta.
 
         Parameters
         ----------
@@ -210,7 +229,10 @@ class KLAAnnealing(Callback):
                         ) -> float:
             """
             Sigmoid annealing of beta from start_beta to max_beta over n_epochs_anneal epochs.
-            
+
+            Beta is close to start_beta at the beginning, reaches the midpoint after half
+            of n_epochs_anneal and gets close to max_beta at the end.
+
             Parameters
             ----------
             epoch : int
@@ -244,6 +266,15 @@ class LROnPlateauManager(Callback):
     """
     Manages the ReduceLROnPlateau scheduler to start monitoring
     only after a specified epoch.
+
+    ReduceLROnPlateau lowers the learning rate when the validation loss stops improving.
+    This callback steps the scheduler with the logged 'valid_loss' at the end of each
+    validation epoch, starting from start_epoch.
+
+    Parameters
+    ----------
+    start_epoch : int
+        Epoch from which the scheduler starts monitoring the validation loss
     """
     def __init__(self, start_epoch: int):
         super().__init__()
@@ -251,6 +282,7 @@ class LROnPlateauManager(Callback):
         print(f"LROnPlateauManager initialized. Will start monitoring validation loss at epoch {self.start_epoch}.")
 
     def on_validation_epoch_end(self, trainer: L.Trainer, _):
+        """Step any ReduceLROnPlateau scheduler with the validation loss (after start_epoch)."""
         if trainer.current_epoch < self.start_epoch:
             return
 

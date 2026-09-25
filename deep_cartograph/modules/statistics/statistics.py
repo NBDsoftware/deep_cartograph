@@ -1,3 +1,8 @@
+"""
+Statistics helpers: clustering of samples (k-means, HDBSCAN, hierarchical)
+and simple per-feature statistics used to filter features.
+"""
+
 # Import modules
 import os
 import sys
@@ -16,39 +21,40 @@ logger = logging.getLogger(__name__)
 # Clustering
 def optimize_clustering(features: np.ndarray, settings: Dict):
     """
-    Optimize the hyper-parameters of the clustering algorithm. For kmeans and hierarchical, the optimization 
-    is done computing a combined score* for each number of clusters and selecting the best scoring number of clusters.
+    Cluster the samples, choosing the number of clusters automatically.
 
-    HDBSCAN already has a built-in mechanism to find the best number of clusters.
+    For kmeans and hierarchical, the data is clustered once for each number of clusters
+    in the search interval, and the number with the best combined score* is kept.
+    HDBSCAN already finds the number of clusters by itself, so it is run only once.
 
-    * The score is the equal weight max-min normalized combination of:
+    * The score is the equal weight combination of three scores, each min-max
+      normalized over the search interval:
 
-        - Average silhouette score 
-        - Calinski-Harabasz score
-        - Davies-Bouldin score
-        
-    Average silhouette score: a measure of how similar an object is to its own cluster (cohesion) compared to other clusters (separation).
-    The silhouette ranges from -1 to 1, the higher the value, the better the clustering.
+        - Average silhouette score: how close each sample is to its own cluster compared
+          to other clusters. Ranges from -1 to 1, higher is better.
+        - Calinski-Harabasz score: ratio of between-cluster to within-cluster dispersion.
+          Higher is better.
+        - Davies-Bouldin score: average similarity of each cluster with its most similar
+          cluster. Lower is better (so it is subtracted).
 
-    Calinski-Harabasz score: a measure of how dense the clusters are and how well separated they are from each other. 
-    The score is defined as the ratio of the sum of between-clusters dispersion and of within-cluster dispersion. 
-    The higher the value, the better the clustering.
+    Parameters
+    ----------
 
-    Davies-Bouldin score: defined as the average similarity measure of each cluster with its most similar cluster, 
-    where similarity is the ratio of within-cluster distances to between-cluster distances. The lower the value,
-    the better the clustering.
+    features : np.ndarray
+        Matrix with the features of each sample (n_samples x n_features)
+    settings : Dict
+        Clustering settings. 'algorithm' must be 'kmeans', 'hierarchical' or 'hdbscan'.
+        For kmeans and hierarchical, 'search_interval' gives the [min, max] number of
+        clusters to try (default [2, 15]). See cluster_data() for the other keys.
+        This dictionary is modified in place.
 
-    Inputs
-    ------
-
-        features:          matrix with the features of each sample
-        settings:          dictionary with the settings for the clustering
-    
-    Outputs
+    Returns
     -------
 
-        cluster_labels:  array with the cluster assignment for each sample
-        centroids:       array with the centroids of the clusters
+    cluster_labels : np.ndarray
+        Cluster assignment for each sample
+    centroids : np.ndarray
+        Centroids of the clusters
     """
 
     if settings['algorithm'] == 'kmeans' or settings['algorithm'] == 'hierarchical':
@@ -114,20 +120,37 @@ def cluster_data(features: np.ndarray,
                  initial_centroids: np.ndarray = None
                 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Cluster the data in features using the clustering settings provided in the settings dictionary.
+    Cluster the samples using the algorithm and settings given in the settings dictionary.
 
-    Inputs
-    ------
+    Missing settings are filled in with defaults (the dictionary is modified in place):
+    algorithm='kmeans', num_clusters=10, n_init=10, min_cluster_size=10% of the samples,
+    min_samples=0.1% of the samples (at least 1), cluster_selection_epsilon=0,
+    linkage='complete', max_cluster_size=None, cluster_selection_method='eom'.
 
-        features:          matrix with the features of each sample
-        settings:          dictionary with the settings for the clustering
-        initial_centroids: array with the initial centroids for the k-means algorithm (supersedes num_clusters)
-    
-    Outputs
+    Parameters
+    ----------
+
+    features : np.ndarray
+        Matrix with the features of each sample (n_samples x n_features)
+    settings : Dict
+        Clustering settings. 'algorithm' can be 'kmeans', 'hdbscan' or 'hierarchical'.
+    initial_centroids : np.ndarray, optional
+        Initial centroids for k-means. If given, it sets the number of clusters
+        (overrides num_clusters). Ignored by the other algorithms.
+
+    Returns
     -------
 
-        cluster_labels:  array with the cluster assignment for each sample
-        centroids:       array with the centroids of the clusters
+    cluster_labels : np.ndarray
+        Cluster assignment for each sample
+    centroids : np.ndarray
+        Centroids of the clusters
+
+    Raises
+    ------
+
+    Exception
+        If the algorithm is not implemented
     """
 
     # Set default values for clustering settings
@@ -163,22 +186,28 @@ def kmeans_clustering(feature_matrix: np.ndarray,
                       ) -> np.ndarray:
 
     """
-    Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
-    using the k-means algorithm.
+    Cluster the frames of the simulation with k-means, using the Euclidean distance between features.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        feature_matrix:    matrix with the features of each frame of the simulation
-        num_clusters:      number of clusters to be used in the k-means algorithm
-        n_init:            number of times the k-means algorithm will be run with different centroid seeds, the best result will be kept
-        initial_centroids: array with the initial centroids for the k-means algorithm (supersedes num_clusters)
-    
-    Outputs
+    feature_matrix : np.ndarray
+        Matrix with the features of each frame (n_frames x n_features)
+    num_clusters : int
+        Number of clusters to find
+    n_init : int
+        Number of k-means runs with different centroid seeds. The best result is kept.
+    initial_centroids : np.ndarray, optional
+        Initial centroids. If given, it sets the number of clusters (overrides num_clusters).
+        If None, 'k-means++' initialization is used.
+
+    Returns
     -------
 
-        clusters:    array with the cluster assignment for each frame of the simulation
-        centroids:   array with the centroids of the clusters
+    clusters : np.ndarray
+        Cluster assignment for each frame
+    centroids : np.ndarray
+        Centroids of the clusters
     """
 
     # Log
@@ -208,25 +237,37 @@ def hdbscan_clustering(feature_matrix: np.array,
                        cluster_selection_method: Literal["eom", "leaf"] = "eom"
                        ) -> Tuple[np.array, np.array]:
     """
-    Cluster the frames of the simulation based on the euclidian distance between features. The clustering is performed
-    using the HDBSCAN algorithm.
+    Cluster the frames of the simulation with HDBSCAN, using the Euclidean distance between features.
 
-    Inputs
-    ------
+    HDBSCAN is a density-based method: it finds the number of clusters by itself and
+    labels frames that don't belong to any cluster as noise (label -1). The number of
+    parallel jobs is taken from the SLURM environment variables, if set.
 
-        feature_matrix      (numpy array): matrix with the features of each frame of the simulation
-        min_cluster_size            (int): minimum number of samples in a group for that group to be considered a cluster; 
-                                           groupings smaller than this size will be left as noise 
-        max_cluster_size            (int): a limit to the size of clusters returned by the "eom" cluster selection algorithm, no limit if None
-        min_samples                 (int): number of samples in a neighborhood for a point to be considered as a core point
-        cluster_selection_epsilon (float):  a distance threshold. Clusters below this value will be merged.
-        cluster_selection_method (string): the method used to select clusters from the condensed tree.
-    
-    Outputs
+    Parameters
+    ----------
+
+    feature_matrix : np.array
+        Matrix with the features of each frame (n_frames x n_features)
+    min_cluster_size : int, optional
+        Minimum number of samples in a group for that group to be considered a cluster.
+        Smaller groups are left as noise. Default is 5.
+    max_cluster_size : int, optional
+        Maximum size of the clusters returned by the "eom" selection method. No limit if None.
+    min_samples : int, optional
+        Number of samples in a neighborhood for a point to be considered a core point.
+        If None, it is set to min_cluster_size.
+    cluster_selection_epsilon : float, optional
+        Distance threshold. Clusters closer than this value are merged.
+    cluster_selection_method : {"eom", "leaf"}, optional
+        Method used to select clusters from the condensed tree. Default is "eom".
+
+    Returns
     -------
 
-        clusters (numpy array): array with the cluster assignment for each frame of the simulation
-        centroids (numpy array): array with the estimated centroids for each cluster
+    clusters : np.array
+        Cluster assignment for each frame (-1 means noise)
+    centroids : np.array
+        Estimated centroid of each cluster (noise excluded)
     """
 
     # Find number of CPU cores requested in SLURM
@@ -292,22 +333,35 @@ def hierarchical_clustering(feature_matrix: np.array,
                             linkage: Literal["ward", "complete", "average", "single"] = 'complete'
                             ) -> Tuple[np.array, np.array]:
     """
-    Cluster points based on the euclidian distance between features. The clustering is performed
-    using the hierarchical clustering algorithm.
+    Cluster points with agglomerative (hierarchical) clustering, using the Euclidean distance between features.
 
-    Inputs
-    ------
+    Give either cutoff or num_clusters, not both.
 
-        feature_matrix (numpy array): matrix with the features of each point (e.g. descriptors of a frame of an MD simulation)
-        cutoff               (float): cutoff distance for the clustering algorithm
-        num_clusters           (int): number of clusters to be found.
-        linkage                (str): linkage criterion to be used in the clustering algorithm
+    Parameters
+    ----------
 
-    Outputs
+    feature_matrix : np.array
+        Matrix with the features of each point (e.g. descriptors of a frame of an MD simulation)
+    cutoff : Optional[float]
+        Distance threshold above which clusters are not merged
+    num_clusters : int, optional
+        Number of clusters to find
+    linkage : {"ward", "complete", "average", "single"}, optional
+        Linkage criterion used to merge clusters. Default is 'complete'.
+
+    Returns
     -------
 
-        clusters (numpy array): array with the cluster assignment for each pointt
-        centroids (numpy array): array with the estimated centroid for each cluster as the mean value of the features of the points in the cluster
+    clusters : np.array
+        Cluster assignment for each point
+    centroids : np.array
+        Centroid of each cluster, computed as the mean of the features of its points
+
+    Raises
+    ------
+
+    Exception
+        If both or neither of cutoff and num_clusters are given
     """
 
     # Log
@@ -347,20 +401,26 @@ def find_centroids(data: pd.DataFrame,
                    clustering_features: list
                    ) -> pd.DataFrame:
     """
-    Function that finds the closest sample to each centroid and adds a column named 'centroid' 
-    marking the samples that are centroids.
+    Find the closest sample to each centroid and mark it in a new boolean column named 'centroid'.
 
-    Inputs  
-    ------
+    The input dataframe is modified in place. Exits the program if the centroids
+    and the clustering features have different dimensions.
 
-        data             (DataFrame): data containing the features of the samples and possibly other columns
-        centroids      (numpy array): array with the estimated centroids for each cluster
-        clustering_features   (list): list of column names in data that correspond to the features used for clustering
-    
-    Outputs
+    Parameters
+    ----------
+
+    data : pd.DataFrame
+        Data with the features of the samples and possibly other columns
+    centroids : np.array
+        Estimated centroid of each cluster
+    clustering_features : list
+        Column names in data that correspond to the features used for clustering
+
+    Returns
     -------
-    
-        data (DataFrame): input dataframe with an additional column named 'centroid' marking the samples that are centroids
+
+    data : pd.DataFrame
+        Input dataframe with the extra 'centroid' column, or an empty dataframe if there are no centroids
     """
 
     # Make sure there are centroids
@@ -392,14 +452,30 @@ def find_centroids(data: pd.DataFrame,
 # Feature statistics
 def difference_filter(features_df: pd.DataFrame) -> List[bool]:
     """
-    Function that checks if the difference of each feature between samples
-    is above a certain fixed threshold that depends on the feature type.
-    
-    For sinusoidal features, both the sine and cosine components are considered 
-    to compute the variation.
-    
-    For coordinate features the distance is computed using the euclidean distance between 
-    the coordinates of the atoms. 
+    Check if each feature changes enough across samples, using a fixed threshold per feature type.
+
+    The feature type is read from the prefix of the name (the part before the first '-').
+    The range of values (max - min) of each feature is compared with a threshold:
+
+        - 'sin'/'cos' features: the angle is rebuilt from both components and its range
+          must be at least pi/8 rad (22.5 degrees).
+        - 'tor' features (torsion angles): range of at least pi/8 rad.
+        - 'coord' features: the x, y, z coordinates of each atom are taken together and
+          the largest distance between any two samples must be at least 0.2 nm.
+        - Other features: range of at least 0.2 (e.g. 0.2 nm for distances).
+
+    Parameters
+    ----------
+
+    features_df : pd.DataFrame
+        DataFrame with the time series of the features (one column per feature)
+
+    Returns
+    -------
+
+    List[bool]
+        One value per column, in the same order. True if the feature changes enough.
+        Empty list if the dataframe is empty.
     """
     from scipy.spatial import distance_matrix
     
@@ -497,21 +573,21 @@ def difference_filter(features_df: pd.DataFrame) -> List[bool]:
 
 def min_value_filter(features_df: pd.DataFrame, threshold: float) -> List[bool]:
     """
-    Function that checks if the minimum value of each feature across samples is below a certain threshold.
-    
-    Inputs
-    ------
+    Check if the minimum value of each feature across samples is at or below a threshold.
 
-        features_df:
-            DataFrame with the time series of the features
-        threshold:
-            Minimum value threshold
+    Parameters
+    ----------
 
-    Outputs
+    features_df : pd.DataFrame
+        DataFrame with the time series of the features
+    threshold : float
+        Threshold for the minimum value
+
+    Returns
     -------
 
-        results:
-            List of booleans indicating if the minimum value of each feature is below the threshold
+    results : List[bool]
+        One value per feature. True if its minimum value is at or below the threshold.
     """
     
     feature_names = list(features_df.columns)
@@ -524,40 +600,23 @@ def min_value_filter(features_df: pd.DataFrame, threshold: float) -> List[bool]:
 
 def shannon_entropy(features_df: pd.DataFrame) -> List[float]:
     """
-    Function that computes the Shannon entropy of the distribution of each feature.
+    Compute the Shannon entropy of the distribution of each feature.
 
-    Entropy can be understood as the surprise of the outcome x of a random variable X: 
-    log(1/p(x)) -> the more unlikely the outcome, the more surprised we are and p(x) = 1 yields no surprise
+    Entropy measures how spread out a distribution is: it is higher when values are
+    spread over many bins and lower when they are concentrated in a few. Here it is
+    computed on a 100-bin histogram of each feature (spanning its own min to max), in bits.
 
-    The average 'surprise' of a random variable X: H(X) = \sum_x p(x) log(1/p(x)) = - \sum_x p(x) log(p(x))
+    Parameters
+    ----------
 
-    Which is the entropy of the distribution of X
+    features_df : pd.DataFrame
+        DataFrame with the time series of the features
 
-    The average surprise is maximized when the distribution is uniform (all outcomes have the same probability, variability is maximized)
-
-    The more uniform the distribution (many outcomes with similar probabilities, variability is maximized), the higher the entropy
-    The more skewed the distribution (few outcomes with high probabilities, variability is minimized), the lower the entropy
-
-    For continuous variables, the entropy is computed as the integral of the probability density function times the log of the probability density function
-    and it measures the variability with respect to the unit uniform distribution.
-
-    If its more spread out, the entropy is higher. If its more concentrated, the entropy is lower.
-
-    If it has several peaks, the entropy is higher while if it has a single peak, the entropy is lower (provided they have the same spread or variance)
-
-    Note that the Shannon entropy of continuous distributions will be sensitive to the units of the variable, thus it cannot be used to compare distributions
-    of variables with different units.
-    Inputs
-    ------
-
-        features_df:
-            DataFrame with the time series of the features
-    
-    Outputs
+    Returns
     -------
 
-        feature_entropies:
-            List with the shannon entropy of each feature
+    feature_entropies : List[float]
+        Shannon entropy of each feature, rounded to 3 decimals
     """
 
     from scipy.stats import entropy
@@ -578,19 +637,19 @@ def shannon_entropy(features_df: pd.DataFrame) -> List[float]:
 
 def standard_deviation(features_df: pd.DataFrame) -> List[float]:
     """
-    Function that computes the std of the distribution of each feature.
-    
-    Inputs
-    ------
+    Compute the standard deviation of each feature.
 
-        features_df:
-            DataFrame with the time series of the features 
-            
-    Outputs
+    Parameters
+    ----------
+
+    features_df : pd.DataFrame
+        DataFrame with the time series of the features
+
+    Returns
     -------
 
-        feature_stds: 
-            List of stds of the features
+    feature_stds : List[float]
+        Standard deviation of each feature, rounded to 3 decimals
     """
 
     # Iterate over the features
@@ -605,28 +664,22 @@ def standard_deviation(features_df: pd.DataFrame) -> List[float]:
 
 def dip_test(features_df: pd.DataFrame) -> List[float]:
     """
-    Function that computes the p-value of the Hartigan Dip test for each feature.
+    Compute the p-value of Hartigan's dip test for each feature.
 
-    In the Hartigan's dip test, the null hypothesis is that the distribution is uni-modal. 
-    The alternative hypothesis is that the distribution is multi-modal.
+    Hartigan's dip test checks whether a distribution has a single peak (unimodal).
+    A small p-value is evidence that the feature has more than one peak (multimodal).
 
-    The test statistic is the maximum difference over all sample points, between the empirical 
-    distribution function, and the unimodal distribution function that minimizes that maximum difference.
+    Parameters
+    ----------
 
-    The p-value indicates the probability of rejecting the null hypothesis when it is true. 
-    The smaller the p-value, the stronger the evidence against the null hypothesis.
+    features_df : pd.DataFrame
+        DataFrame with the time series of the features
 
-    Inputs
-    ------
-
-        features_df:
-            DataFrame with the time series of the features 
-    
-    Outputs
+    Returns
     -------
 
-        hdt_pvalues: 
-            List with p-values of the Hartigan Dip test for each feature
+    hdt_pvalues : List[float]
+        p-value of Hartigan's dip test for each feature
     """
     
     from diptest import diptest
@@ -642,5 +695,5 @@ def dip_test(features_df: pd.DataFrame) -> List[float]:
         # Append the p-value to the list
         hdt_pvalues.append(hdt_pvalue)
 
-    # Return a dataframe with the feature names and their p-values
+    # Return the list of p-values
     return hdt_pvalues

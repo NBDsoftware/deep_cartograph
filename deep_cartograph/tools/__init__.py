@@ -1,3 +1,6 @@
+"""
+Deep Cartograph tools. Each tool is one step of the workflow and can also be run on its own.
+"""
 from .align_trajectories import align_trajectories
 from .analyze_geometry import analyze_geometry
 from .compute_features import compute_features

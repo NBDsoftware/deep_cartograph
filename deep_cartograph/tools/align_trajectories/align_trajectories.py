@@ -1,3 +1,7 @@
+"""
+Align trajectories tool: superimposes trajectories onto a reference topology using
+the CA atoms of the residues they share (found through sequence alignment).
+"""
 import os
 import time
 import logging.config
@@ -16,19 +20,23 @@ from deep_cartograph.modules.common import check_data
 
 def find_common_resids(ref_topology: str, topologies: List[str]) -> List[int]:
     """
-    Find reference residue IDs that are common across all target topologies using sequence alignment.
+    Find the residues of the reference topology that are present in all the target topologies.
 
-    For each target topology a PDBTopologyMapper is created that pairwise-aligns the reference
-    sequence against the target sequence. The keys of the resulting mapping are the reference
-    residue IDs found in that target. The intersection across all targets gives the residues
-    that are present in every topology.
+    The reference sequence is aligned to each target sequence to match residues.
 
-    Args:
-        ref_topology: Path to the reference topology PDB file.
-        topologies: List of paths to target topology PDB files.
+    Parameters
+    ----------
+    ref_topology : str
+        Path to the reference topology (PDB file).
 
-    Returns:
-        Sorted list of reference residue IDs present in all target topologies.
+    topologies : List[str]
+        Paths to the target topologies (PDB files).
+
+    Returns
+    -------
+    List[int]
+        Sorted residue IDs (numbered as in the reference) found in every target topology.
+        Empty if `topologies` is empty.
     """
     logger = logging.getLogger("deep_cartograph")
 
@@ -51,13 +59,17 @@ def find_common_resids(ref_topology: str, topologies: List[str]) -> List[int]:
 
 def build_ca_selection(resids: List[int]) -> str:
     """
-    Build an MDAnalysis CA backbone selection string for the given residue IDs.
+    Build an MDAnalysis selection string for the CA atoms of the given residues.
 
-    Args:
-        resids: List of residue IDs.
+    Parameters
+    ----------
+    resids : List[int]
+        Residue IDs to include.
 
-    Returns:
-        MDAnalysis selection string for CA atoms of the given residues.
+    Returns
+    -------
+    str
+        MDAnalysis selection string.
     """
     resid_str = " ".join(str(r) for r in resids)
     return f"backbone and name CA and resid {resid_str}"
@@ -72,28 +84,30 @@ def align_trajectories(trajectory_data: Optional[Union[List[str], str]] = None,
                        ref_topology: Optional[str] = None,
                        output_folder: str = 'align_trajectories') -> None:
     """
-    Tool that aligns all the trajectories and topologies to the reference topology (if provided) or to one 
-    of the topologies. The aligned trajectories and topologies are saved in the output folder.
-    
-    A sequence alignment is used to find the common residues between topologies. The CA atoms 
-    of the common residues are used to align the trajectories. 
-    
-    Args:
-        trajectory_data (Optional[Union[List[str], str]]): 
-            Path to trajectory or list of trajectories to align. If a folder is provided, all the trajectories 
-            in the folder will be aligned.
-        
-        topology_data (Optional[Union[List[str], str]]): 
-            Path to topology or list of topologies corresponding to the trajectories. If a folder is provided, 
-            all the topologies in the folder will be aligned.
-        
-        ref_topology (Optional[str]):
-            Path to reference topology to align the trajectories and topologies. If not provided, the first
-            topology in the list will be used as reference.
-            
-        output_folder (str):
-            Path to the output folder where the aligned trajectories and topologies will be saved. If not
-            provided, a folder named 'align_trajectories' will be created in the current working directory.
+    Align trajectories and topologies to a reference topology and save them in the output folder.
+
+    The residues shared by all topologies are found through sequence alignment, and
+    their CA atoms are used to superimpose each trajectory onto the reference. This
+    works even if the systems have different sequences or residue numbering.
+
+    For each input trajectory, the aligned trajectory (same file name) and its first
+    frame as a PDB topology are written to `output_folder`.
+
+    Parameters
+    ----------
+    trajectory_data : str or List[str], optional
+        Trajectory file(s) or folder with trajectories to align.
+
+    topology_data : str or List[str], optional
+        Topology file(s) or folder with topologies for the trajectories. A single topology
+        is used for all trajectories; otherwise each topology must have the same name as
+        its trajectory.
+
+    ref_topology : str, optional
+        Reference topology to align to. Defaults to the first topology.
+
+    output_folder : str, optional
+        Path to the output folder. Default: 'align_trajectories'.
     """
 
     # Set logger
@@ -124,7 +138,7 @@ def align_trajectories(trajectory_data: Optional[Union[List[str], str]] = None,
 
     logger.info(f"Reference topology: {Path(ref_topology).name}")
 
-    # Find residue IDs common to all topologies (including the reference)
+    # Find reference residue IDs that are present in all topologies
     logger.info("Finding common residues across all topologies via sequence alignment...")
     common_ref_resids = find_common_resids(ref_topology, topologies)
     logger.info(f"Found {len(common_ref_resids)} common residues across all topologies.")
@@ -190,18 +204,20 @@ def align_trajectories(trajectory_data: Optional[Union[List[str], str]] = None,
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -240,6 +256,7 @@ def set_logger(verbose: bool, log_path: str):
 ########
 
 def main():
+    """Entry point of the align trajectories command: read the arguments, then run the tool."""
     
     import argparse
 
@@ -248,7 +265,7 @@ def main():
     parser.add_argument(
         '-traj_data', dest='trajectory_data', required=False, nargs='+',
         help=(
-            "List of trajectory paths or path to folder with trajectories with data to train CVs. "
+            "List of trajectory paths or path to folder with trajectories to align. "
             "These trajectories will be aligned to the reference topology or to the first topology in the list. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
@@ -285,7 +302,7 @@ def main():
     log_path = os.path.join(output_folder, 'deep_cartograph.log')
     set_logger(verbose=args.verbose, log_path=log_path)
 
-    # Run Analyze Geometry tool
+    # Run Align Trajectories tool
     align_trajectories(
         trajectory_data=args.trajectory_data,
         topology_data=args.topology_data,
