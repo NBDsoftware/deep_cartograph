@@ -27,8 +27,9 @@ Starting from trajectory and topology files, Deep Cartograph can:
 :align: center
 ```
 
-**New here?** Start with the [Installation](installation.md) guide, then run the full
-[`deep_carto`](workflow/deep_carto.md) workflow.
+**New here?** Start with the [Installation](installation.md) guide, skim the
+[Concepts](concepts.md) page if terms like *collective variable* or *colvars file* are new to you,
+then run the full [`deep_carto`](workflow/deep_carto.md) workflow.
 
 ## Workflow
 
@@ -56,6 +57,7 @@ Each step is also available as a standalone command and as a Python function.
 :hidden:
 
 installation
+concepts
 workflow/deep_carto
 ```
 

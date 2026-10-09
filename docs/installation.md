@@ -17,7 +17,17 @@ This exposes the `deep_carto` workflow command and the tool commands (`align_tra
 `analyze_geometry`, `compute_features`, `filter_features`, `train_colvars`, `traj_augmentation`,
 `traj_cluster`, `traj_projection`).
 
-<!-- TODO: document environment_lite.yml (no torch / mlcolvar, PCA only). -->
+## Lightweight install
+
+If you only need PCA, `environment_lite.yml` creates a smaller `deep_cartograph_lite` environment
+without the machine-learning packages (PyTorch, Lightning, mlcolvar). The other CV types are then
+skipped with a warning.
+
+```bash
+conda env create -f environment_lite.yml
+conda activate deep_cartograph_lite
+pip install .
+```
 
 ## GPU support
 

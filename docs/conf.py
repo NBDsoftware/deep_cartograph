@@ -33,6 +33,10 @@ autosectionlabel_prefix_document = True
 # enables definition lists.
 myst_enable_extensions = ['colon_fence', 'deflist']
 
+# Generate anchors for headings up to level 3, so tool pages can link to
+# sections such as concepts.html#collective-variables.
+myst_heading_anchors = 3
+
 # Build outputs and local environments are not documentation sources.
 exclude_patterns = ['_build']
 
