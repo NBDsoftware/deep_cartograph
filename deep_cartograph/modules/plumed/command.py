@@ -1,3 +1,8 @@
+"""
+Functions that build single PLUMED commands (actions) as strings.
+
+Each function returns one command, ending with a newline, ready to be added to a PLUMED input file.
+"""
 # Import modules
 import sys
 import math
@@ -20,20 +25,23 @@ def molinfo(
     topology: str, 
     moltype: str = None
     ) -> str:
-    '''
-    Function that creates a PLUMED MOLINFO command.
+    """
+    Create a PLUMED MOLINFO command.
 
-    Inputs
-    ------
+    MOLINFO reads a structure file so that atoms can be referred to by name (e.g. ``@CA-12``) in other commands.
 
-        topology    (str):  path to the topology file
-        moltype     (str):  molecule type
+    Parameters
+    ----------
+    topology : str
+        Path to the structure file (usually a PDB).
+    moltype : str, optional
+        Molecule type (MOLTYPE keyword). Default is None (not added).
 
     Returns
     -------
-
-        molinfo_command (str):  PLUMED MOLINFO command
-    '''   
+    command : str
+        PLUMED MOLINFO command.
+    """
     command = f"MOLINFO STRUCTURE={topology}"
 
     if moltype is not None:
@@ -44,21 +52,24 @@ def molinfo(
     return command
 
 def wholemolecules(indices: List[int]) -> str:
-    '''
-    Function that creates a PLUMED WHOLEMOLECULES command.
+    """
+    Create a PLUMED WHOLEMOLECULES command.
+
+    It rebuilds molecules broken by periodic boundary conditions. All atoms from the first
+    to the last index are treated as a single entity.
 
     NOTE: If needed, this could be extended to consider multiple entities. (e.g. WHOLEMOLECULES ENTITY0=1-10 ENTITY1=11-20)
-    
-    Inputs
-    ------
 
-        indices     :  list of molecule indices
+    Parameters
+    ----------
+    indices : list of int
+        Atom indices (starting at 1). Only the first and last are used.
 
     Returns
     -------
-
-        wholemolecules_command (str):  PLUMED WHOLEMOLECULES command
-    '''   
+    command : str
+        PLUMED WHOLEMOLECULES command.
+    """
     command = f"WHOLEMOLECULES ENTITY0={indices[0]}-{indices[-1]} \n"
 
     return command
@@ -66,19 +77,22 @@ def wholemolecules(indices: List[int]) -> str:
 def fit_to_template(
     template_path: str
     ) -> str:
-    '''
-    Function that creates a PLUMED FIT TO TEMPLATE command.
-    
-    Inputs
-    ------
+    """
+    Create a PLUMED FIT_TO_TEMPLATE command.
 
-        template_path   (str):  path to the reference structure
+    It aligns the system to a reference structure at every step, which is needed for
+    features that depend on orientation, such as atomic coordinates.
+
+    Parameters
+    ----------
+    template_path : str
+        Path to the reference PDB. Its occupancy column marks the atoms used for the alignment.
 
     Returns
     -------
-
-        fit_to_template_command (str):  PLUMED FIT TO TEMPLATE command
-    '''
+    command : str
+        PLUMED FIT_TO_TEMPLATE command.
+    """
     
     command = f"FIT_TO_TEMPLATE STRIDE=1 REFERENCE={template_path} TYPE=OPTIMAL\n"
 
@@ -88,20 +102,21 @@ def position (
     command_label: str,
     atom: str
     ) -> str:
-    '''
-    Function that creates a PLUMED POSITION command.
-    
-    Inputs
-    ------
+    """
+    Create a PLUMED POSITION command, which gives the x, y and z coordinates of an atom.
 
-        command_label   (str):          command label
-        atom            (str):          atom
-    
-    Outputs
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atom : str
+        Atom definition (index or MOLINFO shortcut such as ``@CA-12``).
+
+    Returns
     -------
-
-        position_command (str):         PLUMED POSITION command
-    '''
+    position_command : str
+        PLUMED POSITION command.
+    """
     position_command = command_label + ": POSITION ATOM=" + str(atom) + " NOPBC\n"
     
     return position_command
@@ -110,20 +125,21 @@ def distance(
     command_label: str, 
     atoms: Union[List[str], str]
     ) -> str:
-    '''
-    Function that creates a PLUMED DISTANCE command.
+    """
+    Create a PLUMED DISTANCE command between two atoms (or centers).
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms, as a list of atom definitions or a single comma-separated string.
 
-        command_label   :  command label
-        atoms           :  list of strings or string defining the atoms 
-    
-    Outputs
+    Returns
     -------
-
-        distance_command    (str):          PLUMED DISTANCE command
-    '''
+    distance_command : str
+        PLUMED DISTANCE command.
+    """
   
     # Check if atoms is a list of strings or a string
     if isinstance(atoms, list):
@@ -153,21 +169,25 @@ def custom(
     arguments: List[str],
     periodic: bool = False
     ) -> str:
-    '''
-    Function that creates a PLUMED CUSTOM command.
+    """
+    Create a PLUMED CUSTOM command, which applies a math expression to other variables.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    expression : str
+        Math expression (e.g. ``"sin(x)"``).
+    arguments : list of str
+        Labels of the input variables.
+    periodic : bool, optional
+        Whether the result is periodic. Default is False.
 
-        command_label   :       command label
-        expression      :       expression
-        arguments       :       arguments
-
-    Outputs
+    Returns
     -------
-
-        custom_command  (str):              PLUMED CUSTOM command
-    '''
+    custom_command : str
+        PLUMED CUSTOM command.
+    """
     
     # Create CUSTOM command
     custom_command = command_label + ": CUSTOM ARG=" + ",".join(arguments)
@@ -189,20 +209,22 @@ def torsion(
     command_label: str, 
     atoms: Union[List[str], str]
     ) -> str:
-    '''
-    Function that creates a PLUMED TORSION command.
+    """
+    Create a PLUMED TORSION command, which gives a dihedral angle.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms, as a list of atom definitions or a single comma-separated string.
+        Either 4 atoms or a single shortcut such as ``@phi-12``.
 
-        command_label   :                 command label
-        atoms           :  list of strings or string defining the atoms
-
-    Outputs
+    Returns
     -------
-
-        torsion_command :                 PLUMED TORSION command
-    '''
+    torsion_command : str
+        PLUMED TORSION command.
+    """
     
     # Check if atoms is a list of strings or a string
     if isinstance(atoms, list):
@@ -231,22 +253,22 @@ def sin_old(
     atoms: Union[List[str], str]
     ) -> str:
     """
-    Proxy for the PLUMED ALPHABETA command using a reference angle of -pi/2 radians to convert the cosinus to a sinus.
-    
-    alphabeta = 0.5*(1+cos(phi-pi/2)) 
+    Old way to compute a sine-like feature of a dihedral using the PLUMED ALPHABETA command.
 
-    where phi is the torsion angle defined by the atoms
+    Calls ``alphabeta`` with a reference angle of -pi/2, which gives
+    ``0.5*(1+cos(phi+pi/2)) = 0.5*(1-sin(phi))``, where phi is the dihedral angle.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms that define the dihedral.
 
-        command_label   :  command label
-        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
-    
-    Outputs
+    Returns
     -------
-
-        sin_command     :                 PLUMED ALPHABETA command for the sinus
+    str
+        PLUMED ALPHABETA command.
     """
     return alphabeta(command_label, atoms, reference = -round(math.pi/2,4))
 
@@ -255,22 +277,22 @@ def cos_old(
     atoms: Union[List[str], str]
     ) -> str:
     """
-    Proxy for the PLUMED ALPHABETA command using a reference angle of 0 radians.
-    
-    alphabeta = 0.5*(1+cos(phi-0)) 
+    Old way to compute a cosine-like feature of a dihedral using the PLUMED ALPHABETA command.
 
-    where phi is the torsion angle defined by the atoms
+    Calls ``alphabeta`` with a reference angle of 0, which gives ``0.5*(1+cos(phi))``,
+    where phi is the dihedral angle.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms that define the dihedral.
 
-        command_label   :  command label
-        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
-    
-    Outputs
+    Returns
     -------
-
-        cos_command     :                 PLUMED ALPHABETA command for the cosinus
+    str
+        PLUMED ALPHABETA command.
     """
     return alphabeta(command_label, atoms, reference = 0)
 
@@ -280,18 +302,24 @@ def alphabeta(
     reference: float
     ) -> str:
     """
-    Function that creates an PLUMED ALPHABETA command. The command returns the cosinus moved up and squished between 0 and 1:
-    
-    alphabeta = 0.5*(1+cos(phi-ref)) 
-    
-    where phi is the torsion angle defined by the atoms and ref is the reference angle in radians.
+    Create a PLUMED ALPHABETA command.
 
-    Inputs
-    ------
+    It gives the cosine of a dihedral shifted and scaled to the range [0, 1]:
+    ``0.5*(1+cos(phi-ref))``, where phi is the dihedral angle and ref the reference angle.
 
-        command_label   :  command label
-        atoms           :  list of strings or string defining the atoms that define the phi torsion angle
-        reference       :  list of floats defining the reference values
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms that define the dihedral.
+    reference : float
+        Reference angle in radians.
+
+    Returns
+    -------
+    alphabeta_command : str
+        PLUMED ALPHABETA command.
     """
 
     # Check if atoms is a list of strings or a string
@@ -325,22 +353,25 @@ def read(
     values, 
     ignore_time
     ) -> str:
-    '''
-    Function that creates a PLUMED READ command.
+    """
+    Create a PLUMED READ command, which reads values from a colvars file.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    file_path : str
+        Path to the file to read.
+    values : str
+        Name of the column(s) to read.
+    ignore_time : bool
+        If True, the time column of the file is ignored.
 
-        command_label   (str):              command label
-        file_path       (str):              file path
-        values          (str):              values
-        ignore_time     (bool):             True if time must be ignored
-
-    Outputs
+    Returns
     -------
-
-        read_command    (str):              PLUMED READ command
-    '''
+    read_command : str
+        PLUMED READ command.
+    """
 
     # Create READ command
     read_command = command_label + ": READ FILE=" + file_path + " VALUES=" + values
@@ -362,27 +393,32 @@ def combine(
     powers: Optional[np.array] = None,
     periodic: bool = False
     ) -> str:
-    '''
-    Function that creates a PLUMED COMBINE command. The output from this command is the 
-    linear combination of the input arguments:
-    
-        C = Sum_i [ c_i * (x_i - a_i)^p_i ] 
+    """
+    Create a PLUMED COMBINE command, which computes a combination of variables.
 
-    Inputs
-    ------
+    The result is ``C = Sum_i [ c_i * (x_i - a_i)^p_i ]``. Used for example to build linear CVs
+    or to normalize a variable.
 
-        command_label   :       command label
-        arguments       :       arguments -> x_i
-        coefficients    :       coefficients -> c_i
-        parameters      :       parameters -> a_i
-        powers          :       powers -> p_i
-        periodic        :       True if the RC is periodic
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the input variables (x_i).
+    coefficients : array-like, optional
+        Coefficients (c_i). Default is None (PLUMED default).
+    parameters : array-like, optional
+        Offsets (a_i). Default is None (PLUMED default).
+    powers : array-like, optional
+        Powers (p_i). Default is None (PLUMED default).
+    periodic : bool, optional
+        Whether the result is periodic. Default is False.
 
-    Outputs
+    Returns
     -------
-
-        combine_command (str):              PLUMED COMBINE command
-    '''
+    combine_command : str
+        PLUMED COMBINE command.
+    """
     
     # Create COMBINE command
     combine_command = command_label + ": COMBINE ARG=" + ",".join(arguments)
@@ -424,21 +460,23 @@ def rmsd(
     reference: str, 
     type: str = "OPTIMAL"
     ) -> str:
-    '''
-    Function that creates a PLUMED RMSD command.
-    
-    Inputs
-    ------
-    
-        command_label   (str):              command label
-        reference       (str):              reference structure
-        type            (str):              type of RMSD calculation
+    """
+    Create a PLUMED RMSD command, which gives the RMSD with respect to a reference structure.
 
-    Outputs
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    reference : str
+        Path to the reference PDB. Occupancy marks alignment atoms and B-factor marks RMSD atoms.
+    type : str, optional
+        Type of RMSD calculation. Default is ``"OPTIMAL"``.
+
+    Returns
     -------
-    
-        rmsd_command    (str):              PLUMED RMSD command
-    '''
+    rmsd_command : str
+        PLUMED RMSD command.
+    """
 
     # Create RMSD command
     rmsd_command = command_label + ": RMSD REFERENCE=" + reference + " TYPE=" + type + " \n"
@@ -454,25 +492,34 @@ def upper_walls(
     epsilons: Optional[List[float]] = None,
     offsets: Optional[List[float]] = None
     ) -> str:
-    '''
-    Function that creates a PLUMED UPPER_WALLS command.
-    
-    Inputs
-    ------
+    """
+    Create a PLUMED UPPER_WALLS command.
 
-        command_label   (str):              command label
-        argument        (str):              argument
-        at_eq           (float):            equilibrium position
-        kappa           (float):            force constant
-        exponent        (int):              exponent
-        epsilon         (float):            epsilon
-        offset          (float):            offset
-    
-    Outputs
+    It adds a bias that pushes each variable back when it goes above a given value.
+    Each list has one value per argument. Keywords left as None are not added.
+
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the variables to restrain.
+    at_eqs : list of float, optional
+        Position of the wall for each variable (AT).
+    kappas : list of float, optional
+        Force constants (KAPPA).
+    exponents : list of int, optional
+        Exponents (EXP).
+    epsilons : list of float, optional
+        Rescaling factors (EPS).
+    offsets : list of float, optional
+        Offsets (OFFSET).
+
+    Returns
     -------
-
-        upper_walls_command (str):          PLUMED UPPER_WALLS command
-    '''
+    upper_walls_command : str
+        PLUMED UPPER_WALLS command.
+    """
     
     # Create UPPER_WALLS command
     upper_walls_command = command_label + ": UPPER_WALLS ARG=" + ",".join(arguments)
@@ -523,21 +570,28 @@ def print(
     stride: int = 1, 
     fmt: str = "%.4f"
     ) -> str:
-    '''
-    Function that creates a PLUMED PRINT command.
+    """
+    Create a PLUMED PRINT command, which writes variables to a colvars file.
 
-    Inputs
-    ------
+    A colvars (COLVAR) file is a text table written by PLUMED with one column per variable
+    and one row per saved step.
 
-        arguments       :      arguments
-        file_path       :              output colvars file path
-        stride          :              stride
+    Parameters
+    ----------
+    arguments : list of str
+        Labels of the variables to print.
+    file_path : str
+        Path to the output colvars file.
+    stride : int, optional
+        Print every ``stride`` steps. Default is 1.
+    fmt : str, optional
+        Number format. Default is ``"%.4f"``.
 
-    Outputs
+    Returns
     -------
-
-        print_command   (str):              PLUMED PRINT command
-    '''
+    print_command : str
+        PLUMED PRINT command.
+    """
 
     # Create PRINT command
     print_command = "PRINT ARG="
@@ -576,29 +630,41 @@ def histogram(
     weights_label = None,
     clear_freq = None
     ) -> str:
-    '''
-    Function that creates a PLUMED HISTOGRAM command.
+    """
+    Create a PLUMED HISTOGRAM command, which accumulates a histogram of variables on a grid.
 
-    Inputs
-    ------
+    Grid lists have one value per argument.
 
-        command_label     (str):             command label
-        arguments         (list of str):     list of arguments
-        grid_mins         (list of float):   list of values for grid minimum
-        grid_maxs         (list of float):   list of values for grid maximum
-        stride            (int):             stride for command (1=read all)
-        kernel            (str):             kernel used for kernel density estimation
-        normalization     (str):             type of normalization
-        grid_bins         (list of int):     list of values for grid bins
-        bandwidths        (list of float):   list of values for bandwidth
-        weights_label     (str):             weights label
-        clear_freq        (int):             frequency for clearing accumulated data to compute the histogram - used in block analysis
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the variables.
+    grid_mins : list of float
+        Lower limit of the grid.
+    grid_maxs : list of float
+        Upper limit of the grid.
+    stride : int
+        Use one of every ``stride`` steps (1 = use all).
+    kernel : str
+        Kernel used for kernel density estimation (e.g. ``"GAUSSIAN"``).
+    normalization : str
+        Type of normalization.
+    grid_bins : list of int, optional
+        Number of bins. Default is ``[500]``.
+    bandwidths : list of float, optional
+        Kernel bandwidths, only used with the ``GAUSSIAN`` kernel. Default is ``[0.01]``.
+    weights_label : str, optional
+        Label of the log-weights (LOGWEIGHTS), used to reweight biased data. Default is None.
+    clear_freq : int, optional
+        Clear the accumulated data every ``clear_freq`` steps (used in block analysis). Default is None.
 
-    Outputs
+    Returns
     -------
-
-        histogram_command (str):            PLUMED HISTOGRAM command
-    '''
+    histogram_command : str
+        PLUMED HISTOGRAM command.
+    """
 
     # Create HISTOGRAM command
     histogram_command = command_label + ": HISTOGRAM ARG="
@@ -679,20 +745,23 @@ def dumpgrid(
     file_path, 
     stride = None
     ) -> str:
-    '''
-    Function that creates a PLUMED DUMPGRID command.
+    """
+    Create a PLUMED DUMPGRID command, which writes a grid (e.g. a histogram or FES) to a file.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    arguments : list of str
+        Labels of the grids to write.
+    file_path : str
+        Path to the output file.
+    stride : int, optional
+        Write every ``stride`` steps. Default is None (write only at the end).
 
-        arguments       (list of str):      arguments
-        file_path       (str):              file name
-
-    Outputs
+    Returns
     -------
-
-        dumpgrid_command (str):             PLUMED DUMPGRID command
-    '''
+    dumpgrid_command : str
+        PLUMED DUMPGRID command.
+    """
 
     # Create DUMPGRID command
     dumpgrid_command = "DUMPGRID GRID="
@@ -725,22 +794,25 @@ def convert_to_fes(
     temp, 
     mintozero = True
     ) -> str:
-    '''
-    Function that creates a PLUMED CONVERT_TO_FES command.
+    """
+    Create a PLUMED CONVERT_TO_FES command, which turns a histogram into a free energy surface.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the input grids.
+    temp : float
+        Temperature.
+    mintozero : bool, optional
+        If True, shift the FES so its minimum is zero. Default is True.
 
-        command_label   (str):              command label
-        arguments       (list of str):      arguments
-        temp            (float):            temperature
-        mintozero       (bool):             whether to set minimum to zero
-
-    Outputs
+    Returns
     -------
-
-        convert_to_fes_command (str):       PLUMED CONVERT_TO_FES command
-    '''
+    convert_to_fes_command : str
+        PLUMED CONVERT_TO_FES command.
+    """
 
     # Create CONVERT_TO_FES command
     convert_to_fes_command = command_label + ": CONVERT_TO_FES GRID="
@@ -769,21 +841,23 @@ def reweight_bias(
     arguments, 
     temp
     ) -> str:
-    '''
-    Function that creates a PLUMED REWEIGHT_BIAS command.
+    """
+    Create a PLUMED REWEIGHT_BIAS command, which computes weights to remove the effect of a bias.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the bias variables.
+    temp : float
+        Temperature.
 
-        command_label   (str):              command label
-        arguments       (list of str):      arguments
-        temp            (float):            temperature
-
-    Outputs
+    Returns
     -------
-
-        reweight_bias_command (str):        PLUMED REWEIGHT_BIAS command
-    '''
+    reweight_bias_command : str
+        PLUMED REWEIGHT_BIAS command.
+    """
 
     # Create REWEIGHT_BIAS command
     reweight_bias_command = command_label + ": REWEIGHT_BIAS ARG="
@@ -808,21 +882,23 @@ def external(
     arguments, 
     file
     ) -> str:
-    '''
-    Function that creates a PLUMED EXTERNAL command.
+    """
+    Create a PLUMED EXTERNAL command, which applies a bias read from a grid file.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the biased variables.
+    file : str
+        Path to the grid file with the bias.
 
-        command_label          (str):   command label
-        arguments      (list of str):   arguments
-        file                   (str):   file name
-    
-    Outputs
+    Returns
     -------
-
-        external_command (str):         PLUMED EXTERNAL command
-    '''
+    external_command : str
+        PLUMED EXTERNAL command.
+    """
 
     # Create EXTERNAL command
     external_command = command_label + ": EXTERNAL ARG=" 
@@ -852,18 +928,29 @@ def opes_metad(
     compression_threshold: float
     ) -> str:
     """
-    Function that creates a PLUMED OPES_METAD command.
+    Create a PLUMED OPES_METAD command, which applies an OPES enhanced sampling bias.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the biased variables (usually the CV components).
+    temperature : float
+        Temperature.
+    pace : int
+        Update the bias every ``pace`` steps.
+    sigmas : list of float
+        Initial kernel width, one per argument.
+    barrier : float
+        Expected height of the free energy barriers to overcome.
+    compression_threshold : float
+        Threshold used to merge nearby kernels.
 
-        command_label           :     command label
-        arguments               :     arguments
-        temperature             :     temperature
-        pace                    :     pace
-        sigmas                  :     sigmas
-        barrier                 :     barrier
-        compression_threshold   :     compression threshold
+    Returns
+    -------
+    opes_metad_command : str
+        PLUMED OPES_METAD command.
     """
 
     # Start OPES_METAD command
@@ -905,18 +992,31 @@ def opes_metad_explore(
     compression_threshold: float
     ) -> str:
     """
-    Function that creates a PLUMED OPES_METAD_EXPLORE command.
+    Create a PLUMED OPES_METAD_EXPLORE command.
 
-    Inputs
-    ------
+    This OPES variant explores the CV space faster, at the cost of slower convergence.
 
-        command_label           :     command label
-        arguments               :     arguments
-        temperature             :     temperature
-        pace                    :     pace
-        sigma                   :     sigma
-        barrier                 :     barrier
-        compression_threshold   :     compression threshold
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the biased variables (usually the CV components).
+    temperature : float
+        Temperature.
+    pace : int
+        Update the bias every ``pace`` steps.
+    sigmas : list of float
+        Initial kernel width, one per argument.
+    barrier : float
+        Expected height of the free energy barriers to overcome.
+    compression_threshold : float
+        Threshold used to merge nearby kernels.
+
+    Returns
+    -------
+    opes_metad_explore_command : str
+        PLUMED OPES_METAD_EXPLORE command.
     """
 
     # Start OPES_METAD_EXPLORE command
@@ -955,18 +1055,23 @@ def opes_expanded(
     observation_steps: int
     ) -> str:
     """
-    Function that creates a PLUMED OPES_EXPANDED command.
+    Create a PLUMED OPES_EXPANDED command.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the expansion collective variables.
+    pace : int
+        Update the bias every ``pace`` steps.
+    observation_steps : int
+        Number of steps used to gather information before applying the bias.
 
-        command_label           :     command label
-        arguments               :     arguments
-        temperature             :     temperature
-        pace                    :     pace
-        sigma                   :     sigma
-        barrier                 :     barrier
-        compression_threshold   :     compression threshold
+    Returns
+    -------
+    opes_expanded_command : str
+        PLUMED OPES_EXPANDED command.
     """
 
     # Start OPES_EXPANDED command
@@ -1002,21 +1107,39 @@ def metad(
     grid_bins: List[int]
     ) -> str:  
     """
-    Function that creates a PLUMED METAD command.
+    Create a PLUMED METAD command for (well-tempered) metadynamics.
 
-    Inputs
-    ------
+    Metadynamics adds Gaussian hills along the CVs to push the system out of visited states.
+    The command also asks PLUMED to compute c(t) (CALC_RCT), used for reweighting.
+    List arguments have one value per CV component.
 
-        command_label   :     command label
-        arguments       :     arguments
-        sigmas          :     sigmas
-        height          :     height
-        bias_factor     :     bias_factor
-        temperature     :     temperature
-        pace            :     pace
-        grid_mins       :     grid mins
-        grid_maxs       :     grid maxs
-        grid_bins       :     grid bins
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    arguments : list of str
+        Labels of the biased variables.
+    sigmas : list of float
+        Width of the Gaussian hills.
+    height : float
+        Height of the Gaussian hills.
+    bias_factor : int
+        Well-tempered bias factor.
+    temperature : float
+        Temperature.
+    pace : int
+        Add a hill every ``pace`` steps.
+    grid_mins : list of float
+        Lower limit of the grid used to store the bias.
+    grid_maxs : list of float
+        Upper limit of the grid.
+    grid_bins : list of int
+        Number of grid bins.
+
+    Returns
+    -------
+    metad_command : str
+        PLUMED METAD command.
     """
 
     # Start METAD command
@@ -1071,13 +1194,19 @@ def com(
     atoms
     ) -> str:
     """
-    Function that creates a PLUMED COM command.
+    Create a PLUMED COM command, which defines a virtual atom at the center of mass of a group of atoms.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms, as a list of atom definitions or a single comma-separated string.
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms
+    Returns
+    -------
+    com_command : str
+        PLUMED COM command.
     """
 
     # Check if atoms is a list of strings or a string
@@ -1111,13 +1240,19 @@ def center(
     atoms
     ) -> str:
     """
-    Function that creates a PLUMED CENTER command.
+    Create a PLUMED CENTER command, which defines a virtual atom at the geometric center of a group of atoms.
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command.
+    atoms : list or str
+        Atoms, as a list of atom definitions or a single comma-separated string.
 
-        command_label   (str):                 command label
-        atoms           (list of str or str):  list of strings or string defining the atoms
+    Returns
+    -------
+    center_command : str
+        PLUMED CENTER command.
     """
 
     # Check if atoms is a list of strings or a string
@@ -1152,14 +1287,21 @@ def pytorch_model(
     model_path
     ) -> str:
     """
-    Function that creates a PLUMED PYTORCH_MODEL command.
+    Create a PLUMED PYTORCH_MODEL command, which evaluates a TorchScript model (e.g. a trained CV).
 
-    Inputs
-    ------
+    Parameters
+    ----------
+    command_label : str
+        Label of the command. The outputs are called ``<label>.node-0``, ``<label>.node-1``, etc.
+    arguments : list of str
+        Labels of the input variables (features), in the order the model expects.
+    model_path : str
+        Path to the TorchScript model file.
 
-        command_label   (str):                 command label
-        arguments       (list of str):         list of arguments
-        model_path      (str):                 path to the PyTorch model
+    Returns
+    -------
+    pytorch_model_command : str
+        PLUMED PYTORCH_MODEL command.
     """
 
     # Create PYTORCH_MODEL command

@@ -1,7 +1,11 @@
+"""
+Schema for the configuration of the trajectory clustering tool.
+"""
 from pydantic import BaseModel
 from typing import List, Union, Literal, Optional
 
 class Figures(BaseModel):
+    """Validates the `figures` section: settings of the clustering plots."""
     # Plot the Projected Clustered Trajectory
     plot: bool = True
     # Number of bins for the Kernel Density Estimation of the Projected Clustered Trajectory
@@ -16,10 +20,11 @@ class Figures(BaseModel):
     marker_size: int = 5
     
 class TrajClusterSchema(BaseModel):
+    """Validates the `traj_cluster` section of the configuration."""
 
     # Whether to run the clustering or not
     run: bool = True
-    # Output mode for the clustering results
+    # Structures to extract for each cluster: only the centroids, or also all the frames (None to extract none)
     output_structures: Optional[Literal['centroids', 'all']] = 'centroids'
     # Clustering algorithm to use
     algorithm: Literal["kmeans", "hdbscan", "hierarchical"] = "hierarchical"
@@ -41,7 +46,7 @@ class TrajClusterSchema(BaseModel):
     min_samples: int = 3
     # A distance threshold. Clusters below this value will be merged (only for hdbscan)
     cluster_selection_epsilon: float = 0
-    # The method used to select clusters from the condensed tree."eom" selects the most persistent cluster while “leaf” provides the most fine grained and homogeneous ones
+    # The method used to select clusters from the condensed tree (only for hdbscan). "eom" selects the most persistent cluster while “leaf” provides the most fine grained and homogeneous ones
     cluster_selection_method: Literal["eom", "leaf"] = "eom"
     # Settings for figures
     figures: Figures = Figures()

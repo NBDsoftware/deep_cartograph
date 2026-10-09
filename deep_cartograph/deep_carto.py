@@ -1,3 +1,8 @@
+"""
+Deep Cartograph workflow: runs all the tools in sequence, from trajectories
+to trained collective variables (CVs), projections and clusters. Provides the
+Python API (`deep_cartograph`) and the `deep_carto` command-line entry point.
+"""
 import os
 import sys
 import time
@@ -49,99 +54,78 @@ def deep_cartograph(
     output_folder: Optional[str] = None,
 ) -> None:
     """
-    Main API for the Deep Cartograph workflow.
+    Run the full Deep Cartograph workflow.
 
-    Args:
-        configuration (Dict): 
-            Configuration dictionary (refer to `default_config.yml` for details).
-        
-        trajectory_data (Union[List[str], str]):
-            Path to a trajectory file or directory containing multiple trajectories.
-            These will be used to compute the collective variables.
-            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
-        
-        topology_data (Union[List[str], str]):
-            Path to a topology file or directory with topology files for trajectories.
-            - If a single topology file is provided, it is used for all trajectories.
-            - If a directory is provided, each topology file must match a trajectory filename.
-            Accepted format: `.pdb`.
-            
-        validation_trajectory_data (Union[List[str], str]):
-            Path to a trajectory file or directory containing multiple trajectories
-            to use for validating the collective variables during training.
-            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
-        
-        validation_topology_data (Union[List[str], str]):
-            Path to a topology file or directory with topology files for validation trajectories.
-            - If a single topology file is provided, it is used for all validation trajectories.    
-            - If a directory is provided, each topology file must match a validation trajectory filename.
-            Accepted format: `.pdb`.    
-            
-        seed_trajectory_data (Union[List[str], str]):
-            Path to a trajectory file or directory containing multiple trajectories
-            to augment using the trajectory augmentation tool.
-            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
-        
-        seed_topology_data (Union[List[str], str]):
-            Path to a topology file or directory with topology files for seed trajectories.
-            - If a single topology file is provided, it is used for all seed trajectories.
-            - If a directory is provided, each topology file must match a seed trajectory filename.
-            Accepted format: `.pdb`.
-        
-        supplementary_traj_data (Optional[Union[List[str], str]]):
-            Path to a supplementary trajectory file or directory.
-            These trajectories will be projected onto the CV but not used for computing CVs.
-            Example: experimental structures, coarse-grained simulations.
-            Default: `None`.
-            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
-        
-        supplementary_top_data (Optional[Union[List[str], str]]):
-            Path to a supplementary topology file or directory.
-            - If a single topology file is provided, it is used for all supplementary trajectories.
-            - If a directory is provided, each supplementary trajectory must have a matching topology file.
-            Default: `None`.
-            Accepted format: `.pdb`.
-        
-        reference_topology (Optional[str]):
-            Path to a reference topology file used to determine features from user selections.
-            Default: first topology file in `topology_data`.
-            Accepted format: `.pdb`.
-            
-        waypoints_data (Optional[Union[List[str], str]]):
-            Path to the folder containing intermediate conformations that define the transition of interest.
-            If given, features that do not change their value across these structures will be filtered out.
-            Default: `None`.
-        
-        dimension (Optional[int]): 
-            Number of dimensions for the collective variables.
-            If provided, this overrides the value in the configuration file.
-            Default: `None`.
-        
-        cvs (Optional[List[Literal["pca", "ae", "tica", "htica", "deep_tica"]]]):
-            List of collective variables to train or compute.
-            If provided, this overrides the configuration file settings.
-            Default: `None`.
+    The steps are: analyze geometry, augment seed trajectories, compute features,
+    filter features, train CVs, project and cluster
+    the trajectories in CV space. Each step writes its results to its own
+    subfolder inside `output_folder`.
 
-        n_models (Optional[int]):
-            Number of models to train as an ensemble, for the neural network CVs
-            ("ae", "vae", "deep_tica"). The training trajectories are split into `n_models`
-            disjoint folds and member i is trained on every fold except fold i, so each member
-            differs by the data it did not see. Each model is saved in its own `{cv_name}_{i}`
-            folder. The supplementary projection and clustering steps run on the first member.
-            If provided, this overrides the configuration file settings.
-            Default: `None` (a single model per CV).
+    Trajectory formats accepted: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
+    Topology format accepted: `.pdb`. For every `*_topology_data` argument, if a single
+    topology file is provided it will be used for all trajectories of that group; otherwise 
+    each topology must have the same name as its trajectory.
 
-        restart (bool): 
-            If `True`, restarts the workflow from the last completed step.
-            Deletes step folders that need to be recomputed.
-            Default: `False`.
-        
-        output_folder (Optional[str]): 
-            Path to the output directory.
-            Default: `"deep_cartograph"`.
+    Parameters
+    ----------
+    configuration : Dict
+        Configuration dictionary, with one section per step (see `default_config.yml`).
 
-    Returns:
-        None
+    trajectory_data : str or List[str], optional
+        Trajectory file(s) or folder with trajectories used to train the CVs.
+
+    topology_data : str or List[str], optional
+        Topology file(s) or folder with topologies for `trajectory_data`.
+
+    validation_trajectory_data : str or List[str], optional
+        Trajectory file(s) or folder with trajectories used to validate the CVs during training.
+
+    validation_topology_data : str or List[str], optional
+        Topology file(s) or folder with topologies for `validation_trajectory_data`.
+
+    seed_trajectory_data : str or List[str], optional
+        Trajectory file(s) or folder with trajectories to augment (by interpolating
+        between frames) before adding them to the training data.
+
+    seed_topology_data : str or List[str], optional
+        Topology file(s) or folder with topologies for `seed_trajectory_data`.
+
+    supplementary_traj_data : str or List[str], optional
+        Trajectory file(s) or folder with extra trajectories (e.g. experimental structures)
+        that are projected onto the trained CVs but not used to train them.
+
+    supplementary_top_data : str or List[str], optional
+        Topology file(s) or folder with topologies for `supplementary_traj_data`.
+
+    reference_topology : str, optional
+        Topology used to turn the feature selections of the configuration into actual features.
+        Defaults to the first topology in `topology_data` (or in `seed_topology_data` if there
+        are no main topologies).
+
+    waypoints_data : str or List[str], optional
+        Structure file(s) or folder with intermediate conformations of the transition of
+        interest. Features that do not change across these structures are filtered out.
+
+    dimension : int, optional
+        Number of dimensions of the CVs. Overrides the value in the configuration.
+
+    cvs : List[str], optional
+        CVs to train or compute (e.g. 'pca', 'ae', 'vae', 'tica', 'htica', 'deep_tica', 'umap').
+        Overrides the list in the configuration.
+
+    n_models : int, optional
+        Number of models to train as an ensemble for the neural network CVs ('ae', 'vae', 'deep_tica').
+        The training trajectories are split into `n_models` groups (folds) and each model is
+        trained on all folds except one. Each model is saved in its own `{cv_name}_{i}` folder,
+        and the projection and clustering steps use the first model.
+        Overrides the value in the configuration (default: a single model per CV).
+
+    restart : bool, optional
+        If True, reuse the existing `output_folder` and skip the steps whose results
+        already exist. If False, a new, unique output folder is created. Default: False.
+
+    output_folder : str, optional
+        Path to the output folder. Default: 'deep_cartograph'.
     """
     
     # Set logger
@@ -379,18 +363,20 @@ def deep_cartograph(
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -423,7 +409,7 @@ def set_logger(verbose: bool, log_path: str):
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
 
 def parse_arguments():
-    """Parses command-line arguments."""
+    """Parse the command-line arguments of the `deep_carto` command."""
     parser = argparse.ArgumentParser(
         prog="Deep Cartograph",
         description="Map trajectories onto Collective Variables."
@@ -524,7 +510,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-cvs', nargs='+', required=False,
-        help="Collective variables to train or compute (pca, ae, tica, htica, vae, deep_tica). "
+        help="Collective variables to train or compute (pca, ae, vae, tica, htica, deep_tica, umap). "
              "Overrides the configuration input YML."
     )
     parser.add_argument(
@@ -550,7 +536,7 @@ def parse_arguments():
 
 
 def main():
-    """Main function to execute Deep Cartograph workflow."""
+    """Entry point of the `deep_carto` command: read the arguments and configuration, then run the workflow."""
     
     args = parse_arguments()
 

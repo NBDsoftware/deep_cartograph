@@ -1,13 +1,18 @@
+"""
+Schema for the configuration of the compute features tool.
+"""
 from pydantic import BaseModel
 from typing import Dict, List, Literal, Union
 
 class CoordinateGroup(BaseModel):
+    """Settings of a group of coordinate features (x, y, z of each selected atom)."""
     # Selection of atoms to be included in this group (MDAnalysis selection syntax)
     selection: str = "not name H*"
     # Stride for the selection. Include only every stride-th atom in the selection
     stride: int = 1
     
 class DistanceGroup(BaseModel):
+    """Settings of a group of distance features (between atoms of two selections)."""
 
     # Selection of atoms to be included in the first selection of this group (MDAnalysis selection syntax)
     first_selection: str = "not name H*"
@@ -23,6 +28,7 @@ class DistanceGroup(BaseModel):
     skip_bonded_atoms: bool = True
 
 class DihedralGroup(BaseModel):
+    """Settings of a group of dihedral angle features."""
     
     # Selection of atoms to be included in this group (MDAnalysis selection syntax)
     selection: str = "not name H*"
@@ -32,6 +38,7 @@ class DihedralGroup(BaseModel):
     search_mode: Literal["virtual", "protein_backbone", "real"] = "real"
 
 class DistanceToCenterGroup(BaseModel):
+    """Settings of a group of distances from atoms to a geometric center."""
 
     # Selection of atoms to compute the distance to the geometric center to (MDAnalysis selection syntax)
     selection: str = "not name H*"
@@ -39,6 +46,7 @@ class DistanceToCenterGroup(BaseModel):
     center_selection: str = "not name H*"
 
 class Features(BaseModel):
+    """Validates the `features` section: the groups of features to compute."""
     
     # Dictionaries with the group name as key and the group definition as value
     
@@ -52,6 +60,7 @@ class Features(BaseModel):
     distance_to_center_groups: Dict[str, DistanceToCenterGroup] = {}
 
 class PlumedSettings(BaseModel):
+    """Validates the `plumed_settings` section."""
 
     # Time out for the plumed command to run (in seconds)
     timeout: int = 172800
@@ -61,6 +70,7 @@ class PlumedSettings(BaseModel):
     features: Features = Features()
 
 class PlumedEnvironment(BaseModel):
+    """Validates the `plumed_environment` section: how to run PLUMED on this machine."""
 
     # Path to the PLUMED binary
     bin_path: str = "plumed"
@@ -70,6 +80,7 @@ class PlumedEnvironment(BaseModel):
     env_commands: List[str] = []
 
 class ComputeFeaturesSchema(BaseModel):
+    """Validates the `compute_features` section of the configuration."""
     
     # Plumed settings
     plumed_settings: PlumedSettings = PlumedSettings()

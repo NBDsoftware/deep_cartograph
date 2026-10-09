@@ -1,3 +1,8 @@
+"""
+General helper functions used across Deep Cartograph: file handling,
+configuration reading and validation, input checks and simple I/O.
+"""
+
 import os
 import sys
 import yaml
@@ -20,13 +25,13 @@ logger = logging.getLogger(__name__)
 def package_is_installed(*package_name: str) -> bool:
     """
     Check if some packages are installed.
-    
+
     Parameters
     ----------
-    
-    package_name : str
-        Variable number of package names to check
-    
+
+    *package_name : str
+        Variable number of package names to check (import names, e.g. 'torch')
+
     Returns
     -------
     
@@ -42,18 +47,21 @@ def package_is_installed(*package_name: str) -> bool:
 
 def files_exist(*file_path, verbose: bool = True) -> bool:
     '''
-    Returns true if all files exist.
-    Inputs
-    ------
+    Check if all the given files exist.
 
-        file_path  (str): variable number of paths to files including filename
-        
-        verbose   (bool): if True, it logs an error message for each file that doesn't exist
-    
-    Output
-    ------
+    Parameters
+    ----------
 
-        exist (bool): True if they all exist. False if any of them doesn't exist
+    *file_path : str
+        Variable number of paths to files, including the file name
+    verbose : bool, optional
+        If True, log an error for each missing file. Default is True.
+
+    Returns
+    -------
+
+    bool
+        True if all files exist, False if any of them is missing
     '''
 
     all_exist = True
@@ -71,16 +79,19 @@ def files_exist(*file_path, verbose: bool = True) -> bool:
 
 def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
     """
-    Compresses one or more files and/or directories into a single ZIP file.
+    Compress one or more files and/or directories into a single ZIP file.
 
-    This function preserves the directory structure. For example, compressing a
-    directory named 'my_folder' will result in a 'my_folder' directory inside
-    the zip archive.
+    The directory structure is kept. For example, compressing a directory named
+    'my_folder' gives a 'my_folder' directory inside the zip archive. Paths that
+    don't exist are skipped with a warning. Errors are logged, not raised.
 
     Parameters
     ----------
-        output_zip_path: The full path for the output ZIP file (e.g., '/path/to/archive.zip').
-        *paths_to_compress: A variable number of paths to files or directories to compress.
+
+    output_zip_path : str
+        Full path of the output ZIP file (e.g. '/path/to/archive.zip')
+    *paths_to_compress : str
+        Variable number of paths to files or directories to compress
     """
     if not paths_to_compress:
         logger.warning("No input paths were provided to compress.")
@@ -125,13 +136,17 @@ def zip_files(output_zip_path: str, *paths_to_compress: str) -> None:
 
 def unzip_files(zip_path: str, output_folder: str) -> None:
     """
-    Extracts the contents of a ZIP file to a specified output folder.
+    Extract the contents of a ZIP file to an output folder.
+
+    Errors (missing or corrupted file, permissions) are logged, not raised.
 
     Parameters
     ----------
-        zip_path: The full path to the ZIP file to be extracted (e.g., '/path/to/archive.zip').
-        output_folder: The directory where the contents will be extracted. 
-                       If it doesn't exist, it will be created.
+
+    zip_path : str
+        Full path to the ZIP file to extract (e.g. '/path/to/archive.zip')
+    output_folder : str
+        Folder where the contents will be extracted. It is created if it doesn't exist.
     """
     if not os.path.isfile(zip_path):
         logger.error(f"ZIP file '{zip_path}' does not exist.")
@@ -156,11 +171,13 @@ def unzip_files(zip_path: str, output_folder: str) -> None:
         
 def remove_files(*file_paths: str) -> None:
     """ 
-    Safely remove a list of files.
-    
+    Remove the given files, ignoring paths that are not existing files.
+
     Parameters
     ----------
-        *file_paths: Variable number of file paths to remove.
+
+    *file_paths : str
+        Variable number of file paths to remove
     """
     for file_path in file_paths:
         if os.path.isfile(file_path):
@@ -169,17 +186,19 @@ def remove_files(*file_paths: str) -> None:
 # Related to configuration
 def read_configuration(configuration_path: str) -> Dict[str, Any]:
     """
-    Function to read the YAML configuration file. Exits if configuration file is not found.
+    Read a YAML configuration file. Exits the program if the file is not found.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        configuration_path       (str): Path to YAML configuration file
+    configuration_path : str
+        Path to the YAML configuration file
 
-    Outputs
+    Returns
     -------
-        
-        configuration (dict): Dictionary with configuration
+
+    configuration : Dict[str, Any]
+        Dictionary with the configuration
     """
 
     # Read configuration file
@@ -200,6 +219,9 @@ def validate_configuration(configuration: Dict[str, Any],
     Validate the configuration dictionary with the given schema and dump the validated configuration to
     the output folder.
 
+    The validated configuration includes the schema defaults for any missing keys.
+    Exits the program if the configuration is not valid.
+
     Parameters
     ----------
 
@@ -208,7 +230,8 @@ def validate_configuration(configuration: Dict[str, Any],
     schema : Type[BaseModel]
         Pydantic schema to validate the configuration
     output_folder : str
-        Path to the output folder
+        Path to the output folder. The validated configuration is saved there as
+        'configuration.yml'. If None, nothing is saved.
 
     Returns
     -------
@@ -235,9 +258,18 @@ def merge_configurations(common_config: Dict, specific_config: Optional[Dict]) -
         """
         Merge the common configuration with the cv-specific configuration recursively.
 
-        It preserves all key and value pairs in the common configuration that are not in 
-        the cv-specific configuration 
-        
+        Values in the cv-specific configuration win. Keys found only in the common
+        configuration are kept. Nested dictionaries are merged key by key.
+
+        Parameters
+        ----------
+
+        common_config : Dict
+            Base configuration, shared by all CVs
+        specific_config : Optional[Dict]
+            CV-specific configuration. If None or empty, a copy of the common
+            configuration is returned.
+
         Returns
         -------
 
@@ -262,19 +294,19 @@ def merge_configurations(common_config: Dict, specific_config: Optional[Dict]) -
 # Features utils
 def read_features_list(features_path: Optional[str]) -> Optional[List[str]]:
     """
-    Read the feature list to use
+    Read the list of features to use from a text file (one entry per line).
 
     Parameters
     ----------
 
-    features_path : str
-        Path to the file with the list of features
-    
+    features_path : Optional[str]
+        Path to the file with the list of features. If None, nothing is read.
+
     Returns
     -------
 
     feature_constraints : Optional[List[str]]
-        List of features to use or regex to select the features
+        List of feature names (or regex patterns) to use, or None if no path is given
     """
 
     if features_path is not None:
@@ -294,20 +326,23 @@ def read_features_list(features_path: Optional[str]) -> Optional[List[str]]:
 # Input validation
 def find_files(paths: Union[List[str], str]) -> List[str]:
     """
-    Function that finds all files in a path or list of paths. 
-    
+    Find all files in a path or list of paths.
+
     For each path, if it is a file, it is added to the list. If it is a folder,
-    all the files in the folder are added to the list. 
+    all the files directly inside it are added (sub-folders are not searched).
+    Hidden files are ignored. Exits the program if a path doesn't exist.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        paths: Paths to files or folders
+    paths : Union[List[str], str]
+        Path or paths to files or folders
 
     Returns
     -------
 
-        file_paths: List of file paths
+    file_paths : List[str]
+        Sorted list of file paths
     """
     
     # If paths is a string, we convert it to a list
@@ -345,34 +380,34 @@ def check_data(trajectory_data: Optional[Union[List[str], str]],
                topology_data: Optional[Union[List[str], str]]
     ) -> Tuple[List[str], List[str]]:
     """
-    Function that checks the existence of the trajectory and topology data. 
-    It also checks that the number of trajectory files is the same as the number of topology files.
-    
-    Inputs
-    ------
-    
-    trajectory_data
+    Check the trajectory and topology inputs and pair each trajectory with its topology.
+
+    It also checks that the number of trajectory files is the same as the number of
+    topology files. Exits the program if a check fails.
+
+    Parameters
+    ----------
+
+    trajectory_data : Optional[Union[List[str], str]]
         Path to trajectory, trajectories or folder with trajectories.
-        
-    topology_data
+    topology_data : Optional[Union[List[str], str]]
         Path to topology, topologies or folder with topologies for the trajectories.
         If a single topology file is provided, it is used for all trajectories.
-        If a folder is given, each trajectory should have a corresponding topology file with the same name.
+        If several are given, each trajectory should have a corresponding topology file with the same name.
+
+    Returns
+    -------
+
+    traj_file_paths : List[str]
+        List of trajectory file paths.
+    top_file_paths : List[str]
+        List of topology file paths, one per trajectory.
 
     Notes
     -----
     This function is idempotent: calling it on its own output is safe. A single topology
     expanded into N identical paths by a previous call is treated as the single-topology
     case rather than triggering the name-matching branch.
-
-    Returns
-    -------
-    
-    traj_file_paths
-        List of trajectory file paths.
-    
-    top_file_paths
-        List of topology file paths.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -423,24 +458,22 @@ def check_data(trajectory_data: Optional[Union[List[str], str]],
 # Related to i/o
 def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, verbose: bool = True):
     """
-    Initialize a dataset from a dataframe. Suitable for supervised/unsupervised tasks.
+    Create an mlcolvar dataset from a dataframe of features.
 
     Parameters
     ----------
-    filter_args: dict, optional
-        Dictionary of arguments which are passed to df.filter() to select descriptors (keys: items, like, regex), by default None
-        Note that 'time' and '*.bias' columns are always discarded.
+    df : pd.DataFrame
+        Dataframe with one column per feature and one row per sample
+    filter_args : dict, optional
+        Arguments passed to df.filter() to select descriptors (keys: items, like, regex), by default None.
+        Columns whose name contains 'labels', 'time', 'bias' or 'walker' are always discarded.
     verbose : bool, optional
-        Print info on the datasets, by default True
-    create_labels: bool, optional
-        Assign a label to each file, default True if more than a file is given, otherwise False
-    kwargs : optional
-        args passed to mlcolvar.utils.io.load_dataframe
+        Log info on the dataset, by default True
 
     Returns
     -------
-    torch.Dataset
-        Torch labeled dataset of the given data
+    mlcolvar.data.DictDataset
+        Dataset with the selected features stored under the 'data' key (no labels)
     """
     
     import torch
@@ -463,13 +496,15 @@ def create_dataset_from_dataframe(df: pd.DataFrame, filter_args: dict = None, ve
 
 def save_list(list_to_save: list, path_to_save: str) -> None:
     """
-    Function that saves a list to a file.
+    Save a list to a text file, one element per line.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        list_to_save: List to save
-        path_to_save: Path to the file where the list will be saved
+    list_to_save : list
+        List to save
+    path_to_save : str
+        Path to the file where the list will be saved. It is overwritten if it exists.
     """
 
     # Open the file
@@ -483,7 +518,9 @@ def save_list(list_to_save: list, path_to_save: str) -> None:
 
 def save_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], y_label: str, x_label: str, folder_path: str):
     """
-    Save the data to files.
+    Save x/y data pairs to CSV files, one file per key.
+
+    Each file is named '<key>.csv' and has two columns: x and y.
 
     Parameters
     ----------
@@ -491,13 +528,19 @@ def save_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], y_label:
     y_data : Dict[str, np.array]
         Dictionary with the y data to save
     x_data : Dict[str, np.array]
-        Dictionary with the corresponding x data
+        Dictionary with the corresponding x data (same keys as y_data)
     y_label : str
-        Label for the y data
+        Label for the y data (used in the header)
     x_label : str
-        Label for the x data
+        Label for the x data (used in the header)
     folder_path : str
         Path to the folder where the data will be saved
+
+    Raises
+    ------
+
+    ValueError
+        If a key in y_data has no matching entry in x_data
     """
     
     # For each key in y_data
@@ -516,17 +559,22 @@ def save_data(y_data: Dict[str, np.array], x_data: Dict[str, np.array], y_label:
     
 def write_as_csv(dataframe, path):
     """
-    Writes a pandas DataFrame to a CSV file keeping the same column names but in PLUMED format.
+    Write a pandas DataFrame to a space-separated file in PLUMED format, keeping the column names.
+
     Note that the time column is assumed to be in ns and will be converted to ps!
+    The input dataframe is modified in place.
 
-    If the file already exists, it will append the new data to the existing file.
+    If the file already exists, the new data is appended. In that case the first row
+    is dropped (it repeats the last sample) and the time is shifted to continue from
+    the last time in the file.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        dataframe   (pandas DataFrame):    DataFrame to be written
-        path                     (str):    path to the CSV file including the file name
-
+    dataframe : pd.DataFrame
+        DataFrame to write. It must have a 'time' column.
+    path : str
+        Path to the output file, including the file name
     """
 
     # Convert time from ns to ps
@@ -563,17 +611,19 @@ def write_as_csv(dataframe, path):
 
 def read_list(path_to_read: str) -> list:
     """
-    Function that reads a list from a file.
+    Read a list from a text file, one element per line.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        path_to_read: Path to the file where the list is saved
-    
+    path_to_read : str
+        Path to the file where the list is saved
+
     Returns
     -------
 
-        list_read: List read from the file
+    list_read : list
+        Lines of the file as strings (trailing newline characters are kept)
     """
 
     # Open the file
@@ -586,20 +636,23 @@ def read_list(path_to_read: str) -> list:
 
 def get_unique_path(path: str) -> str:
     """
-    Returns a unique path. 
-    If it exists, it creates a new path with a suffix number.
-    If it does not exist, it returns the original path.
-    If the path is a file, it returns the path to the file with a suffix number, respecting the extension.
+    Return a path that doesn't exist yet.
 
-    Inputs
+    If the path doesn't exist, it is returned as is. Otherwise a number suffix
+    is added (e.g. 'output_1', 'output_2', ...). For files, the suffix goes
+    before the extension (e.g. 'data_1.csv'). Nothing is created on disk.
+
+    Parameters
     ----------
 
-        path           (str): original path
-    
+    path : str
+        Original path
+
     Returns
     -------
-        
-        unique_path    (str): unique path
+
+    unique_path : str
+        Unique path
     """
 
     # Convert to PurePath object
@@ -655,17 +708,21 @@ def get_unique_path(path: str) -> str:
 # Related to training
 def closest_power_of_two(n: int) -> int:
     """
-    Returns the closest power of two that is less than n.
+    Return the largest power of two that is strictly less than n.
 
-    Inputs
-    ------
+    For example, 100 gives 64 and 64 gives 32.
 
-        n (int): Number
-    
+    Parameters
+    ----------
+
+    n : int
+        Number
+
     Returns
     -------
 
-        closest_power (int): Closest power of two that is less than n
+    closest_power : int
+        Largest power of two that is strictly less than n
     """
 
     # Get the power of two

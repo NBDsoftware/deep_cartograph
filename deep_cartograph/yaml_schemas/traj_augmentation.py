@@ -1,7 +1,11 @@
+"""
+Schema for the configuration of the trajectory augmentation tool.
+"""
 from pydantic import BaseModel
 from typing import Literal, Optional
 
 class TrajAugmentationSchema(BaseModel):
+    """Validates the `traj_augmentation` section of the configuration."""
     
     # Number of frames in the interpolated trajectory (only used if interpolation_method is not None)
     num_frames: int = 1000
@@ -18,5 +22,5 @@ class TrajAugmentationSchema(BaseModel):
     atom_selection: str = "all"
     # Output trajectory format
     traj_format: Literal['xtc', 'dcd', 'nc', 'pdb'] = 'xtc'
-    # Wether to prepare the trajectory before augmentation (unwrapping and centering) - better to do it beforehand
+    # Whether to prepare the trajectory before augmentation (unwrapping and centering) - better to do it beforehand
     prepare_trajectory: bool = False

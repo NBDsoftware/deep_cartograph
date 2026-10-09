@@ -8,3 +8,5 @@ _pycache_/
 output*/
 debug*/
 lightning_logs/
+# Sphinx build output
+docs/_build/

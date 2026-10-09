@@ -1,3 +1,8 @@
+"""
+Builders that write complete PLUMED input files.
+
+Each builder uses an assembler to create the content, adds a PRINT command and writes the file.
+"""
 # Import modules
 import sys
 import logging
@@ -17,8 +22,10 @@ DEFAULT_FMT = '%14.10f'
 # They write the PLUMED input file
 class ComputeFeaturesBuilder(Assembler):
     """
-    Builder to create an input file that computes a collection of features during an MD simulation or trajectory.
-    """           
+    Builder for an input file that computes and prints a list of features.
+
+    Duplicated feature labels are dropped with a warning. See ``Assembler`` for the parameters.
+    """
     def __init__(self, plumed_input_path: str, 
                  topology_path: str, 
                  features_list: List[str], 
@@ -38,8 +45,13 @@ class ComputeFeaturesBuilder(Assembler):
         return super().__init__(plumed_input_path, topology_path, unique_features_list, traj_stride, fit_template_path)
 
     def build(self, colvars_path: str):
-        """ 
-        Override the base build method to include the print command.
+        """
+        Build the input file, add a PRINT command for all features and write it.
+
+        Parameters
+        ----------
+        colvars_path : str
+            Path to the colvars file where PLUMED will print the values.
         """
         super().build()
         
@@ -54,7 +66,9 @@ class ComputeFeaturesBuilder(Assembler):
         
 class ComputeCVBuilder(CollectiveVariableAssembler):
     """
-    Builder to create an input file that computes a collective variable during an MD simulation or trajectory.
+    Builder for an input file that computes and prints a collective variable.
+
+    See ``CollectiveVariableAssembler`` for the parameters.
     """
     def __init__(self, plumed_input_path: str, 
                  topology_path: str, 
@@ -67,8 +81,13 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
                                 traj_stride, cv_type, cv_params, fit_template_path)
     
     def build(self, colvars_path: str):
-        """ 
-        Override the base build method to include the print command.
+        """
+        Build the input file, add a PRINT command for the CV components and write it.
+
+        Parameters
+        ----------
+        colvars_path : str
+            Path to the colvars file where PLUMED will print the values.
         """
         super().build()
         
@@ -87,8 +106,10 @@ class ComputeCVBuilder(CollectiveVariableAssembler):
         self.write()
         
 class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
-    """ 
-     Builder to create an input file to enhance sampling during an MD simulation or trajectory.
+    """
+    Builder for an input file that biases a collective variable with an enhanced sampling method.
+
+    See ``EnhancedSamplingAssembler`` for the parameters.
     """
     
     def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
@@ -103,8 +124,13 @@ class ComputeEnhancedSamplingBuilder(EnhancedSamplingAssembler):
                                 rmsd_restraint_k, rmsd_restraint_eq)
     
     def build(self, colvars_path: str):
-        """ 
-        Override the base build method to include the print command.
+        """
+        Build the input file, add a PRINT command for the CV components and the bias, and write it.
+
+        Parameters
+        ----------
+        colvars_path : str
+            Path to the colvars file where PLUMED will print the values.
         """
         super().build()
         

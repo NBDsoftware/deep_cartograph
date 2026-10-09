@@ -1,3 +1,8 @@
+"""
+Translate feature names from a reference topology to another topology,
+matching residues through a sequence alignment.
+"""
+
 import logging
 from typing import List, Optional
 
@@ -13,11 +18,23 @@ logger = logging.getLogger(__name__)
 class Translator:
     """
     Class that uses a topology mapper to translate a list of features from a reference topology to another topology.
+
+    Only the residue numbers in the feature names are changed. For example, 'dist-@CA_579-@CA_600'
+    could become 'dist-@CA_575-@CA_596' in a topology with a different numbering.
     """
-    
+
     def __init__(self, reference_topology: str, target_topology: str, reference_features: List[str]):
         """
         Initialize the feature translator.
+
+        Parameters
+        ----------
+        reference_topology : str
+            Path to the reference topology (PDB) file
+        target_topology : str
+            Path to the target topology (PDB) file
+        reference_features : List[str]
+            Feature names defined in the reference topology
         """
         self.reference_topology = reference_topology
         self.target_topology = target_topology
@@ -33,9 +50,8 @@ class Translator:
         
         Returns
         -------
-        
-            translated_features :
-                List of strings with translated feature or None if the feature is not present in the target topology
+        translated_features : List[Optional[str]]
+            Translated feature names, or None for features that are not present in the target topology
         """
         
         # Create a topology mapper between the reference topology and the target topology
@@ -47,6 +63,14 @@ class Translator:
         """ 
         Translate each feature from the reference topology to the target topology respecting the original
         order of the features.
+
+        Requires the topology mapper created in run(). Names without atoms (e.g. 'time')
+        are kept as they are.
+
+        Returns
+        -------
+        translated_features : List[Optional[str]]
+            Translated feature names, or None for features that are not present in the target topology
         """
         
         translated_features = []
@@ -88,11 +112,21 @@ class Translator:
             
     def translate_atom(self, atom: str) -> Optional[str]:
         """ 
-        Translate atom from the reference topology to the new topology
-        
+        Translate an atom from the reference topology to the target topology.
+
         NOTE: We assume the following format for atoms: @CA_579 or @phi_579 (from distance or torsion features)
-        
+
         NOTE: We assume the atom name is not changing in the target topology
+
+        Parameters
+        ----------
+        atom : str
+            Atom in the reference topology, as '<name>_<resid>'
+
+        Returns
+        -------
+        Optional[str]
+            Atom in the target topology, or None if the residue has no match
         """
         
         ref_atom_name, ref_resid = atom.split('_')

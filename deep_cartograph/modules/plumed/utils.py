@@ -1,3 +1,6 @@
+"""
+Small helpers to prepare trajectories for the PLUMED driver.
+"""
 # Import modules
 
 import os
@@ -15,9 +18,23 @@ DEFAULT_FMT = '%14.10f'
     
 def get_traj_flag(traj_path):
     """
-    Get trajectory flag from trajectory path. Depending on the extension of the trajectory,
-    the flag will be different.
-    """ 
+    Get the PLUMED driver flag that matches the trajectory file extension (e.g. ``--mf_xtc`` for ``.xtc``).
+
+    Parameters
+    ----------
+    traj_path : str
+        Path to the trajectory file.
+
+    Returns
+    -------
+    traj_flag : str
+        PLUMED driver flag for this trajectory format.
+
+    Raises
+    ------
+    Exception
+        If the extension is not supported by PLUMED.
+    """
     
     # Extensions supported by the molfile plugin
     molfile_extensions = {
@@ -61,27 +78,26 @@ def get_traj_flag(traj_path):
 
 def sanitize_CRYST1_record(pdb_path, output_folder) -> str:
     """
-    Check if a PDB file has a meaningless CRYST1 record and remove it if so.
-    
-    PDB bank requires the CRYST1 record to be present, so some tools will write a dummy CRYST1 record (like MDAnalysis)
-    
-    Dummy CRYST1 record: 
-    
+    Remove a dummy CRYST1 record from a PDB file, if present.
+
+    Some tools (like MDAnalysis) write a dummy CRYST1 record (a 1 x 1 x 1 box):
+
         CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1
-        
-    PLUMED will use this record to obtain the box dimensions and correct for periodic boundary conditions when computing
-    variables. So any present CRYST1 record must be meaningful.
-    
+
+    PLUMED would read it as the real box and apply wrong periodic boundary conditions,
+    so it must be removed. If found, a cleaned copy is written to ``output_folder``.
+
     Parameters
     ----------
-    
-        pdb_path    (str):  path to the PDB file
-        output_folder (str): path to the output folder where the new PDB file will be written if needed
-    
+    pdb_path : str
+        Path to the PDB file.
+    output_folder : str
+        Folder where the cleaned copy is written, if needed.
+
     Returns
     -------
-    
-        pdb_path    (str):  path to the PDB file with the CRYST1 record removed if needed
+    new_pdb_path : str
+        Path to the cleaned copy, or ``pdb_path`` if nothing was removed.
     """
     
     dummy_cryst1 = "CRYST1    1.000    1.000    1.000  90.00  90.00  90.00" # NOTE: Maybe check for the values of the box dimensions and angles rather than the specific string

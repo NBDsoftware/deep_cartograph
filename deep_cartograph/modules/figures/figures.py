@@ -1,3 +1,8 @@
+"""
+Plotting functions: free energy surfaces, projected trajectories, clusters,
+sensitivity analysis results and simple line plots.
+"""
+
 # Import modules
 import os
 import logging
@@ -19,7 +24,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import List, Dict, Optional
-# Assuming other necessary imports (logger, package_is_installed, FesFigure, get_ranges) exist in your environment
 
 def plot_fes(
     data: np.ndarray, 
@@ -32,19 +36,34 @@ def plot_fes(
     legend_cutoff: int = 10
     ):
     """
-    Creates a figure of the free energy surface and saves it to a file.
+    Compute the free energy surface (FES) along one or two variables, plot it and save it as 'fes.png'.
+
+    The FES is estimated from the sample density with mlcolvar (KDE). If mlcolvar or torch
+    are not installed, or settings['compute'] is False, nothing is done. If settings['save']
+    is True, the FES values, grid, bounds and error are also saved as .npy files.
     If len(sup_data) > legend_cutoff, the legend is saved to a separate 'fes_legend.png' file.
 
     Parameters
     ----------
-        data:             data with time series of the variables along which the FES is computed (1D or 2D)
-        cv_labels:        labels of the variables along which the FES is computed
-        settings:         dictionary with the settings of the FES plot
-        output_path:      path where the outputs are saved
-        num_blocks:       number of blocks to use for the FES computation
-        sup_data:         supplementary data to plot alongside the main data
-        sup_data_labels:  labels of the supplementary data
-        legend_cutoff:    maximum number of items allowed in the main plot legend before splitting
+    data : np.ndarray
+        Time series of the variables along which the FES is computed (1D or 2D)
+    cv_labels : List[str]
+        Labels of the variables along which the FES is computed
+    settings : Dict
+        Settings of the FES plot (see the FesFigure schema)
+    output_path : str
+        Folder where the outputs are saved
+    num_blocks : int, optional
+        Number of blocks used to estimate the FES error. It is reduced if blocks
+        would have fewer than 100 samples. Default is 1.
+    sup_data : Optional[List[np.ndarray]], optional
+        Supplementary data to plot on top of the FES. 1D arrays are shown as
+        histograms and 2D arrays as scatter points.
+    sup_data_labels : Optional[List[str]], optional
+        Labels of the supplementary data, used in the legend
+    legend_cutoff : int, optional
+        Maximum number of items allowed in the main plot legend before it is
+        saved to a separate file. Default is 10.
     """
     
     if not package_is_installed('mlcolvar', 'torch'):
@@ -193,11 +212,11 @@ def plot_fes(
 
 def create_cv_plot(fes, fes_grid, cv, x, y, labels, cv_labels, max_fes, file_path):
     """
-    Creates a figure with the value of the CV for each point (x,y) of the grid,
-    adds the fes as a contour plot and saves it to a file.
+    Plot the value of each CV component at each point (x, y), with the FES drawn as contour lines.
 
-    This can be used to project CVs on the FES whenever the CV is not a function of the FES variables. 
-    
+    This can be used to project CVs on the FES whenever the CV is not a function of the FES variables.
+    One figure is saved per CV component, adding '_1', '_2', ... before the '.png' extension.
+
     Parameters
     ----------
 
@@ -206,19 +225,19 @@ def create_cv_plot(fes, fes_grid, cv, x, y, labels, cv_labels, max_fes, file_pat
     fes_grid : array-like
         Grid of the free energy surface
     cv : array-like
-        CV values
+        CV values, with shape (n_samples, n_components)
     x : array-like
         Values of the first variable of the FES
     y : array-like
         Values of the second variable of the FES
     labels : list of str
-        labels of the variables of the FES
-    cv_labels: list of str
-        labels of the CVs
+        Labels of the variables of the FES
+    cv_labels : list of str
+        Labels of the CV components, used as titles
     max_fes : float
-        maximum value of the FES
+        Maximum value of the FES shown in the contour lines
     file_path : str
-        File path where the figure is saved
+        File path where the figure is saved (should end in '.png')
     """
 
     def add_fes_contour(fes, fes_grid, ax, max_fes):
@@ -280,19 +299,27 @@ def create_cv_plot(fes, fes_grid, cv, x, y, labels, cv_labels, max_fes, file_pat
 
 def clusters_scatter_plot(data: pd.DataFrame, column_labels: List[str], cluster_label: str, settings: Dict, file_path: str, cluster_colors: List) -> None:
     """
-    Create a scatter plot of a trajectory projected on a 2D space defined by the CVs given in labels. 
-    The color of the markers is given by the cluster.
-    Adds the histograms of the data along each axis and save the figure to a file.
+    Create a scatter plot of a trajectory projected on the 2D space defined by two CVs, colored by cluster.
 
-    Inputs
-    ------
+    Histograms of the data along each axis are added on the sides and the figure is
+    saved to a file. Nothing is done if settings['plot'] is False.
 
-        data:            data with the trajectory projected on the 2D space
-        column_labels:   labels of the CVs used to project the trajectory
-        cluster_label:   label of the data used to color the markers
-        settings:        dictionary with the settings of the plot
-        file_path:       path where the figure will be saved
-        cluster_colors:  list with the RGB colors to use for each cluster
+    Parameters
+    ----------
+
+    data : pd.DataFrame
+        Data with the trajectory projected on the 2D space
+    column_labels : List[str]
+        Names of the two columns (CVs) to use as x and y axes
+    cluster_label : str
+        Name of the column with the cluster of each sample, used to color the markers
+    settings : Dict
+        Plot settings. Keys used: 'plot', 'marker_size', 'alpha', 'num_bins' and
+        'bandwidth' (KDE bandwidth adjustment for the side histograms).
+    file_path : str
+        Path where the figure will be saved
+    cluster_colors : List
+        RGB colors to use for each cluster
     """
     
     if settings.get('plot', True):
@@ -342,18 +369,24 @@ def clusters_scatter_plot(data: pd.DataFrame, column_labels: List[str], cluster_
 
 def gradient_scatter_plot(data: pd.DataFrame, column_labels: List[str], color_label: str, settings: Dict, file_path: str) -> None:
     """
-    Create a scatter plot of the column_labels columns of the data DataFrame. 
-    The color of the markers is a gradient of the colormap given in settings and determined by the color_label column.
-    The plot is saved to a file.
+    Create a 2D scatter plot of two columns, colored with a gradient given by a third column.
 
-    Inputs
-    ------
+    Typically used to show a projected trajectory colored by frame number (the color bar
+    is labeled 'Frame num.'). Nothing is done if settings['plot'] is False.
 
-        data:         data with the trajectory projected on the 2D space
-        column_labels:     labels of the CVs used to project the trajectory
-        color_label:     label of the data used to color the markers
-        settings:        dictionary with the settings of the plot
-        file_path:       path where the figure will be saved
+    Parameters
+    ----------
+
+    data : pd.DataFrame
+        Data with the trajectory projected on the 2D space
+    column_labels : List[str]
+        Names of the two columns (CVs) to use as x and y axes
+    color_label : str
+        Name of the column used to color the markers
+    settings : Dict
+        Plot settings. Keys used: 'plot', 'cmap', 'marker_size' and 'alpha'.
+    file_path : str
+        Path where the figure will be saved
     """
 
     if settings.get('plot', True):
@@ -398,18 +431,22 @@ def gradient_scatter_plot(data: pd.DataFrame, column_labels: List[str], color_la
 
 def get_ranges(X: np.ndarray, X_ref: Union[List[np.ndarray], None] = None) -> List:
     """
-    Find the range of the data along each dimension.
+    Find the range of the data along each dimension, with a small margin, to use as plot limits.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        X:             array with the main data
-        X_ref:         array with the reference data
+    X : np.ndarray
+        Main data, 1D or with shape (n_samples, n_dimensions)
+    X_ref : Union[List[np.ndarray], None], optional
+        List of reference data arrays. If given, the range is widened to include them.
 
     Returns
     -------
 
-        ranges:       list with the range of the data along each dimension +/- 0.5% of the range
+    data_range : tuple or List[tuple]
+        For 1D data, a (min, max) tuple widened by 0.5% of the range on each side.
+        Otherwise, a list with one (min, max) tuple per dimension, widened by 5% of the range.
     """
 
     # Check dimension of the data
@@ -438,7 +475,7 @@ def get_ranges(X: np.ndarray, X_ref: Union[List[np.ndarray], None] = None) -> Li
                 if max_x > data_range[1]:
                     data_range = (data_range[0], max_x)
 
-        # Define an offset as 5% of the range
+        # Define an offset as 0.5% of the range
         offset = 0.005*(data_range[1]-data_range[0])
 
         # Add the offset to the limits
@@ -478,14 +515,17 @@ def get_ranges(X: np.ndarray, X_ref: Union[List[np.ndarray], None] = None) -> Li
 
 def plot_clusters_size(cluster_labels: pd.Series, colors: List, output_folder: str):
     """
-    Plot barplot with the number of members for each cluster.
-    
-    Inputs
-    ------
+    Plot a bar chart with the number of members of each cluster and save it as 'clusters_size.png'.
 
-        cluster_labels   : List with cluster ID for each frame
-        colors           : List with the RGB colors to use for each cluster
-        output_folder    : Path to the output folder
+    Parameters
+    ----------
+
+    cluster_labels : pd.Series
+        Cluster ID of each frame
+    colors : List
+        RGB colors to use for each cluster, in the order of the sorted cluster IDs
+    output_folder : str
+        Path to the output folder
     """
 
     # Find settings
@@ -543,17 +583,20 @@ def plot_clusters_size(cluster_labels: pd.Series, colors: List, output_folder: s
 def generate_cmap(num_colors: int, base_colormap: str):
     """
     Generate a color map with num_colors colors from a base colormap.
-    
-    Inputs
-    ------
 
-        num_colors (int): The number of colors to generate.
-        base_colormap (str): The name of the base colormap to use.
+    Parameters
+    ----------
 
-    Output
-    ------
-        
-        cmap (ListedColormap): The generated color map.
+    num_colors : int
+        Number of colors to generate
+    base_colormap : str
+        Name of the matplotlib colormap to use as base
+
+    Returns
+    -------
+
+    cmap : ListedColormap
+        The generated color map
     """
     
     # Extract the desired number of colors from the base cmap in RGBA format
@@ -566,18 +609,21 @@ def generate_cmap(num_colors: int, base_colormap: str):
 
 def generate_colors(num_colors: int, base_colormap: str) -> list:
     """
-    Generate a list of colors from a base colormap.
+    Generate evenly spaced colors from a base colormap.
 
-    Inputs
-    ------
+    Parameters
+    ----------
 
-        num_colors (int): The number of colors to generate.
-        base_colormap (str): The name of the base colormap to use.
-    
-    Output
-    ------
+    num_colors : int
+        Number of colors to generate
+    base_colormap : str
+        Name of the matplotlib colormap to use as base
 
-        colors (List): A list of colors in the RGB(A) format (0-1 range for each channel: (Red, Green, Blue, Alpha)).
+    Returns
+    -------
+
+    colors : np.ndarray
+        Array of shape (num_colors, 4) with RGBA colors (each channel in the 0-1 range)
     """
 
     # Get the base cmap
@@ -601,16 +647,32 @@ def plot_data(y_data: Dict[str, np.array],
               font_size: int = 18):
     """
     Plot each array in y_data vs the corresponding array in x_data and save the figure to a file.
-    
-    Inputs
+
+    All lines are drawn on the same axes. The y axis starts at 0.
+
+    Parameters
+    ----------
+
+    y_data : Dict[str, np.array]
+        Dictionary with the y data to plot, one line per key
+    x_data : Dict[str, np.array]
+        Dictionary with the x values for each y data (same keys as y_data)
+    title : str
+        Title of the plot
+    y_label : str
+        Label of the y axis
+    x_label : str
+        Label of the x axis
+    figure_path : str
+        Path where the figure will be saved
+    font_size : int, optional
+        Font size for title, labels and ticks. Default is 18.
+
+    Raises
     ------
-        y_data:      dictionary with the y data to plot
-        x_data:      dictionary with the x values for each y data
-        title:       title of the plot
-        y_label:     label of the y axis
-        x_label:     label of the x axis
-        figure_path: path where the figure will be saved 
-        font_size:   font size for title, labels, and ticks (default: 12)
+
+    ValueError
+        If a key in y_data has no matching entry in x_data
     """
     
     # Create figure
@@ -673,12 +735,20 @@ def plot_sensitivity_results(results: Dict[str, np.array],
     """
     Plot the sensitivity analysis results.
 
-    Inputs
-    ------
+    The sensitivity tells how much the CV changes with each input feature. For each mode,
+    the 20 most important features are plotted to 'top_features_<mode>.png'. A histogram
+    of all sensitivity values is saved to 'sensitivity_histogram.png'.
 
-        results:             dictionary with the sensitivity analysis results
-        modes:               list of modes to plot the sensitivity analysis results 
-        output_folder:       path to the output folder where the figures will be saved
+    Parameters
+    ----------
+
+    results : Dict[str, np.array]
+        Sensitivity analysis results, as returned by mlcolvar's sensitivity_analysis
+        (must include the 'sensitivity' key)
+    modes : List[Literal['barh', 'violin', 'scatter']]
+        Plot styles to use, one figure per mode
+    output_folder : str
+        Path to the output folder where the figures will be saved
     """
     
     from mlcolvar.explain import plot_sensitivity

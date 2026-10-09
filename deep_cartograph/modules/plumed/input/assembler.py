@@ -1,3 +1,8 @@
+"""
+Assemblers that put together the text of a PLUMED input file.
+
+Each class adds a section on top of its parent: features, then a collective variable, then enhanced sampling.
+"""
 # Import modules
 import os
 import sys
@@ -20,6 +25,9 @@ DEFAULT_FMT = '%14.10f'
 class Assembler:
     """
     Base class to assemble the contents of a PLUMED input file.
+
+    It writes the header (MOLINFO, WHOLEMOLECULES and, if needed, FIT_TO_TEMPLATE) and the
+    commands that compute each feature. The text is kept in ``input_content``.
     """
     def __init__(self, plumed_input_path: str, 
                  topology_path: str, 
@@ -27,27 +35,23 @@ class Assembler:
                  traj_stride: int,
                  fit_template_path: Optional[str] = None
         ):
-        """ 
-        Minimal attributes to construct a PLUMED input file.
-        
+        """
+        Store the minimal information needed to build a PLUMED input file.
+
         Parameters
         ----------
-        
-            plumed_input_path (str):
-                Path to the PLUMED input file. The file that will be written.
-                
-            topology_path (str):
-                Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
-                
-            features_list (list):
-                List of features to be tracked.
-            
-            traj_stride (int):
-                Stride to use when computing the features from a trajectory or MD simulation.
-                
-            fit_template_path (str, optional):
-                Path to the reference topology with beta and occupancy factors ready to use as RMSD template. 
-                If provided, it will be used for the FIT TO TEMPLATE command.
+        plumed_input_path : str
+            Path to the PLUMED input file that will be written.
+        topology_path : str
+            Path to the topology used by the MOLINFO command, so atoms can be referred to by name.
+        features_list : list of str
+            Labels of the features to compute (e.g. ``dist-@CA_584-@CA_549``).
+            They must be defined for this topology.
+        traj_stride : int
+            Stride used when printing values from a trajectory or MD simulation.
+        fit_template_path : str, optional
+            Path to a PDB template for the FIT_TO_TEMPLATE command (occupancy marks the atoms used to align).
+            Required if any feature is an atomic coordinate. Default is None.
         """
         # Path to the contents of the input file
         self.input_content: str = ""
@@ -80,7 +84,9 @@ class Assembler:
             
     def build(self):
         """
-        Build the base content of the PLUMED input file. This method should be overridden by subclasses.
+        Add the header and the feature commands to ``input_content``.
+
+        Subclasses extend this method to add more sections.
         """
         
         # Write Header title
@@ -114,27 +120,24 @@ class Assembler:
      
     def get_feature_command(self, feature_label: str) -> str:
         """
-        Get the PLUMED command to compute a feature from its definition.
-        
-        Each feature is defined by a string with different 'entities' joined by '-'.
-        The first entity is always the feature name, and defines which command/s should be used.
-        The rest of the entities define the atoms that should be used to compute the feature and 
-        the number of them will depend on the specific feature.
+        Get the PLUMED command(s) that compute a feature from its label.
 
-        Ex: dist-@CA_584-@CA_549 -> feat_name -  atom1  -  atom2   
-            
+        A feature label is made of entities joined by ``-``. The first entity is the feature type
+        (``dist``, ``coord``, ``sin``, ``cos`` or ``tor``) and the rest are the atoms involved.
+
+        Example: ``dist-@CA_584-@CA_549`` is the distance between two C-alpha atoms.
+
         Parameters
         ----------
-        
-            feature_label (str):
-                Name (i.e. definition) of the feature to compute.
-        
+        feature_label : str
+            Label (i.e. definition) of the feature.
+
         Returns
         -------
-        
-            command (str):
-                PLUMED command to compute the feature.
-        """   
+        command : str
+            PLUMED command(s) that compute the feature. May be empty if the command was
+            already written for another feature (e.g. the y and z coordinates of an atom).
+        """
         
         # Divide the feature definition into entities
         entities = feature_label.split("-")
@@ -233,8 +236,8 @@ class Assembler:
             sys.exit(1)
 
     def add_center_commands(self):
-        """ 
-        Write any center command needed to compute the features.
+        """
+        Add a CENTER command for each group center used by the features (entities starting with ``center_``).
         """
         
         written_centers = []
@@ -262,8 +265,15 @@ class Assembler:
                         written_centers.append(entity)
              
     def add_print_command(self, colvars_path: str, stride: int):
-        """ 
-        Add the print command to the PLUMED input file.
+        """
+        Add a PRINT command that writes ``print_args`` to a colvars file.
+
+        Parameters
+        ----------
+        colvars_path : str
+            Path to the output colvars file.
+        stride : int
+            Print every ``stride`` steps.
         """
         # Leave a blank line
         self.input_content += "\n"
@@ -272,36 +282,34 @@ class Assembler:
         
     def write(self):
         """
-        Write the PLUMED input file. This method is not used by the Assembler classes but the Builder classes.
+        Write ``input_content`` to the PLUMED input file. Called by the Builder classes.
         """
         with open(self.plumed_input_path, "w") as f:
             f.write(self.input_content)
             
 class CollectiveVariableAssembler(Assembler):
     """
-    Assembler class to add the calculation of a collective variable to a PLUMED input file.
+    Assembler that also adds the calculation of a collective variable (CV).
 
     Parameters
     ----------
-    
-        plumed_input_path (str):
-            Path to the PLUMED input file. The file that will be written.
-            
-        topology_path (str):
-            Path to the topology file. The one used by the MOLINFO command to define atom shortcuts.
-            
-        features_list (list):
-            List of features to be tracked. Make sure the features are defined for this topoogy.
-        
-        traj_stride (int):
-            Stride to use when computing the features from a trajectory or MD simulation.
-            
-        cv_type (str):
-            Type of collective variable to compute. Can be 'linear' or 'non-linear'.
-            
-        cv_params (dict):
-            Parameters for the collective variable. The parameters depend on the CV type.
-
+    plumed_input_path : str
+        Path to the PLUMED input file that will be written.
+    topology_path : str
+        Path to the topology used by the MOLINFO command, so atoms can be referred to by name.
+    features_list : list of str
+        Labels of the features to compute (e.g. ``dist-@CA_584-@CA_549``).
+        They must be defined for this topology.
+    traj_stride : int
+        Stride used when printing values from a trajectory or MD simulation.
+    cv_type : str
+        Type of collective variable: ``'linear'`` or ``'non-linear'``.
+    cv_params : dict
+        Parameters of the collective variable. Required keys depend on ``cv_type``
+        (see ``validate_linear_cv`` and ``validate_non_linear_cv``).
+    fit_template_path : str, optional
+        Path to a PDB template for the FIT_TO_TEMPLATE command (occupancy marks the atoms used to align).
+        Required if any feature is an atomic coordinate. Default is None.
     """
     def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], traj_stride: int, 
                  cv_type: str, cv_params: Dict, fit_template_path: Optional[str] = None):
@@ -319,7 +327,12 @@ class CollectiveVariableAssembler(Assembler):
         
     def add_cv_section(self):
         """
-        Add the collective variable section to the contents of the PLUMED input file.
+        Add the commands that compute the collective variable, depending on ``cv_type``.
+
+        Raises
+        ------
+        ValueError
+            If ``cv_type`` is not recognized.
         """
         
         # Add the corresponding CV commands
@@ -331,8 +344,11 @@ class CollectiveVariableAssembler(Assembler):
             raise ValueError(f"CV type {self.cv_type} not recognized.")
         
     def add_linear_cv(self):
-        """ 
-        Add a linear collective variable to the PLUMED input file.
+        """
+        Add a linear CV to the PLUMED input file.
+
+        Features are normalized (if requested), combined with the CV weights, and each CV component
+        is then scaled to the range [-1, 1] using the CV min and max values.
         """
         
         # Validate cv params
@@ -380,9 +396,18 @@ class CollectiveVariableAssembler(Assembler):
               
     def validate_linear_cv(self):
         """
-        Validate the parameters of a linear collective variable.
-        
+        Check that ``cv_params`` has everything needed for a linear CV.
+
+        Required keys: ``features_norm_mode``, ``features_norm_mean``, ``features_norm_range``,
+        ``weights`` (array of shape n_features x cv_dimension), ``cv_dimension`` and ``cv_stats``.
+        ``cv_name`` defaults to ``'cv'``.
+
         NOTE: migrate this to a pydantic model
+
+        Raises
+        ------
+        ValueError
+            If a key is missing or the weights shape does not match the features or the CV dimension.
         """
         
         if 'features_norm_mode' not in self.cv_params:
@@ -415,10 +440,10 @@ class CollectiveVariableAssembler(Assembler):
             raise ValueError(f"CV dimension {self.cv_params['cv_dimension']} does not match the number of components in the weights {self.cv_params['weights'].shape[1]}")
         
     def add_non_linear_cv(self):
-        """ 
-        Add a non-linear collective variable to the PLUMED input file.
-        
-        Note that the feature and CV normalization are included inside the model
+        """
+        Add a non-linear CV to the PLUMED input file using a PyTorch model.
+
+        Feature and CV normalization are included inside the model.
         """
         
         self.validate_non_linear_cv()
@@ -432,9 +457,17 @@ class CollectiveVariableAssembler(Assembler):
         
     def validate_non_linear_cv(self):
         """
-        Validate the parameters of a non-linear collective variable.
-        
+        Check that ``cv_params`` has everything needed for a non-linear CV.
+
+        Required keys: ``weights_path`` (path to the TorchScript model) and ``cv_dimension``.
+        ``cv_name`` defaults to ``'cv'``.
+
         NOTE: migrate this to a pydantic model
+
+        Raises
+        ------
+        ValueError
+            If a required key is missing.
         """
         
         if 'weights_path' not in self.cv_params:
@@ -448,7 +481,38 @@ class CollectiveVariableAssembler(Assembler):
              
 class EnhancedSamplingAssembler(CollectiveVariableAssembler):
     """
-    Assembler class to add enhanced sampling to a PLUMED input file.
+    Assembler that also adds an enhanced sampling bias on the CV and, optionally, an RMSD restraint.
+
+    Parameters
+    ----------
+    plumed_input_path : str
+        Path to the PLUMED input file that will be written.
+    topology_path : str
+        Path to the topology used by the MOLINFO command, so atoms can be referred to by name.
+    features_list : list of str
+        Labels of the features to compute (e.g. ``dist-@CA_584-@CA_549``).
+        They must be defined for this topology.
+    traj_stride : int
+        Stride used when printing values from a trajectory or MD simulation.
+    cv_type : str
+        Type of collective variable: ``'linear'`` or ``'non-linear'``.
+    cv_params : dict
+        Parameters of the collective variable. Required keys depend on ``cv_type``
+        (see ``validate_linear_cv`` and ``validate_non_linear_cv``).
+    sampling_method : str
+        Enhanced sampling method: ``'wt_metadynamics'``, ``'opes_metad'``, ``'opes_metad_explore'``
+        or ``'opes_expanded'`` (not implemented yet).
+    sampling_params : dict
+        Parameters of the enhanced sampling method (e.g. ``sigma``, ``pace``, ``temperature``).
+    fit_template_path : str, optional
+        Path to a PDB template for the FIT_TO_TEMPLATE command (occupancy marks the atoms used to align).
+        Required if any feature is an atomic coordinate. Default is None.
+    rmsd_restraint_reference_path : str, optional
+        Path to the PDB reference for the RMSD restraint. If None, no restraint is added.
+    rmsd_restraint_k : float, optional
+        Force constant of the RMSD restraint.
+    rmsd_restraint_eq : float, optional
+        RMSD value above which the restraint starts acting.
     """
     def __init__(self, plumed_input_path: str, topology_path: str, features_list: List[str], 
                  traj_stride: int, cv_type: str, cv_params: Dict, sampling_method: str, 
@@ -474,8 +538,13 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         self.add_enhanced_sampling_section()
         
     def add_enhanced_sampling_section(self):
-        """ 
-        Add the enhanced sampling section to the contents of the PLUMED input file.
+        """
+        Add the enhanced sampling commands and, if requested, the RMSD restraint.
+
+        Raises
+        ------
+        ValueError
+            If ``sampling_method`` is not recognized.
         """
         
         if self.sampling_method == "wt_metadynamics":
@@ -493,9 +562,11 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         self.add_rmsd_restraint()
     
     def add_rmsd_restraint(self):
-        """   
-        Add an RMSD restraint to the PLUMED input file if a reference structure is provided.
-        The restrain is added using a RMSD command followed by an UPPER_WALLS command.
+        """
+        Add an RMSD restraint if a reference structure was given.
+
+        The restraint uses an RMSD command followed by an UPPER_WALLS command, so the system is only
+        pushed back when its RMSD to the reference goes above ``rmsd_restraint_eq``.
         """
         
         if self.rmsd_restraint_reference_path is not None:
@@ -609,7 +680,12 @@ class EnhancedSamplingAssembler(CollectiveVariableAssembler):
         
     def add_opes_expanded(self):
         """
-        Add OPES expanded action to the PLUMED input file.
+        Add an OPES expanded action to the PLUMED input file.
+
+        Raises
+        ------
+        NotImplementedError
+            Always, since this method is not implemented yet.
         """
         bias_name = 'opes_expanded'
         

@@ -1,3 +1,7 @@
+"""
+Trajectory clustering tool: groups trajectory frames into clusters based on their
+position in the collective variable space and extracts representative structures.
+"""
 # Import modules
 import os
 import time
@@ -27,12 +31,15 @@ def traj_cluster(
     output_folder: str = 'traj_cluster'
 ) -> None:
     """
-    Clusters frames from the trajectories based on the value of the collective variable. 
-    Clusters are found using all the frames from the trajectories provided in `cv_traj_paths`.
-    Optionally, supplementary trajectories can be projected onto the same clusters using `sup_cv_traj_paths`.
-    
-    It is assumed that each trajectory in `cv_traj_paths` has a corresponding trajectory in `trajectories` and `topologies`.
-    The same applies to `sup_cv_traj_paths`, `sup_trajectories`, and `sup_topologies`.
+    Cluster the frames of the trajectories by their position in the collective variable (CV) space.
+
+    Clusters are found using all the samples in `cv_traj_paths` (CSV files with the trajectories
+    projected onto the CV). If the original trajectories and topologies are given, a representative
+    structure (centroid) of each cluster, and optionally all the frames of each cluster, are saved.
+    Samples in `sup_cv_traj_paths` are assigned to the cluster of their closest sample in `cv_traj_paths`.
+
+    Each file in `cv_traj_paths` must have a matching file in `trajectories` and `topologies`.
+    The same applies to `sup_cv_traj_paths`, `sup_trajectories` and `sup_topologies`.
 
     Parameters
     ----------
@@ -54,23 +61,24 @@ def traj_cluster(
 
     sup_trajectories : Optional[List[str]], default=None
         List of paths to trajectory files corresponding to the supplementary collective variable trajectories (same order as sup_cv_traj_paths).
+        Required if `sup_cv_traj_paths` is given. Only used to name the output folders.
 
     sup_topologies : Optional[List[str]], default=None
         List of paths to topology files corresponding to the supplementary trajectory files (same order as sup_trajectories).
 
-    frames_per_sample : Optional[float], default=1
-        Frames in the collective variable trajectory file for each frame in the trajectory file.
+    frames_per_sample : Optional[int], default=1
+        Number of trajectory frames between two consecutive samples of the CV trajectory files
+        (the stride used when computing the features). Used to find the frames to extract.
 
     output_folder : str, default='traj_cluster'
-        Path to the output folder where the output files will be saved.  
-        If not provided, a folder named 'traj_cluster' is created.
+        Path to the output folder.
 
     Returns
     -------
-
     Dict[str, List[str]]
-        A dictionary where keys are the names of the trajectories from cv_traj_paths and values are lists of paths to
-        the clustered trajectories in the CV space for each cv trajectory file.
+        For each trajectory name (supplementary ones start with 'sup_'), a list with the path to its
+        CV trajectory CSV file with a cluster label per sample. Empty if clustering is disabled
+        in the configuration.
     """
     
     logger = logging.getLogger("deep_cartograph")
@@ -114,18 +122,20 @@ def traj_cluster(
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -160,7 +170,7 @@ def set_logger(verbose: bool, log_path: str):
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
-    """Parses command-line arguments."""
+    """Parse the command-line arguments of the trajectory clustering command."""
     parser = argparse.ArgumentParser(
         prog="Deep Cartograph:  Trajectory clustering on the CV space",
         description=("Clusters frames from the trajectories based on the value of the collective variable."
@@ -180,9 +190,9 @@ def parse_arguments():
     # Optional arguments
     parser.add_argument(
         '-trajectory', dest='trajectory', type=str, required=False,
-        help=("Path to trajectory file corresponding to the collective variable trajectory file." 
-              "The values of the collective variable must correspond to frames of this trajectory." 
-              "Used to create structure clusters."
+        help=("Path to trajectory file corresponding to the collective variable trajectory file. " 
+              "The values of the collective variable must correspond to frames of this trajectory. " 
+              "Used to extract the structures of each cluster."
         )
     )
     parser.add_argument(
@@ -195,7 +205,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-sup_trajectory', dest='sup_trajectory_path', type=str, required=False,
-        help="Path to trajectory file of the supplementary cv trajectory file."
+        help="Path to trajectory file of the supplementary cv trajectory file. Required if -sup_cv_traj is given."
     )
     parser.add_argument(
         '-sup_topology', dest='sup_topology_path', type=str, required=False,
@@ -203,7 +213,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-frames_per_sample', dest='frames_per_sample', type=int, required=False,
-        help="Frames in the trajectory for each sample in the cv trajectory."
+        help="Number of trajectory frames between two consecutive samples in the cv trajectory (default: 1)."
     )
     parser.add_argument(
         '-out', '-output', dest='output_folder', required=False,
@@ -221,6 +231,7 @@ def parse_arguments():
 ########
 
 def main():
+    """Entry point of the trajectory clustering command: read the arguments and configuration, then run the tool."""
 
     args = parse_arguments()
 

@@ -1,5 +1,6 @@
 """
-Class that computes metrics of the features to filter them.
+Class that computes metrics of the features to filter them, keeping only the
+most informative features before training the CVs.
 """
 
 import os
@@ -17,8 +18,12 @@ from deep_cartograph.modules.plumed.colvars import read_features
 logger = logging.getLogger(__name__)
 
 class Filter:
+    """
+    Filter features using statistics of their time series (entropy, standard deviation,
+    Hartigan's dip test) and, optionally, their change across a set of waypoint structures.
+    """
 
-    def __init__(self, 
+    def __init__(self,
                  settings: Dict, 
                  colvars_paths: List[str], 
                  waypoint_colvars_paths: Optional[List[str]] = None,
@@ -31,34 +36,32 @@ class Filter:
         features based on the entropy, standard deviation, Hartigan's Dip Test or their values across 
         a set of metastable structures. 
         
-        * NOTE: Here we could add autocorrelation or kinetic variance filters
-        
-        Input
-        -----
-        
-            settings
-                Filtering options
+        On creation, it finds the features common to all colvars files and saves them
+        to 'all_features.txt' in the output folder.
 
-            colvars_paths
-                Path to colvars files with the time series of the features
-            
-            waypoint_colvars_paths (Optional)
-                List of paths to colvars files containing the value of the features for intermediate 
-                conformations that define the transition of interest.  
-                If given, features that do not change their value across these structures will be filtered out.
-                
-            topologies (Optional)
-                Paths to topology files corresponding to the different colvars files
-                
-            waypoint_topologies (Optional)
-                Paths to topology files corresponding to the waypoint colvars files
-                
-            reference_topology (Optional)
-                Path to reference topology that will be used to define the filtered list of features. If no reference topology 
-                is given, the first file in topologies is used.
-                
-            output_dir (Optional)
-                Path to output folder
+        * NOTE: Here we could add autocorrelation or kinetic variance filters
+
+        Parameters
+        ----------
+        settings : Dict
+            Filtering options. Keys used: 'entropy_quantile', 'std_quantile',
+            'diptest_significance_level' and 'local_distance_threshold' (in Angstroms).
+            A filter is turned off when its value is None.
+        colvars_paths : List[str]
+            Paths to colvars files with the time series of the features
+        waypoint_colvars_paths : Optional[List[str]], optional
+            List of paths to colvars files containing the value of the features for intermediate
+            conformations that define the transition of interest.
+            If given, features that do not change their value across these structures will be filtered out.
+        topologies : Optional[List[str]], optional
+            Paths to topology files corresponding to the different colvars files
+        waypoint_topologies : Optional[List[str]], optional
+            Paths to topology files corresponding to the waypoint colvars files
+        reference_topology : Optional[str], optional
+            Path to reference topology that will be used to define the filtered list of features. If no reference topology
+            is given, the first file in topologies is used.
+        output_dir : Optional[str], optional
+            Path to output folder. It must already exist. Default is 'filter_features'.
         """
         from deep_cartograph.modules.common import save_list
         
@@ -127,8 +130,15 @@ class Filter:
 
     def find_common_features(self) -> List[str]:
         """
-        Find the common features that are present in all colvars files. If topologies are given, 
+        Find the common features that are present in all colvars files. If topologies are given,
         translate the feature names of each colvars file to the reference topology before comparing them.
+
+        Exits the program if there are no common features.
+
+        Returns
+        -------
+        List[str]
+            Common feature names (reference topology names if topologies are given)
         """
         from deep_cartograph.modules.plumed.colvars import read_column_names
         from deep_cartograph.modules.features import Translator as FeatureTranslator
@@ -170,10 +180,24 @@ class Filter:
         """
         Filter the features.
 
-        Inputs
-        ------
+        A feature is discarded if any active filter rejects it:
 
-            csv_summary (bool): If True, saves the summary with the filtering results to a csv file.
+        - Waypoints: its value doesn't change enough across the waypoint structures.
+        - Local contacts (only with waypoints): its minimum value across waypoints is above
+          the local distance threshold.
+        - Entropy / standard deviation: its value is below the given quantile of all features.
+        - Dip test: its p-value is above the significance level (it looks unimodal, i.e. single-peaked).
+
+        Parameters
+        ----------
+        csv_summary : bool, optional
+            If True, saves a summary of the filtering results to 'filter_summary.csv'
+            in the output folder. Default is False.
+
+        Returns
+        -------
+        list
+            Names of the features that pass all the filters
         """
 
         # Log the estimated time remaining every log_interval features

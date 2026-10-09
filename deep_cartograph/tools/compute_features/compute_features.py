@@ -1,3 +1,7 @@
+"""
+Compute features tool: computes features (distances, dihedrals, coordinates, ...)
+for each trajectory with PLUMED and saves them as colvars files.
+"""
 import os
 import sys
 import time
@@ -32,44 +36,53 @@ def compute_features(
     output_folder: str = "compute_features",
 ) -> List[str]:
     """
-    Computes features from a trajectory using PLUMED.
+    Compute features for each trajectory using PLUMED.
 
-    Args:
-        configuration (Dict): 
-            Configuration dictionary (see `default_config.yml` for more details).
-        
-        trajectory_data (Union[List[str], str]): 
-            Path to a trajectory file or directory containing multiple trajectories.
-            For which features will be computed.
-            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
-        
-        topology_data (Union[List[str], str]): 
-            Path to a topology file or directory with topology files for trajectories.
-            - If a single topology file is provided, it is used for all trajectories.
-            - If a directory is provided, each topology file must match a trajectory filename.
-            Accepted format: `.pdb`.
-        
-        reference_topology (Optional[str]):
-            Path to the reference topology file.
-            Used to extract features from user selections.
-            Defaults to the first topology in `topologies` if not provided. 
-            Accepted format: `.pdb`.
-            
-        reference_features (Optional[List[str]]):
-            List of features to compute in the reference topology
-            If not given they will be extracted from the reference topology using the features configuration
-            
-        traj_stride (Optional[int]):
-            Stride for reading the trajectory. Default: 1 (read all frames).
-            Note: This parameter is also specified in the configuration file.
-            If both are provided, the function argument takes precedence.
-        
-        output_folder (Optional[str]):
-            Path to the output folder where computed features will be stored.
-            Default: `"compute_features"`.
+    The features are defined in the configuration as atom selections, which are applied
+    to the reference topology and then translated to each trajectory topology, so every
+    trajectory gets the same set of features. The result for each trajectory is a colvars
+    file: a PLUMED text file with one column per feature and one row per frame.
 
-    Returns:
-        List[str]: Paths to the output colvars files containing the time series of the computed features.
+    If all the colvars files already exist, the computation is skipped.
+
+    Parameters
+    ----------
+    configuration : Dict
+        Configuration dictionary (see `default_config.yml` for more details).
+
+    trajectory_data : str or List[str]
+        Trajectory file(s) or folder with trajectories to compute features for.
+        Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
+
+    topology_data : str or List[str]
+        Topology file(s) or folder with topologies for the trajectories.
+        A single topology is used for all trajectories; otherwise each topology must
+        have the same name as its trajectory. Accepted format: `.pdb`.
+
+    reference_topology : str, optional
+        Topology used to turn the feature selections into actual features.
+        Defaults to the first topology. Accepted format: `.pdb`.
+
+    reference_features : List[str], optional
+        Features to compute, named as in the reference topology. If not given, they are
+        found from the features configuration (keeping only features present in all topologies).
+
+    traj_stride : int, optional
+        Use one of every `traj_stride` frames of the trajectories. If given, it overrides
+        `plumed_settings.traj_stride` in the configuration.
+
+    output_folder : str, optional
+        Path to the output folder. Default: `"compute_features"`.
+
+    Returns
+    -------
+    List[str]
+        Paths to the colvars files, one per trajectory (`<output_folder>/<trajectory name>/colvars.dat`).
+
+    Raises
+    ------
+    ValueError
+        If some reference features cannot be translated to one of the topologies.
     """
 
     # Set logger
@@ -223,18 +236,20 @@ def compute_features(
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -269,7 +284,7 @@ def set_logger(verbose: bool, log_path: str):
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
-    """Parses command-line arguments."""
+    """Parse the command-line arguments of the compute features command."""
     parser = argparse.ArgumentParser(
         prog="Deep Cartograph: Compute features",
         description="Compute features from a trajectory using PLUMED."
@@ -284,7 +299,6 @@ def parse_arguments():
         '-traj_data', dest='trajectory_data', type=str, required=True, nargs='+',
         help=(
             "List of trajectory paths or path to folder with trajectories for which features are computed. "
-            "These trajectories will not be modified before using them to train CVs. "
             "Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd."
         )
     )
@@ -301,7 +315,7 @@ def parse_arguments():
     # Optional arguments
     parser.add_argument(
         '-traj_stride', dest='traj_stride', type=int, required=False,
-        help="Stride for reading the trajectory. Default: 1 (read all frames)."
+        help="Stride for reading the trajectory (use one of every traj_stride frames). Overrides the value in the configuration file."
     )
     parser.add_argument(
         '-output', dest='output_folder', type=str, required=False,
@@ -319,6 +333,7 @@ def parse_arguments():
 ########
 
 def main():
+    """Entry point of the compute features command: read the arguments and configuration, then run the tool."""
 
     args = parse_arguments()
 

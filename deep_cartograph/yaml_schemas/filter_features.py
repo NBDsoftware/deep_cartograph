@@ -1,7 +1,11 @@
+"""
+Schema for the configuration of the filter features tool.
+"""
 from pydantic import BaseModel
 from typing import Union, Optional
 
 class FilterSettings(BaseModel):
+    """Validates the `filter_settings` section: which filters to apply and their thresholds."""
 
     # Distance threshold to distinguish local contacts (in Angstroms) (None to skip filter)
     local_distance_threshold: Optional[float] = None
@@ -13,6 +17,7 @@ class FilterSettings(BaseModel):
     std_quantile: Optional[float] = None
 
 class SamplingSettings(BaseModel):
+    """Validates the `sampling_settings` section (currently not used by the filtering code)."""
     
     # Number of samples to use for each feature
     num_samples:  Union[int, None] = None
@@ -22,6 +27,7 @@ class SamplingSettings(BaseModel):
     relaxation_time: int = 1
 
 class FilterFeaturesSchema(BaseModel):
+    """Validates the `filter_features` section of the configuration."""
         
     # Definition of filter settings
     filter_settings: FilterSettings = FilterSettings()

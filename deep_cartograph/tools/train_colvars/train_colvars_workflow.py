@@ -1,3 +1,7 @@
+"""
+Workflow class behind the train colvars tool: trains each requested CV and writes
+its model, projected trajectories, FES plots and PLUMED input files.
+"""
 # Import necessary modules
 import os
 import sys
@@ -19,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 class TrainColvarsWorkflow:
     """
-    Class to train collective variables from colvars files.
+    Train collective variables (CVs) from colvars files and write their outputs.
+
+    This class does the work behind the `train_colvars` tool.
     """
     def __init__(self, 
                  configuration: Dict, 
@@ -39,13 +45,14 @@ class TrainColvarsWorkflow:
                  frames_per_sample: Optional[int] = 1,
                  output_folder: Optional[str] = 'train_colvars'):
         """
-        Initializes the TrainColvarsWorkflow class.
+        Set up the workflow and check that the input files exist.
         
-        The class runs the train_colvars workflow, which consists of:
+        For each requested CV, the workflow:
         
-            1. Use train_colvars_paths files to compute the collective variables.
-            2. Plotting the FES of each colvars file in the CV space. 
-            3. Plotting the trajectory onto the CV space colored by frame number.
+            1. Trains the CV with the data in `train_colvars_paths`.
+            2. Plots the FES of each training trajectory in the CV space.
+            3. Plots each training trajectory in the CV space, colored by frame number (2D CVs only).
+            4. Writes PLUMED input files for each training and supplementary topology.
             
         The output folder is organized as follows:
         
@@ -54,8 +61,8 @@ class TrainColvarsWorkflow:
                 traj_data/                      # data related to the input trajectories 
                     trajectory_1/               # trajectory folder
                         fes/                    # FES plots and arrays                           
-                            component_1/
-                            component_1_2/
+                            fes_<cv>_1/
+                            fes_<cv>_1_2/
                         plumed_inputs/
                             unbiased_md.zip
                             biased_md.zip
@@ -72,6 +79,12 @@ class TrainColvarsWorkflow:
         training trajectories are split into N disjoint folds and member i is fitted on every
         fold except fold i, while the feature statistics, the validation data and the projected
         trajectories stay identical in scope for every member.
+
+        The parameters are the same as in `train_colvars` (see that function for details), with
+        these name changes: `train_topology_paths` (`train_topologies`), `val_topology_paths`
+        (`val_topologies`), `sup_topology_paths` (`sup_topologies`), `sup_names` (`sup_traj_names`),
+        `ref_topology_path` (`reference_topology`), `cv_dimension` (`dimension`) and
+        `num_models` (`n_models`).
         """
         
         # Set output folder
@@ -206,20 +219,16 @@ class TrainColvarsWorkflow:
                          output_folder: str
         ):
         """ 
-        Create all the required FES plots
+        Create the FES plots of the projected data: a 1D plot for each CV component
+        and a 2D plot for each pair of components.
         
-        1D plots for each components
-        
-        2D plots for each pair of components
-        
-        Inputs
-        ------
-        
-        data: 
-            Main data to compute the FES
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Data projected onto the CV, one column per component.
             
-        output_folder:
-            Directory where the FES will be saved
+        output_folder : str
+            Folder where the FES plots (and arrays) are saved.
         """
         
         # 1D plots for each component
@@ -264,7 +273,8 @@ class TrainColvarsWorkflow:
 
     def workflow_finished(self) -> bool:
         """
-        Check if the workflow has been completed.
+        Return True if every requested CV (and ensemble member) already has a trained
+        model and projected trajectories.
         """
         
         workflow_finished = True
@@ -363,7 +373,14 @@ class TrainColvarsWorkflow:
     
     def run(self):
         """
-        Run the train_colvars workflow.
+        Train all the requested CVs, skipping the run if all outputs already exist.
+
+        CVs other than 'pca' are skipped if mlcolvar, torch or lightning are not installed.
+
+        Returns
+        -------
+        Dict
+            Output paths for each CV (see `get_output_paths`).
         """
         
         # Check if the workflow has been run already
@@ -413,18 +430,17 @@ class TrainColvarsWorkflow:
 
         Parameters
         ----------
+        cv_name : str
+            Name of the collective variable to train.
 
-        cv_name
-            Name of the collective variable to train
+        member_index : int
+            Index of the ensemble member, 0 when a single model is trained.
 
-        member_index
-            Index of the ensemble member, 0 when a single model is trained
+        member_folder : str
+            Name of the output folder for this member ('{cv_name}' or '{cv_name}_{i}').
 
-        member_folder
-            Name of the output folder for this member ('{cv_name}' or '{cv_name}_{i}')
-
-        merged_configuration
-            Configuration for this cv, with the common settings already merged in
+        merged_configuration : Dict
+            Configuration for this CV, with the common settings already merged in.
         """
 
         cv_output_folder = os.path.join(self.output_folder, member_folder)

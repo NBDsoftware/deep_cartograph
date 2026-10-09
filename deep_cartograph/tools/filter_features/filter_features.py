@@ -1,3 +1,7 @@
+"""
+Filter features tool: selects the most informative features from colvars files
+and saves their names to a text file.
+"""
 import os
 import sys
 import time
@@ -30,16 +34,15 @@ def filter_features(
     output_folder: str = "filter_features"
 ) -> str:
     """
-    Filters features from colvars files using various algorithms to select a subset that retains 
-    the most information about the system.
+    Select the subset of features that carries the most information about the system.
 
-    This function is optimized to handle large colvars files efficiently by performing multiple 
-    open/close operations to minimize memory usage.
+    The features in the colvars files are filtered with the methods enabled in the
+    configuration (Hartigan's dip test, entropy, standard deviation, local distance and
+    waypoint filters). Features are read one at a time, so large colvars files can be used.
+    If the output file already exists, the filtering is skipped.
 
-    **NOTE**:  
-    - If `topologies` and `reference_topology` are not provided, it is assumed that all colvars files 
-      have the same feature names.  
-    - This assumption allows easy CLI usage.
+    **NOTE**: If `topologies` is not provided, all colvars files are assumed to have the
+    same feature names.
 
     Parameters
     ----------
@@ -56,7 +59,7 @@ def filter_features(
         If given, features that do not change their value across these structures will be filtered out.
 
     csv_summary : bool, optional (default: True)
-        If `True`, saves a CSV summary with filter values for each collective variable.
+        If `True`, saves a CSV summary with the filter values of each feature.
 
     topologies : List[str], optional (default: None)
         Topologies corresponding to the colvars files.  
@@ -70,13 +73,12 @@ def filter_features(
         If `None`, the first topology in `topologies` is used as a reference.
             
     output_folder : str, optional (default: "filter_features")
-        Path to the output folder.  
-        If not specified, a folder named `"filter_features"` is created.
+        Path to the output folder.
 
     Returns
     -------
     output_features_path : str
-        Path to the output file containing the filtered features.
+        Path to the text file with the names of the selected features (`filtered_features.txt`).
     """
 
     logger = logging.getLogger("deep_cartograph")
@@ -144,12 +146,17 @@ def filter_features(
 
 def check_colvars(colvars_paths: List[str]):
     """
-    Function that checks the existence of the colvars files.
+    Check that all the colvars files exist.
 
     Parameters
     ----------
+    colvars_paths : List[str]
+        Paths to the colvars files.
 
-        colvars_paths: List of paths to the input colvars files with the time series of features to filter.
+    Raises
+    ------
+    FileNotFoundError
+        If any of the files does not exist.
     """
 
     for path in colvars_paths:
@@ -158,18 +165,20 @@ def check_colvars(colvars_paths: List[str]):
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -204,11 +213,11 @@ def set_logger(verbose: bool, log_path: str):
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
-    """Parses command-line arguments."""
+    """Parse the command-line arguments of the filter features command."""
     parser = argparse.ArgumentParser(
         prog="Deep Cartograph: Filter Features",
-        description=("Filter the features in the colvar file using different" 
-                     "algorithms to select a subset of features that contains"
+        description=("Filter the features in the colvar file using different " 
+                     "algorithms to select a subset of features that contains "
                      "the most information about the system."
         )
     )
@@ -262,6 +271,7 @@ def parse_arguments():
 ########
 
 def main():
+    """Entry point of the filter features command: read the arguments and configuration, then run the tool."""
 
     args = parse_arguments()
 

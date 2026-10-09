@@ -1,3 +1,7 @@
+"""
+Trajectory augmentation tool: creates new trajectories with more frames by
+interpolating between existing frames (optionally adding noise).
+"""
 import os
 import sys
 import time
@@ -28,32 +32,39 @@ def traj_augmentation(
     output_folder: str = "traj_augmentation",
 ) -> List[str]:
     """
-    Augments trajectory samples interpolating the existing frames.
+    Create new trajectories with more frames by interpolating between the existing frames.
 
-    Args:
-        configuration (Dict): 
-            Configuration dictionary (see `default_config.yml` for more details).
-        
-        trajectory_data (Union[List[str], str]): 
-            Path to a trajectory file or directory containing multiple trajectories.
-            These will be augmented.
-            Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
-        
-        topology_data (Union[List[str], str]):
-            Path to a topology file or directory with topology files for trajectories.
-            - If a single topology file is provided, it is used for all trajectories.
-            - If a directory is provided, each topology file must match a trajectory filename.
-            Accepted format: `.pdb`.
-            
-        num_replicas (int, optional):
-            Number of replicas to generate for each trajectory. Only used if noise_std is not null. Default: `1`.
-        
-        output_folder (str, optional): 
-            Path to the output folder where the augmented trajectories will be saved.
-            Default: `"traj_augmentation"`.
+    Useful when only a few structures are available (e.g. a short path between two states).
+    Gaussian noise can also be added to the new frames (see `default_config.yml`).
 
-    Returns:
-        List[str]: Paths to the augmented trajectory files.
+    Parameters
+    ----------
+    configuration : Dict
+        Configuration dictionary (see `default_config.yml` for more details).
+
+    trajectory_data : str or List[str]
+        Trajectory file(s) or folder with trajectories to augment.
+        Accepted formats: `.xtc`, `.dcd`, `.pdb`, `.xyz`, `.gro`, `.trr`, `.crd`.
+
+    topology_data : str or List[str]
+        Topology file(s) or folder with topologies for the trajectories.
+        A single topology is used for all trajectories; otherwise each topology must have
+        the same name as its trajectory. Accepted format: `.pdb`.
+
+    num_replicas : int, optional
+        Number of augmented trajectories to create from each input trajectory. Each replica
+        uses a different random seed, so replicas only differ if `noise_std` is set. Default: `1`.
+
+    output_folder : str, optional
+        Path to the output folder. Default: `"traj_augmentation"`.
+
+    Returns
+    -------
+    augmented_trajectories : List[str]
+        Paths to the augmented trajectory files.
+
+    augmented_topologies : List[str]
+        Paths to the topology files of the augmented trajectories (same order).
     """
 
     # Set logger
@@ -127,18 +138,20 @@ def traj_augmentation(
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -173,7 +186,7 @@ def set_logger(verbose: bool, log_path: str):
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
-    """Parses command-line arguments."""
+    """Parse the command-line arguments of the trajectory augmentation command."""
     parser = argparse.ArgumentParser(
         prog="Deep Cartograph: Trajectory Augmentation",
         description="Trajectory Augmentation Tool: Augments trajectory samples interpolating the existing frames."
@@ -203,7 +216,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-n', '-num_replicas', dest='num_replicas', type=int, default=1, required=False,
-        help="Number of replicas to generate for each trajectory. Only used if noise_std is not null. Default: 1."
+        help="Number of replicas to generate for each trajectory. Replicas only differ if noise_std is not null. Default: 1."
     )
     
     parser.add_argument(
@@ -222,6 +235,7 @@ def parse_arguments():
 ########
 
 def main():
+    """Entry point of the trajectory augmentation command: read the arguments and configuration, then run the tool."""
 
     args = parse_arguments()
 

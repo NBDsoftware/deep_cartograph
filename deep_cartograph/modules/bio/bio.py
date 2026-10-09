@@ -1,3 +1,7 @@
+"""
+Map residue numbers between two PDB topologies by aligning their sequences.
+"""
+
 import logging
 from typing import Tuple, List, Dict, Union, Optional
 
@@ -8,17 +12,22 @@ from Bio.SeqUtils import seq1
 logger = logging.getLogger(__name__)
 
 class PDBTopologyMapper:
+    """
+    Map residue numbers from a reference PDB topology to a target PDB topology.
+
+    Useful when the same protein is numbered differently in two files
+    (e.g. different constructs or mutants).
+    """
     def __init__(self, reference_topology: str, target_topology: str):
         """
         Use biopython to read two PDB files, align their sequences, and store a mapping.
-        
-        Input
-        -----
-        
-            reference_topology :
-                Path to the reference PDB file.
-            target_topology :
-                Path to the other PDB file.
+
+        Parameters
+        ----------
+        reference_topology : str
+            Path to the reference PDB file.
+        target_topology : str
+            Path to the other PDB file.
         """
 
         self.ref_sequence: str
@@ -59,23 +68,29 @@ class PDBTopologyMapper:
     @staticmethod
     def find_residues(pdb_file: str, chain_id: Optional[str] = None) -> Tuple[str, List[int]]:
         """
-        Finds the one-letter amino acid sequence and its residue indices from a PDB file.
-        
-        Input
-        -----
-        
-            pdb_file :
-                Path to the PDB file.
-            chain_id :
-                Chain identifier in the PDB file.
-        
+        Find the one-letter sequence and the residue numbers from a PDB file.
+
+        Only the first model is read. Residues that are not standard amino acids
+        (e.g. water or ligands) are written as 'X'.
+
+        Parameters
+        ----------
+        pdb_file : str
+            Path to the PDB file.
+        chain_id : str, optional
+            Chain identifier in the PDB file. If None, all chains are read.
+
         Returns
         -------
-        
-            sequence :
-                One-letter amino acid sequence.
-            indices :
-                Residue indices.
+        sequence : str
+            One-letter sequence.
+        indices : List[int]
+            Residue numbers (resids), in the same order as the sequence.
+
+        Raises
+        ------
+        ValueError
+            If the file can't be parsed or the chain is not found.
         """
         parser = PDB.PDBParser(QUIET=True)
     
@@ -103,7 +118,21 @@ class PDBTopologyMapper:
     
     @staticmethod
     def align_sequences(seq1: str, seq2: str) -> Align.Alignment:
-        """Aligns two sequences using Bio.Align.PairwiseAligner and returns the best local alignment."""
+        """
+        Align two sequences using Bio.Align.PairwiseAligner and return the best local alignment.
+
+        Parameters
+        ----------
+        seq1 : str
+            First (reference) sequence
+        seq2 : str
+            Second (target) sequence
+
+        Returns
+        -------
+        Align.Alignment
+            Best-scoring local alignment
+        """
         aligner = Align.PairwiseAligner()
         aligner.mode = 'local'
         aligner.match_score = 1
@@ -116,13 +145,15 @@ class PDBTopologyMapper:
     
     def get_mapping(self) -> Dict[int, Tuple[str, str, int]]:
         """
-        Creates a mapping from reference residues to target residues using the sequence alignment.
-        
+        Create a mapping from reference residues to target residues using the sequence alignment.
+
+        Only residues inside aligned segments are included. Residues in gaps are left out.
+
         NOTE: this mapping currently only takes into account amino acid residues.
-        
+
         The format of the mapping is the following:
 
-            self.mapping = {
+            mapping = {
                 6: ('A', 'A', 509),
                 7: ('A', 'A', 510),
                 8: ('M', 'M', 511),
@@ -132,6 +163,11 @@ class PDBTopologyMapper:
         Where the key is the resid of the reference topology (for quick translation lookup) and
         the Tuple value is formed by the reference resname, the target topology resname and 
         the target topology resid.
+
+        Returns
+        -------
+        Dict[int, Tuple[str, str, int]]
+            Mapping from reference resid to (reference resname, target resname, target resid)
         """
 
         # Find indices of matching sequence segments (there can be more than one segments if there are mismatches or gaps)
@@ -157,18 +193,16 @@ class PDBTopologyMapper:
     def map_residue(self, ref_residue_index: int) -> Union[int, None]:
         """
         Given a resid in the reference topology, return the corresponding resid in the other topology.
-        
-        Input
-        -----
-        
-            ref_residue_index :
-                Residue index in the reference topology.
-                
+
+        Parameters
+        ----------
+        ref_residue_index : int
+            Residue number (resid) in the reference topology.
+
         Returns
         -------
-        
-            resid :
-                Residue index in the other topology or None if not found.
+        resid : Union[int, None]
+            Residue number in the other topology, or None if not found.
         """
         
         # NOTE: Should we check here the residue is the same? Should we ask for the atom name as well?

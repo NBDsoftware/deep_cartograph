@@ -1,6 +1,9 @@
 Deep Cartograph
 ===============
 
+[![Docs](https://github.com/NBDsoftware/deep_cartograph/actions/workflows/docs.yml/badge.svg)](https://nbdsoftware.github.io/deep_cartograph/)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
+
 <img src="deep_cartograph/data/images/DeepCarto_logo.png" width="200">
 
 Deep cartograph is a package to analyze and enhance MD simulations.
@@ -29,86 +32,37 @@ Starting from a trajectory and topology files, Deep cartograph can be used to:
 - **deep_cartograph**: contains all the tools and modules that form part of the deep_cartograph package.
 - **examples**: contains examples of how to use the package.
 
-## Installation
+## Documentation
 
-Using conda, create the deep cartograph environment from the `environment.yml` or `environment_detailed.yml` files.
+Full documentation, including one page per tool, is at **https://nbdsoftware.github.io/deep_cartograph/**.
+
+## Installation
 
 ```
 git clone https://github.com/NBDsoftware/deep_cartograph.git
 cd deep_cartograph
 conda env create -f environment_detailed.yml
-```
-
-The `environment_detailed.yml` file has been produced using `conda env export --no-builds -f environment_detailed.yml` and should be cross-platform compatible. 
-Otherwise try to create the environment from `environment.yml`.
-
-Activate the environment and install the deep cartograph package itself.
-
-```
-cd deep_cartograph
+conda activate deep_cartograph
 pip install .
 ```
 
-If you are a developer you can install it in editable mode:
-
-```
-pip install -e .
-```
-
-In this way changes in this working directory will be reflected on the environment.
-
-If you want to use GPU support be sure to install the environment in the machine that has an available GPU. In a cluster for example you can connect with an interactive session to the computation node and perform the installation there. In this way conda will install the necessary dependencies to have gpu support. 
+See the [installation guide](https://nbdsoftware.github.io/deep_cartograph/installation.html) for GPU support and development installs.
 
 ## Usage
 
-The main workflow can be used calling `deep_carto` within the environment:
+Run the full workflow with `deep_carto`:
 
 ```
-usage: Deep Cartograph [-h] -conf CONFIGURATION_PATH -traj_data TRAJECTORY_DATA -top_data TOPOLOGY_DATA [-sup_traj_data SUPPLEMENTARY_TRAJ_DATA] [-sup_top_data SUPPLEMENTARY_TOP_DATA]
-                       [-ref_top REFERENCE_TOPOLOGY] [-restart] [-dim DIMENSION] [-cvs CVS [CVS ...]] [-out OUTPUT_FOLDER] [-v]
-
-Map trajectories onto Collective Variables.
-
-options:
-  -h, --help            show this help message and exit
-  -conf CONFIGURATION_PATH, -configuration CONFIGURATION_PATH
-                        Path to configuration file (.yml).
-  -traj_data TRAJECTORY_DATA
-                        Path to trajectory or folder with trajectories to analyze. Accepted formats: .xtc .dcd .pdb .xyz .gro .trr .crd.
-  -top_data TOPOLOGY_DATA
-                        Path to topology or folder with topology files for the trajectories. If a folder is provided, each topology should have the same name as the corresponding
-                        trajectory in -traj_data. Accepted format: .pdb.
-  -sup_traj_data SUPPLEMENTARY_TRAJ_DATA
-                        Path to supplementary trajectory or folder with supplementary trajectories. Used to project onto the CV alongside 'trajectory_data' but not for computing CVs.
-  -sup_top_data SUPPLEMENTARY_TOP_DATA
-                        Path to supplementary topology or folder with supplementary topologies. If a folder is provided, each topology should match the corresponding supplementary
-                        trajectory in -sup_traj_data.
-  -ref_top REFERENCE_TOPOLOGY
-                        Path to reference topology file. Used to find features from user selections. Defaults to the first topology in topology_data. Accepted format: .pdb.
-  -restart              Restart workflow from the last finished step. Deletes step folders for repeated steps.
-  -dim DIMENSION, -dimension DIMENSION
-                        Dimension of the CV to train or compute. Overrides the configuration input YML.
-  -cvs CVS [CVS ...]    Collective variables to train or compute (pca, ae, tica, htica, deep_tica). Overrides the configuration input YML.
-  -out OUTPUT_FOLDER, -output OUTPUT_FOLDER
-                        Path to the output folder.
-  -v, -verbose          Set logging level to DEBUG.
-
+deep_carto -conf config.yml -traj_data trajectories/ -top_data topologies/ -out output/
 ```
 
-An example for the YAML configuration file can be found here `deep_cartograph/default_config.yml`.
+An example YAML configuration file is in `deep_cartograph/default_config.yml`. Each step is also available as a standalone tool (`compute_features`, `train_colvars`, ...); see the [tools list](deep_cartograph/tools/README.md) and the [documentation](https://nbdsoftware.github.io/deep_cartograph/) for all options.
 
-**PLUMED interface**: the resulting Deep Learning CVs can be deployed for enhancing sampling with the [PLUMED](https://www.plumed.org/) package via the [pytorch](https://www.plumed.org/doc-master/user-doc/html/_p_y_t_o_r_c_h__m_o_d_e_l.html>`_) interface, available since version 2.9. 
+Common problems are covered in the [FAQ](https://nbdsoftware.github.io/deep_cartograph/faq.html).
 
-## FAQ
+## Citing
 
-**Error in LatticeReduction.cpp when using a trajectory from AMBER**
-
-```
-(tools/LatticeReduction.cpp:42) static void PLMD::LatticeReduction::sort(PLMD::Vector*)
-+++ assertion failed: m[1]<=m[2]*onePlusEpsilon
-```
-
-This is related to how PLUMED reads the lattice vector information from the input files. Might be a problem specific to AMBER, see [discussion](https://groups.google.com/g/plumed-users/c/k6QoUu5LGoE/m/uzt4VGooCAAJ?utm_medium=email&utm_source=footer). In some cases it can be solved **converting the trajectory to pdb format** and then **erasing the CRYST record**. Otherwise try to change the PLUMED version or convert the trajectory to a different format. 
+If you use Deep Cartograph, please cite it using the metadata in [CITATION.cff](CITATION.cff), or GitHub's "Cite this repository" button. Changes between versions are listed in the [CHANGELOG](CHANGELOG.md).
 
 ## Licensing
 

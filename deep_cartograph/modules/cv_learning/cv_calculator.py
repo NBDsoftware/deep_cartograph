@@ -1,3 +1,9 @@
+"""
+Collective variable (CV) calculators.
+
+Each calculator reads features from PLUMED colvars files, fits a CV (PCA, TICA, HTICA, AE,
+VAE, DeepTICA or UMAP), projects data onto it and writes the model and PLUMED input files.
+"""
 import os
 import copy
 import torch
@@ -25,31 +31,37 @@ def build_timelagged_dataset(data: torch.Tensor,
                              lag_time: int
     ):
     """
-    Creates a time-lagged dataset, restricting the (t, t+lag_time) pairs to samples that belong
-    to the same trajectory.
+    Creates a time-lagged dataset of (t, t+lag_time) sample pairs, keeping only pairs whose
+    two samples come from the same trajectory.
 
-    The data is a concatenation of one block of samples per colvars file and carries no time
-    column, so without the trajectory labels mlcolvar assumes a single continuous time series and
-    pairs the last samples of one trajectory with the first samples of the next one, producing
-    lag_time * (num_trajectories - 1) pairs with meaningless kinetics.
+    The data is one block of samples per colvars file, stacked one after the other. Without
+    the trajectory labels, mlcolvar would treat it as a single time series and pair the end of
+    one trajectory with the start of the next one, which gives meaningless pairs.
 
     Parameters
     ----------
 
-    data
-        Samples of all the trajectories, concatenated one trajectory after the other
+    data : torch.Tensor
+        Samples of all the trajectories, concatenated one trajectory after the other.
 
-    labels
-        Index of the trajectory each sample belongs to, aligned row-for-row with data
+    labels : np.ndarray or None
+        Index of the trajectory each sample belongs to, aligned row-for-row with data.
+        If None, all samples are treated as a single trajectory.
 
-    lag_time
-        Lag between the two samples of each pair, in number of samples
+    lag_time : int
+        Lag between the two samples of each pair, in number of samples.
 
     Returns
     -------
 
     dataset : DictDataset
-        Dataset with keys 'data', 'data_lag', 'weights' and 'weights_lag'
+        Dataset with keys 'data', 'data_lag', 'weights' and 'weights_lag'.
+
+    Raises
+    ------
+
+    ValueError
+        If a trajectory does not have more samples than the lag time.
     """
     from mlcolvar.utils.timelagged import create_timelagged_dataset
 
@@ -82,22 +94,32 @@ def build_timelagged_dataset(data: torch.Tensor,
 class CVCalculator(ABC, Generic[CVType]):
     """
     Base class for collective variables calculators.
+
+    A CV calculator loads features from colvars files, fits a CV on them, projects data onto
+    the CV, runs a sensitivity analysis and saves the model and PLUMED input files. The usual
+    flow is ``load_training_data`` followed by ``run``. A trained model can be reloaded with
+    ``load``.
+
+    Subclasses must implement ``compute_cv``, ``save_weights``, ``get_cv_parameters``,
+    ``get_cv_type``, ``project_data``, ``sensitivity_analysis`` and ``normalize_cv``. They
+    usually also extend ``save_model`` and ``_load_from_folder``.
     """
-    def __init__(self, 
+    def __init__(self,
         configuration: Optional[Dict] = None,
         output_path: Optional[str] = None
         ):
         """
         Initializes the base CV calculator.
-        
+
         Parameters
         ----------
-    
-        configuration (Optional)
-            Configuration dictionary with settings for the CV, not needed when loading a model from a zip file.
 
-        output_path (Optional)
-            Output path where the CV results folder will be created
+        configuration : Dict, optional
+            Settings for the CV (see the train_colvars default_config.yml or the
+            yaml_schemas/train_colvars.py schema). Not needed when loading a model from a zip file.
+
+        output_path : str, optional
+            Folder where the CV results folder will be created.
         """
         
         # Configuration
@@ -165,9 +187,8 @@ class CVCalculator(ABC, Generic[CVType]):
         Data the model is fitted on: the fold-restricted subset when training an ensemble
         member, otherwise all the training data.
 
-        Note this is resolved lazily instead of assigning fit_data eagerly, because
-        LinearCalculator.load_training_data reassigns self.training_data to a normalized
-        tensor after calling super(), which would leave an eagerly set fit_data stale.
+        It is resolved on each access (instead of copying training_data into fit_data once),
+        so it stays correct if a subclass later replaces self.training_data.
         """
         return self.training_data if self.fit_data is None else self.fit_data
 
@@ -184,21 +205,31 @@ class CVCalculator(ABC, Generic[CVType]):
     @classmethod
     def load(cls, model_path: str, output_path: str):
         """
-        Factory method to load a CVCalculator from a model.zip file.
+        Loads a trained CV calculator from a model.zip file.
 
-        This method automatically determines the correct CVCalculator subclass
-        from the model file, instantiates it, and loads the data.
+        The CV type is read from the model metadata, and the matching subclass is created
+        and filled with the saved model.
 
         Parameters
         ----------
         model_path : str
             Path to the model.zip file.
         output_path : str
-            Output path where the CV results folder will be created.
+            Folder where the CV results folder will be created.
 
         Returns
         -------
-        An instance of the appropriate CVCalculator subclass.
+        calculator : CVCalculator
+            Instance of the matching CVCalculator subclass, ready to project data.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the model file does not exist.
+        ValueError
+            If the CV name cannot be read from the model metadata.
+        TypeError
+            If the CV name is not a known CV calculator.
         """
         from deep_cartograph.modules.common import unzip_files
         import json
@@ -242,8 +273,8 @@ class CVCalculator(ABC, Generic[CVType]):
 
     def _load_from_folder(self, folder_path: str):
         """
-        Loads common model attributes from a directory.
-        This is called by the factory after unzipping.
+        Loads the model files common to all CVs (metadata, feature labels, reference
+        topology) from an unzipped model folder. Called by ``load``.
         """
         import json
         
@@ -278,10 +309,9 @@ class CVCalculator(ABC, Generic[CVType]):
             logger.warning('Reference topology file not found in the model.')
 
     def create_output_folders(self):
-        """ 
-        Creates the output folders for this CV.
-
-        Used after the specific CV calculator constructor has been called.
+        """
+        Creates the output folder for this CV and its 'sensitivity_analysis', 'training'
+        and 'model' subfolders.
         """
         
         # Create output folder for this CV
@@ -304,19 +334,23 @@ class CVCalculator(ABC, Generic[CVType]):
         features_list: Optional[List[str]] = None,
         ):
         """
-        Loads the validation data from the colvars files
-        
+        Loads the validation data from colvars files.
+
+        Only used by the non-linear CVs. If no validation data is given, they take it from
+        the training data instead.
+
         Parameters
         ----------
-        
-        val_colvars_paths 
-            List of paths to colvars files with the main data used for validation
-        val_topology_paths (Optional)
-            List of paths to topology files corresponding to the validation colvars files (same order)
-        ref_topology_path (Optional)
-            Path to the reference topology file. If None, the first topology file is used as reference topology
-        features_list (Optional)
-            List with the features to use for the validation (names from reference topology) or None to use all features in the colvars files
+
+        val_colvars_paths : List[str]
+            Paths to the colvars files used for validation.
+        val_topology_paths : List[str], optional
+            Topology files matching the validation colvars files (same order).
+        ref_topology_path : str, optional
+            Reference topology file. If None, the first validation topology is used.
+        features_list : List[str], optional
+            Features to use (names from the reference topology). If None, all features in the
+            colvars files are used.
         """
         
         # Topologies
@@ -347,19 +381,23 @@ class CVCalculator(ABC, Generic[CVType]):
         features_list: Optional[List[str]] = None, 
         ):
         """
-        Loads the training data from the colvars files
-    
+        Loads the training data from colvars files.
+
+        Also stores the feature labels, computes the feature statistics used for normalization
+        and, for ensemble members, selects the subset of trajectories to fit on.
+
         Parameters
         ----------
 
-        train_colvars_paths 
-            List of paths to colvars files with the main data used for training
-        train_topology_paths (Optional)
-            List of paths to topology files corresponding to the training colvars files (same order)
-        ref_topology_path (Optional)
-            Path to the reference topology file. If None, the first topology file is used as reference topology
-        features_list (Optional)
-            List with the features to use for the training (names from reference topology) or None to use all features in the colvars files
+        train_colvars_paths : List[str]
+            Paths to the colvars files used for training.
+        train_topology_paths : List[str], optional
+            Topology files matching the training colvars files (same order).
+        ref_topology_path : str, optional
+            Reference topology file. If None, the first training topology is used.
+        features_list : List[str], optional
+            Features to use (names from the reference topology). If None, all features in the
+            colvars files are used.
         """
         
         # Topologies
@@ -397,17 +435,17 @@ class CVCalculator(ABC, Generic[CVType]):
 
     def compute_feature_statistics(self, features_df: pd.DataFrame):
         """
-        Computes the feature statistics and the normalization mean/range used to normalize
-        the input features.
+        Computes the feature statistics (mean, std, min, max) and the mean/range used to
+        normalize the input features.
 
-        Kept separate from the data loading so that the statistics can be computed from the
-        whole training data while the model is fitted on a subset of it (ensemble training).
+        The statistics always come from all the training data, even when an ensemble member
+        is fitted on a subset of it.
 
         Parameters
         ----------
 
         features_df : pd.DataFrame
-            Dataframe with the features used to compute the statistics
+            Features used to compute the statistics.
         """
 
         stats = ['mean', 'std', 'min', 'max']
@@ -420,10 +458,10 @@ class CVCalculator(ABC, Generic[CVType]):
         Restricts the data used to fit the model to the trajectories in self.fit_traj_indices.
 
         Used to train an ensemble of models, where each member is fitted on all but one
-        disjoint fold of the training trajectories. The full training data is kept in
+        fold of the training trajectories. The full training data is kept in
         self.training_data so that every member can still project all the trajectories.
 
-        Does nothing if no fold restriction was requested.
+        Does nothing if self.fit_traj_indices is None.
         """
 
         if self.fit_traj_indices is None or self.training_data is None:
@@ -442,34 +480,43 @@ class CVCalculator(ABC, Generic[CVType]):
 
     def cv_ready(self) -> bool:
         """
-        Checks if the CV is ready to be used.
+        Returns True if the CV has been computed or loaded.
         """
         return self.cv is not None
         
     def prepare_normalization(self) -> Tuple[np.array, np.array]:
 
-        """ 
-        Prepare the normalization parameters for the features. Computes the normalization
-        means and ranges based on the feature statistics and the chosen normalization mode.
-        
+        """
+        Computes the feature normalization means and ranges from the feature statistics and
+        the chosen normalization mode (features_normalization in the configuration).
+
         The normalization will be:
 
                               feature - normalization_mean
         normalized feature = --------------------------------
                                     normalization_range
-        
+
+        Modes: None (no normalization), 'mean_std' (mean 0, std 1), 'min_max_range1'
+        (range [0, 1]) and 'min_max_range2' (range [-1, 1]). Ranges close to zero are set to 1.
+
         Returns
         -------
-        
+
         means : np.array
             Means for normalization
         ranges : np.array
             Ranges for normalization
+
+        Raises
+        ------
+
+        ValueError
+            If the normalization mode is not recognized.
         """
-        
+
         def sanitize_ranges(range_array: np.ndarray):
             """
-            Check the ranges are not close to zero and set them to 1 if they are.
+            Sets ranges close to zero to 1, to avoid dividing by zero.
             """
             for i in range(len(range_array)):
                 if abs(range_array[i]) < 1e-8:
@@ -506,19 +553,23 @@ class CVCalculator(ABC, Generic[CVType]):
     # Main CV-related methods
     def run(self, cv_dimension: Union[int, None] = None) -> Union[pd.DataFrame, None]:
         """
-        Runs the CV calculator.
-        
+        Computes the CV from the loaded training data, then saves the model, runs the
+        sensitivity analysis and projects the training data.
+
+        Call ``load_training_data`` first.
+
         Parameters
         ----------
-        
-        cv_dimension : int
+
+        cv_dimension : int, optional
             Dimension of the CV. If None, the dimension from the configuration is used.
-        
+
         Returns
         -------
-        
-        projected_training_data : pd.DataFrame
-            Projected training data or None if the CV computation failed
+
+        projected_training_data : pd.DataFrame or None
+            Training data projected onto the CV, or None if there is no training data or the
+            CV computation failed.
         """
         
         # Check there is training data to compute the CV
@@ -557,26 +608,27 @@ class CVCalculator(ABC, Generic[CVType]):
     @abstractmethod 
     def compute_cv(self):
         """
-        Computes the collective variables. Implement in subclasses.
+        Fits the CV on the training data and stores it in self.cv. Implement in subclasses.
         """
         raise NotImplementedError
 
     @abstractmethod
     def save_weights(self, weights_path: str):
         """
-        Saves the collective variable to a text file. Implement in subclasses.
-        
+        Saves the CV weights (or model) to a file. Implement in subclasses.
+
         Parameters
         ----------
-        
+
         weights_path : str
             Path to the output file where the weights will be saved
         """
-        raise NotImplementedError   
-    
+        raise NotImplementedError
+
     def save_model(self):
         """
-        Saves the collective variable to a zip file. Here we save the files common to all CV calculators.
+        Writes the model files common to all CVs (metadata, feature labels and reference
+        topology) to the model folder. Subclasses add their own files and zip the folder.
         """
         import json
 
@@ -595,24 +647,38 @@ class CVCalculator(ABC, Generic[CVType]):
     @abstractmethod
     def get_cv_parameters(self) -> Dict:
         """
-        Returns the parameters for the CV. Implement in subclasses.
+        Returns the CV parameters needed to build the PLUMED input. Implement in subclasses.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_cv_type(self) -> str:
         """
-        Returns the type of the CV. Implement in subclasses.
+        Returns the type of the CV (e.g. 'linear' or 'non-linear'). Implement in subclasses.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
-    def project_data(self, 
-                     data: torch.Tensor, 
+    def project_data(self,
+                     data: torch.Tensor,
                      normalize_data: bool = True
         ) -> torch.Tensor:
         """
         Projects the data onto the CV space. Implement in subclasses.
+
+        Parameters
+        ----------
+
+        data : torch.Tensor
+            Feature values to project, one row per sample.
+        normalize_data : bool, optional
+            Whether to normalize the features before projecting. Default is True.
+
+        Returns
+        -------
+
+        projected_data : torch.Tensor
+            Data projected onto the CV space.
         """
         raise NotImplementedError
     
@@ -621,22 +687,26 @@ class CVCalculator(ABC, Generic[CVType]):
                         topology_paths: Union[List[str], str]
         ) -> Union[pd.DataFrame, None]:
         """
-        Projects a colvars file onto the CV space.
-        
+        Projects one or more colvars files onto the CV space.
+
+        The features are translated from each topology to the reference topology, so the
+        files can come from a different system. The trajectory label of each sample is
+        stored in self.projection_data_labels.
+
         Parameters
         ----------
-        
+
         colvars_paths : List[str] or str
             Paths to the colvars files to project
 
         topology_paths : List[str] or str
             Paths to the topology files corresponding to the colvars files
-            
+
         Returns
         -------
-        
-        projected_data : pd.DataFrame
-            Projected data or None if the projection fails
+
+        projected_data : pd.DataFrame or None
+            Projected data, or None if the reference topology is not set.
         """
         
         if self.ref_topology_path is None:
@@ -668,17 +738,15 @@ class CVCalculator(ABC, Generic[CVType]):
         
     def set_labels(self):
         """
-        Sets the labels of the CV.
+        Sets the labels of the CV components (e.g. 'PC 1', 'PC 2').
         """
-        
+
         self.cv_labels = [f'{cv_components_map[self.cv_name]} {i+1}' for i in range(self.cv_dimension)]
-    
+
     def normalize_cv(self):
         """
-        Min max normalization of the CV.
-        Normalizes the collective variable space to the range [-1, 1]
-        Using the min and max values from the evaluation of the training data.
-        Implemented in subclasses.
+        Scales the CV to the range [-1, 1] using the min and max values of the projected
+        training data. Implement in subclasses.
         """
         
         raise NotImplementedError
@@ -689,22 +757,25 @@ class CVCalculator(ABC, Generic[CVType]):
                            waypoint_structures: Optional[List[str]] = None
         ) -> None:
         """
-        Creates all files needed to compute the collective variable from the features
-        for the given topology using plumed. If the topology is not given, the creation
-        of the plumed input is skipped.
-        
+        Writes the PLUMED files needed to compute the CV for the given topology.
+
+        Two zip files are created in the output folder: one to compute the CV in an unbiased
+        run and one to bias it with the enhanced sampling method from the 'bias' configuration.
+        Nothing is written if the topology is None or some features cannot be translated to it.
+
         Parameters
         ----------
 
-        topology : Optional[str]
-            Path to the topology file of the system (used to translate the features)
+        topology : str or None
+            Path to the topology file of the system (used to translate the features).
 
         output_folder : str
-            Path to the output folder where the files will be written
+            Folder where the files will be written.
 
-        waypoint_structures : Optional[List[str]]
-            List of paths to waypoint structures that serve as guides for the CV. The guide is currently implemented as an 
-            RMSD restraint on those regions of the sequence that do not vary between waypoints. If None, no waypoints are used.
+        waypoint_structures : List[str], optional
+            Paths to waypoint structures used to guide the biased run. The guide is an RMSD
+            restraint on the regions that do not change between waypoints. It is only used if
+            'add_rmsd_restraint' is set in the bias configuration.
         """
 
         if topology is None:
@@ -824,8 +895,8 @@ class CVCalculator(ABC, Generic[CVType]):
     @abstractmethod
     def sensitivity_analysis(self):
         """
-        Perform a sensitivity analysis of the CV on the training data.
-        Implemented in subclasses.
+        Computes how much each feature affects the CV on the training data and saves the
+        results (table, plots and per-atom values). Implement in subclasses.
         """
         raise NotImplementedError("Sensitivity analysis not implemented for this CV calculator.")
     
@@ -833,14 +904,24 @@ class CVCalculator(ABC, Generic[CVType]):
                                    feature_labels: List[str],
                                    feature_sensitivities: np.ndarray
     ) -> Dict[int, float]:
-        """ 
-        Compute the per-atom sensitivities by taking the maximum sensitivity per atom of
-        the associated features. This is useful to identify which atoms are the most relevant for 
-        the CV. 
-        
-        The function returns a Dictionary with the atom index as key and the corresponding per-atom sensitivity as value.
-        The atom index follows the MDAnalysis convention (0-based).
-        """ 
+        """
+        Computes one sensitivity value per atom, as the maximum sensitivity of the features
+        that involve that atom. Useful to see which atoms matter most for the CV.
+
+        Parameters
+        ----------
+
+        feature_labels : List[str]
+            Feature names (e.g. 'dist-...' or 'coord-....x'), from the reference topology.
+        feature_sensitivities : np.ndarray
+            Sensitivity of each feature, in the same order as feature_labels.
+
+        Returns
+        -------
+
+        per_atom_sensitivities : Dict[int, float]
+            Atom index (0-based, as in MDAnalysis) mapped to its sensitivity.
+        """
         from deep_cartograph.modules.md import atom_entity_to_index
 
         per_atom_sensitivities: Dict[int, float] = {}
@@ -880,7 +961,7 @@ class CVCalculator(ABC, Generic[CVType]):
 
     def get_range(self) -> List[Tuple[float, float]]:
         """
-        Returns the limits of the collective variable.
+        Returns the (min, max) limits of each CV component.
         """
         
         return self.cv_range
@@ -889,15 +970,19 @@ class CVCalculator(ABC, Generic[CVType]):
 # Types of Collective Variable calculators
 class LinearCalculator(CVCalculator):
     """
-    Base class for linear collective variable calculators
+    Base class for linear CV calculators (PCA, TICA, HTICA).
+
+    The CV is a weight matrix (num_features x cv_dimension) applied to the normalized
+    features. The training data is normalized when loaded. Subclasses only implement
+    ``compute_cv``.
     """
-    
-    def __init__(self, 
-        configuration: Optional[Dict] = None, 
+
+    def __init__(self,
+        configuration: Optional[Dict] = None,
         output_path: Optional[str] = None
         ):
-        """ 
-        Initializes a linear CV calculator.
+        """
+        Initializes a linear CV calculator. See ``CVCalculator.__init__``.
         """
         super().__init__(
             configuration, 
@@ -912,7 +997,7 @@ class LinearCalculator(CVCalculator):
         self.cv_norm_range: Optional[np.array] = None
 
     def _load_from_folder(self, folder_path: str):
-        """Loads linear model specific files from a directory."""
+        """Also loads the CV weights and the CV and feature normalization parameters."""
         super()._load_from_folder(folder_path)
 
         weights_path = os.path.join(self.model_output_folder, 'cv_weights.npy')
@@ -931,8 +1016,11 @@ class LinearCalculator(CVCalculator):
         self.features_norm_range = np.load(features_norm_range_path)
 
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the training data (see ``CVCalculator.load_training_data``) and normalizes it.
+        """
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
-        
+
         if self.training_data is None:
             logger.error('Training data not loaded. Cannot normalize training data.')
             raise ValueError('Training data not loaded. Cannot normalize training data.')
@@ -950,36 +1038,38 @@ class LinearCalculator(CVCalculator):
                        normalizing_range: torch.Tensor,
         ) -> torch.Tensor:
         """
-        Use the normalization mean and range to normalize the data.
-        
+        Normalizes the data as (data - normalizing_mean) / normalizing_range.
+
+        The input tensor is modified in place and also returned.
+
         Parameters
         ----------
-        
+
         data : torch.Tensor
             Data to normalize
-        
+
         normalizing_mean : torch.Tensor
             Mean values for normalization
-        
+
         normalizing_range : torch.Tensor
             Range values for normalization
-            
+
         Returns
         -------
-        
+
         normalized_data : torch.Tensor
             Normalized data
         """
-        
+
         # In-place subtraction and division
         data.sub_(normalizing_mean)
         data.div_(normalizing_range)
 
         return data
-    
+
     def save_weights(self, weights_path: str):
         """
-        Saves the collective variable linear weights to a text file.
+        Saves the linear CV weights to a NumPy .npy file.
         
         Parameters
         ----------
@@ -993,7 +1083,12 @@ class LinearCalculator(CVCalculator):
         
     def save_model(self):
         """
-        Saves the collective variable linear weights and normalization parameters to a zip file.
+        Saves the linear CV weights and normalization parameters to model.zip.
+
+        Raises
+        ------
+        ValueError
+            If the CV or its normalization parameters have not been computed.
         """
         super().save_model()
         
@@ -1033,8 +1128,8 @@ class LinearCalculator(CVCalculator):
         logger.info(f'Model saved to {model_path}')
 
     def get_cv_parameters(self):
-        """ 
-        Get the collective variable parameters.
+        """
+        Returns the CV weights and normalization parameters needed to build the PLUMED input.
         """
 
         # Save CV data to parameters dictionary
@@ -1051,9 +1146,9 @@ class LinearCalculator(CVCalculator):
     
     def get_cv_type(self) -> str:
         """
-        Returns the type of the collective variable.
+        Returns 'linear'.
         """
-        
+
         return 'linear'
     
     def project_data(self, 
@@ -1061,20 +1156,27 @@ class LinearCalculator(CVCalculator):
                      normalize_data: bool = True
         ) -> torch.Tensor:
         """
-        Projects the data onto the normalized CV space.
-        
+        Projects the data onto the CV space and scales the result to [-1, 1].
+
         Parameters
         ----------
         data : torch.Tensor
-            Data to project onto the CV space
+            Data to project onto the CV space. If normalize_data is True, it is
+            normalized in place.
 
-        normalize_data : bool
-            Whether to normalize the data before projection
+        normalize_data : bool, optional
+            Whether to normalize the features before projection. Use False if the data is
+            already normalized. Default is True.
 
         Returns
         -------
         projected_data : torch.Tensor
             Projected data
+
+        Raises
+        ------
+        ValueError
+            If the CV or the normalization parameters have not been computed.
         """
 
         logger.debug(f"Projecting data onto {cv_names_map[self.cv_name]} ...")
@@ -1113,7 +1215,10 @@ class LinearCalculator(CVCalculator):
         return projected_data
             
     def normalize_cv(self):
-        
+        """
+        Computes the CV mean and range that scale the projected training data to [-1, 1].
+        """
+
         if self.training_data is None:
             logger.error('Training data not loaded. Cannot compute CV statistics for normalization.')
             raise ValueError('Training data not loaded. Cannot compute CV statistics for normalization.')
@@ -1132,10 +1237,11 @@ class LinearCalculator(CVCalculator):
         self.cv_norm_range = (self.cv_stats['max'] - self.cv_stats['min']) / 2
 
     def sensitivity_analysis(self):
-        """  
-        Perform a sensitivity analysis of the CV on the training data.
         """
-        
+        Sensitivity analysis for linear CVs: the sensitivity of each feature is the absolute
+        value of its weight. Results are saved separately for each CV component.
+        """
+
         from deep_cartograph.modules.figures import plot_sensitivity_results
         from deep_cartograph.modules.md import map_sensitivity_to_structure
         
@@ -1189,15 +1295,20 @@ class LinearCalculator(CVCalculator):
 
 class NonLinear(CVCalculator):
     """
-    Non-linear collective variables calculator (e.g. Autoencoder)
+    Base class for neural-network CV calculators (AE, VAE, DeepTICA), trained with mlcolvar.
+
+    Feature normalization is built into the model. Training is repeated up to num_tries
+    times and the model with the lowest validation loss is kept. Subclasses implement
+    ``create_model`` and ``set_encoder_layers``, and extend ``set_up_cv_options``,
+    ``set_decoder_layers``, ``load_training_data`` and ``load_validation_data`` as needed.
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
         configuration: Optional[Dict] = None,
         output_path: Optional[str] = None
         ):
-        """ 
-        Initializes a non-linear CV calculator.
+        """
+        Initializes a non-linear CV calculator. See ``CVCalculator.__init__``.
         """
         from lightning import LightningModule
         from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
@@ -1277,8 +1388,8 @@ class NonLinear(CVCalculator):
         self.optimizer_options: Dict = {}
 
     def _load_from_folder(self, folder_path: str):
-        """ 
-        Loads non-linear model specific files from a directory.
+        """
+        Also loads the TorchScript model (cv_weights.pt).
         """
         super()._load_from_folder(folder_path)
 
@@ -1294,8 +1405,9 @@ class NonLinear(CVCalculator):
         self.cv.eval()
 
     def set_up_encoder_last_layer(self):
-        """ 
-        Sets up the last layer of the encoder based on the user-provided configuration.
+        """
+        Adds the last-layer dropout, activation and batch normalization settings to the
+        encoder options (except for the VAE, whose last layer is built by mlcolvar).
         """
     
         # If CV is VAE, less layers are built using feedforward and the last 
@@ -1320,7 +1432,10 @@ class NonLinear(CVCalculator):
             
     def set_up_decoder_last_layer(self):
         """
-        Sets up the last layer of the decoder based on the user-provided configuration and the features normalization.
+        Adds the last-layer settings to the decoder options.
+
+        The last activation is changed to match the feature normalization if needed:
+        sigmoid for 'min_max_range1' and tanh for 'min_max_range2'.
         """
         # Add activation function to the last layer of the decoder - user defined or default None
         self.decoder_options['activation'].append(self.decoder_options['last_layer_activation'])
@@ -1361,8 +1476,7 @@ class NonLinear(CVCalculator):
 
     def _adjust_lr_scheduler_from_datamodule(self, datamodule):
         """
-        Adjusts LR scheduler parameters based on the training configuration.
-        This is called right after the datamodule is created.
+        Adjusts the LR scheduler using the number of batches per epoch of a datamodule.
         """
         
         # Proceed only if a scheduler is defined
@@ -1377,8 +1491,7 @@ class NonLinear(CVCalculator):
     
     def _adjust_lr_scheduler_from_loader(self, train_loader):
             """
-            Adjusts LR scheduler parameters based on the training configuration.
-            This is called right after the dataloaders are created.
+            Adjusts the LR scheduler using the number of batches per epoch of a dataloader.
             """
             
             # Proceed only if a scheduler is defined
@@ -1390,7 +1503,14 @@ class NonLinear(CVCalculator):
 
     def adjust_lr_scheduler(self, steps_per_epoch: int):
         """
-        Adjusts LR scheduler parameters based on the training configuration.
+        Fills in default settings for the OneCycleLR and ReduceLROnPlateau schedulers, if
+        the user did not give them, and sets how often the scheduler steps.
+
+        Parameters
+        ----------
+
+        steps_per_epoch : int
+            Number of training batches per epoch.
         """
         
         scheduler_name = self.lr_scheduler.get('name', '')
@@ -1418,7 +1538,9 @@ class NonLinear(CVCalculator):
             
     def check_num_samples(self):
         """
-        Check the number of samples in the training and validation sets. 
+        Computes and logs the number of samples in the training and validation sets.
+
+        If no separate validation data was given, the split uses the 'lengths' setting.
         """
         
         if self.validation_input_dtset is not None:
@@ -1436,10 +1558,9 @@ class NonLinear(CVCalculator):
         logger.info(f'Number of validation samples: {self.num_validation_samples}')
             
     def check_batch_size(self):
-        """  
-        Check the batch size is not larger than the number of samples in the training set.
-        If it is, set the batch size to the closest power of two smaller than the number
-        of samples in the training set.
+        """
+        Makes sure the batch size is smaller than the number of training samples. If not, it
+        is set to the largest power of two below the number of training samples.
         """
         from deep_cartograph.modules.common import closest_power_of_two
         
@@ -1450,53 +1571,46 @@ class NonLinear(CVCalculator):
                            Setting the batch size to the closest power of two: {self.batch_size}""")
     
     def set_encoder_layers() -> List:
-        """ 
-        Set the layers for the encoder of the non-linear model.
-        Implement in subclasses.
-        
-        self.encoder: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
-            input_dim: number of features
-            hidden_layer_i: number of neurons in the i-th hidden layer
-            output_dim: dimension of the collective variable (latent space)
-            
-        Each non-linear model has different assumptions about the encoder layers input: ae, vae, deep_tica
-            
+        """
+        Returns the encoder layer sizes. Implement in subclasses.
+
+        Usually [num_features, hidden_1, ..., hidden_n, cv_dimension], but each model
+        (ae, vae, deep_tica) expects a slightly different list.
+
         Returns
         -------
-        
+
         nn_layers : List
-            List with the layers for the encoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
+            Number of neurons in each encoder layer, from input to output.
         """
         
         raise NotImplementedError("This method should be implemented in subclasses.")
     
     def set_decoder_layers(self) -> Optional[List]:
-        """ 
-        Set the layers for the decoder of the non-linear model.
-        Implement in subclasses.
-        
-        self.decoder: [input_dim, hidden_layer_1, hidden_layer_2, ..., output_dim]
-            input_dim: dimension of the collective variable (latent space)
-            hidden_layer_i: number of neurons in the i-th hidden layer
-            output_dim: number of features
-            
-        Each non-linear model has different assumptions about the decoder layers input: ae, vae
-        
+        """
+        Returns the decoder layer sizes, or None if the model has no decoder (e.g. DeepTICA).
+
+        Models with a decoder (ae, vae) override this. The list is usually
+        [cv_dimension, hidden_1, ..., hidden_n, num_features].
+
         Returns
         -------
-        
-        nn_layers : Optional[List]
-            List with the layers for the decoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
-            If None, no decoder is used (e.g. DeepTICA).
+
+        nn_layers : List or None
+            Number of neurons in each decoder layer, from input to output, or None.
         """
         
         return None
         
     def set_up_cv_options(self):
         """
-        Sets up the options for the CV based on the training configuration and the normalization of the features
+        Builds the options passed to the mlcolvar model (self.cv_options): input
+        normalization, optimizer and learning rate scheduler.
+
+        Raises
+        ------
+        ValueError
+            If the learning rate scheduler name is not found in torch.optim.lr_scheduler.
         """
         import torch 
         
@@ -1540,12 +1654,11 @@ class NonLinear(CVCalculator):
                 
     def create_model(self):
         """
-        Implement this method in subclasses to create the non-linear model.
-        
-        Creates the non-linear model based on the configuration. 
-        This is needed because there is no common API for all non-linear models in the mlcolvars library,
-        thus the creation of the model has to be done in each specific CV calculator.
-        
+        Creates a new, untrained mlcolvar model. Implement in subclasses.
+
+        Each subclass does this itself because the mlcolvar model classes take different
+        arguments.
+
         Returns
         -------
         
@@ -1557,7 +1670,19 @@ class NonLinear(CVCalculator):
 
     def get_callbacks(self, try_num: int = 1) -> List:
         """
-        Get the callbacks for the training of the Nonlinear model.
+        Returns the Lightning callbacks used during training: metrics logging, early
+        stopping and model checkpoints.
+
+        Parameters
+        ----------
+        try_num : int, optional
+            Number of the current training try, used to name the checkpoints folder.
+            Default is 1.
+
+        Returns
+        -------
+        callbacks : List
+            List of callbacks for the trainer.
         """
 
         from mlcolvar.utils.trainer import MetricsCallback
@@ -1596,7 +1721,15 @@ class NonLinear(CVCalculator):
 
     def train(self) -> bool:
         """
-        Trains the non-linear collective variable using the training data.
+        Trains the model on the training data.
+
+        Training is repeated up to num_tries times with different seeds. The model with the
+        lowest validation loss is kept in self.cv.
+
+        Returns
+        -------
+        success : bool
+            True if at least one try produced a valid model.
         """
         import torch
         import lightning
@@ -1695,7 +1828,11 @@ class NonLinear(CVCalculator):
 
     def _finalize_training(self) -> bool:
         """
-        Handles post-training tasks: model selection, loading, and logging scores.
+        Loads the best or last checkpoint of the current try (see 'model_to_save') into
+        self.cv and sets self.cv_score.
+
+        Returns False if no checkpoint is found or, for DeepTICA, if the score is below the
+        theoretical minimum.
         """
         # 1. Gather all available model info first
         
@@ -1744,7 +1881,6 @@ class NonLinear(CVCalculator):
         # 3. Load the selected model and log results
         if model_path_to_load:
             # The score of the model we are actually loading
-            # (This is an example, you might want to store self.cv_score differently)
             if model_description == "best post-annealing":
                 self.cv_score = best_post_anneal_score
             elif model_description == "best overall":
@@ -1784,12 +1920,13 @@ class NonLinear(CVCalculator):
         
     def check_convergence(self, loss: List):
         """
-        Check if the loss has decreased by the end of the training.
+        Logs a warning if the validation loss never went below its initial value.
 
-        Inputs
-        ------
+        Parameters
+        ----------
 
-            loss:         loss for each epoch.
+        loss : List
+            Validation loss for each epoch.
         """
 
         # Soft convergence condition: Check if the minimum of the validation loss is lower than the initial value
@@ -1798,7 +1935,8 @@ class NonLinear(CVCalculator):
     
     def plot_training_metrics(self):
         """
-        Plots and saves training metrics common to all Non-linear CVs.
+        Saves (if 'save_loss' is set) and plots the training metrics common to all
+        non-linear CVs: loss and learning rate.
         """
         from mlcolvar.utils.plot import plot_metrics
         import torch
@@ -1874,9 +2012,13 @@ class NonLinear(CVCalculator):
             logger.error(f'Failed to save/plot the loss. Error message: {e}\n{traceback.format_exc()}')
 
     def normalize_cv(self):
-        
+        """
+        Adds a post-processing layer to the model that scales the CV of the training data
+        to [-1, 1].
+        """
+
         import torch
-        
+
         from mlcolvar.core.transform import Normalization
         from mlcolvar.core.transform.utils import Statistics
         
@@ -1896,7 +2038,8 @@ class NonLinear(CVCalculator):
         
     def compute_cv(self):
         """
-        Compute Non-linear CV.
+        Trains the model and, if training succeeds, saves the training metrics and puts the
+        model in evaluation mode.
         """
 
         # Train the non-linear model
@@ -1912,8 +2055,15 @@ class NonLinear(CVCalculator):
             self.cv.eval()
 
     def save_weights(self, weights_path: str):
-        """ 
-        Saves the collective variable weights to a pytorch file.
+        """
+        Saves the model as a TorchScript file (usable by PLUMED). Tries trace mode first
+        and script mode if that fails. Errors are logged, not raised.
+
+        Parameters
+        ----------
+
+        weights_path : str
+            Path to the output .pt file.
         """
 
         successfully_saved = False
@@ -1937,7 +2087,7 @@ class NonLinear(CVCalculator):
         
     def save_model(self):
         """
-        Saves the collective variable model to a PyTorch TorchScript file.
+        Saves the TorchScript model and the common model files to model.zip.
         """
         super().save_model()   
 
@@ -1964,7 +2114,8 @@ class NonLinear(CVCalculator):
    
     def get_cv_parameters(self):
         """
-        Get the collective variable parameters.
+        Returns the CV name, dimension and path to the TorchScript model, used to build the
+        PLUMED input.
         """
         cv_parameters = {
             'cv_name': self.cv_name,
@@ -1975,9 +2126,9 @@ class NonLinear(CVCalculator):
     
     def get_cv_type(self) -> str:
         """
-        Returns the type of the collective variable.
+        Returns 'non-linear'.
         """
-        
+
         return "non-linear"
 
     def project_data(self, 
@@ -1986,23 +2137,27 @@ class NonLinear(CVCalculator):
                      ) -> torch.Tensor:
         """
         Projects the given data onto the CV space.
-        
+
         Parameters
         ----------
-        
-            data : torch.Tensor
-                Data to be projected onto the CV space.
-                
-            normalize_data : bool, optional
-                Whether to normalize the data before projection. 
-                This argument is ignored for non-linear CVs, as the normalization 
-                is handled within the model itself. Default is True.
-        
+
+        data : torch.Tensor
+            Data to be projected onto the CV space.
+
+        normalize_data : bool, optional
+            Ignored: the model normalizes its inputs itself. Default is True.
+
         Returns
-        ------- 
-        
-            projected_data : torch.Tensor
-                Data projected onto the CV space.
+        -------
+
+        projected_data : torch.Tensor
+            Data projected onto the CV space, on the CPU.
+
+        Raises
+        ------
+
+        ValueError
+            If there is no model.
         """
         
         logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
@@ -2032,8 +2187,9 @@ class NonLinear(CVCalculator):
         return projected_tensor.cpu() 
 
     def sensitivity_analysis(self):
-        """  
-        Perform a sensitivity analysis of the CV on the training data.
+        """
+        Sensitivity analysis with mlcolvar: the sensitivity of each feature is based on the
+        gradient of the CV with respect to it, averaged (in absolute value) over the training data.
         """
         from mlcolvar.explain import sensitivity_analysis
         
@@ -2062,11 +2218,17 @@ class NonLinear(CVCalculator):
         map_sensitivity_to_structure(per_atom_sensitivities, self.ref_topology_path, str(self.sensitivity_output_folder)) # type: ignore
 
 class UMAP(CVCalculator):
-    """ 
-    Uniform Manifold Approximation and Projection (UMAP) calculator.
     """
-    
+    Uniform Manifold Approximation and Projection (UMAP) calculator.
+
+    UMAP is a non-linear embedding fitted with the umap-learn package. It cannot be used
+    in PLUMED, so no PLUMED files are written, and no sensitivity analysis is done.
+    """
+
     def __init__(self, configuration: Optional[Dict] = None, output_path: Optional[str] = None):
+        """
+        Initializes the UMAP calculator. See ``CVCalculator.__init__``.
+        """
         super().__init__(configuration, output_path)
 
         self.cv_name = 'umap'
@@ -2080,8 +2242,8 @@ class UMAP(CVCalculator):
         self.seed: int = self.configuration.get('seed', 42)
 
     def _load_from_folder(self, folder_path: str):
-        """ 
-        Load a UMAP model from a folder.
+        """
+        Also loads the fitted UMAP model (umap_model.joblib).
         """
         super()._load_from_folder(folder_path)
         
@@ -2112,19 +2274,24 @@ class UMAP(CVCalculator):
         
         
     def save_weights(self, weights_path: str):
-        """ 
-        Saves the UMAP model to a pickle file.
         """
-        import joblib 
+        Saves the UMAP model to a joblib file.
+        """
+        import joblib
         
         # Save the UMAP model to a file
         joblib.dump(self.cv, weights_path)
     
     def save_model(self):
         """
-        Saves the UMAP model to a pickle file.
+        Saves the UMAP model and the normalization parameters to model.zip.
+
+        Raises
+        ------
+        ValueError
+            If the model or its normalization parameters have not been computed.
         """
-        super().save_model()   
+        super().save_model()
         
         from deep_cartograph.modules.common import zip_files
         
@@ -2163,14 +2330,14 @@ class UMAP(CVCalculator):
         
     def sensitivity_analysis(self):
         """
-        Perform a sensitivity analysis of the UMAP model on the training data.
+        Not implemented for UMAP. Only logs a warning.
         """
         logger.warning('Sensitivity analysis is not implemented for UMAP models.')
 
     def normalize_cv(self):
         """
-        Compute min/max statistics of the UMAP embedding on the training data.
-        Uses the embedding_ attribute stored after fit() to avoid recomputing.
+        Computes the CV mean and range that scale the training data embedding to [-1, 1].
+        Uses the embedding stored by UMAP after fitting, so nothing is recomputed.
         """
         if self.cv is None:
             logger.error('No UMAP model available. Cannot compute CV statistics for normalization.')
@@ -2187,7 +2354,7 @@ class UMAP(CVCalculator):
 
     def get_cv_parameters(self) -> Dict:
         """
-        Get the collective variable parameters.
+        Returns the CV name, dimension and UMAP settings.
         """
         cv_parameters = {
             'cv_name': self.cv_name,
@@ -2200,7 +2367,7 @@ class UMAP(CVCalculator):
 
     def get_cv_type(self) -> str:
         """
-        Returns the type of the collective variable.
+        Returns 'umap'.
         """
         return 'umap'
 
@@ -2210,8 +2377,10 @@ class UMAP(CVCalculator):
                        normalizing_range: torch.Tensor,
         ) -> torch.Tensor:
         """
-        Use the normalization mean and range to normalize the data.
-        
+        Normalizes the data as (data - normalizing_mean) / normalizing_range.
+
+        The input tensor is modified in place and also returned.
+
         Parameters
         ----------
         
@@ -2242,25 +2411,30 @@ class UMAP(CVCalculator):
                      normalize_data: bool = True
                      ) -> torch.Tensor:
         
-        """ 
-        Projects the data into a lower-dimensional space using the trained UMAP model.
+        """
+        Projects the data onto the UMAP embedding and scales the result to [-1, 1].
 
         Parameters
         ----------
-        
-            data : torch.Tensor
-                Data to be projected onto the CV space.
-                
-            normalize_data : bool, optional
-                Whether to normalize the data before projection. 
-                This argument is ignored for non-linear CVs, as the normalization 
-                is handled within the model itself. Default is True.
-        
+
+        data : torch.Tensor
+            Data to be projected onto the CV space. If normalize_data is True, it is
+            normalized in place.
+
+        normalize_data : bool, optional
+            Whether to normalize the features before projection. Default is True.
+
         Returns
-        ------- 
-        
-            projected_data : torch.Tensor
-                Data projected onto the CV space.
+        -------
+
+        projected_data : torch.Tensor
+            Data projected onto the CV space.
+
+        Raises
+        ------
+
+        ValueError
+            If the model or the normalization parameters have not been computed.
         """
         
         logger.info(f'Projecting data onto {cv_names_map[self.cv_name]} ...')
@@ -2305,16 +2479,17 @@ class UMAP(CVCalculator):
                            output_folder: str, 
                            waypoint_structures: Optional[List[str]] = None
         ) -> None:
-        """ 
-        Overwrite of the base class method to write PLUMED input files for UMAP.
-        UMAP is not supported in PLUMED, thus we skip the writing of PLUMED input files for UMAP.
+        """
+        Does nothing except log a warning: UMAP is not supported in PLUMED.
         """
         logger.warning(f'PLUMED input files are not generated for {cv_names_map[self.cv_name]} as it is not supported in PLUMED.')
             
 # Specific Collective Variable calculators
 class PCACalculator(LinearCalculator):
     """
-    Principal component analysis calculator.
+    Principal component analysis (PCA) calculator.
+
+    The CV components are the directions of largest variance of the normalized features.
     """
     
     def __init__(self, 
@@ -2334,7 +2509,8 @@ class PCACalculator(LinearCalculator):
 
     def compute_cv(self):
         """
-        Compute Principal Component Analysis (PCA) on the input features. 
+        Computes PCA on the training data with scikit-learn. The sign of each component
+        is chosen so that its first weight is positive.
         """
         
         if self.training_data is None:
@@ -2356,8 +2532,11 @@ class PCACalculator(LinearCalculator):
                 self.cv[:,i] = -self.cv[:,i]
                 
 class TICACalculator(LinearCalculator):
-    """ 
-    Time-lagged independent component analysis calculator.
+    """
+    Time-lagged independent component analysis (TICA) calculator.
+
+    The CV components are the slowest linear combinations of the features, i.e. the ones
+    most correlated with themselves after a lag time ('lag_time' in the configuration).
     """
     
     def __init__(self, 
@@ -2378,8 +2557,11 @@ class TICACalculator(LinearCalculator):
         self.cv_name = 'tica'
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-    
+
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads and normalizes the training data, then builds the time-lagged dataset.
+        """
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
 
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
@@ -2391,7 +2573,8 @@ class TICACalculator(LinearCalculator):
 
     def compute_cv(self):
         """
-        Compute Time-lagged Independent Component Analysis (TICA) on the input features.
+        Computes TICA on the time-lagged training dataset with mlcolvar and keeps the first
+        cv_dimension eigenvectors.
         """
         from mlcolvar.core.stats import TICA
         
@@ -2410,10 +2593,13 @@ class TICACalculator(LinearCalculator):
         self.cv = tica_eigvecs.numpy()
   
 class HTICACalculator(LinearCalculator):
-    """ 
-    Hierarchical Time-lagged independent component analysis calculator.
-    
-    See: 
+    """
+    Hierarchical time-lagged independent component analysis (HTICA) calculator.
+
+    Runs TICA in two levels: first on groups of features, then on the combined result.
+    This is cheaper than plain TICA when there are many features.
+
+    See:
     
     Pérez-Hernández, Guillermo, and Frank Noé. “Hierarchical Time-Lagged Independent Component Analysis: 
     Computing Slow Modes and Reaction Coordinates for Large Molecular Systems.” Journal of Chemical Theory 
@@ -2442,10 +2628,13 @@ class HTICACalculator(LinearCalculator):
         self.subspaces_dimension = self.configuration.get('subspaces_dimension')
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-    
+
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads and normalizes the training data, then builds the time-lagged dataset.
+        """
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
-        
+
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         self.training_input_dtset = build_timelagged_dataset(
             self.training_data,
@@ -2455,16 +2644,15 @@ class HTICACalculator(LinearCalculator):
 
     def compute_cv(self):
         """
-        Compute Hierarchical Time-lagged Independent Component Analysis (TICA) on the input features.
-        
-        Initial space of features (num_features) -> TICA LEVEL 1 (subspaces_dimension x num_subspaces) -> TICA LEVEL 2 (CV_dimension)
-        
-            1. Divide the original dataset into num_subspaces
-            2. Compute TICA on each sub-space (TICA LEVEL 1)
-            3. Project each sub-space onto the TICA eigenvectors of LEVEL 1
-            3. Construct the sparse - block diagonal - matrix transforming the original features into TICA LEVEL 1
-            4. Compute TICA on the concatenated projected data (TICA LEVEL 2)
-            5. Obtain the transformation matrix from features to TICA LEVEL 2 (final CV)
+        Computes hierarchical TICA on the time-lagged training dataset.
+
+        Features (num_features) -> TICA level 1 (subspaces_dimension per subspace) -> TICA level 2 (cv_dimension)
+
+            1. Split the features into num_subspaces groups of consecutive features.
+            2. Compute TICA on each group and project it onto its first subspaces_dimension
+               eigenvectors (level 1).
+            3. Compute TICA on the concatenated level 1 projections (level 2).
+            4. Combine both levels into a single weight matrix from features to the final CV.
         """
         import torch
         from mlcolvar.core.stats import TICA
@@ -2530,7 +2718,9 @@ class HTICACalculator(LinearCalculator):
            
 class AECalculator(NonLinear):
     """
-    Autoencoder calculator.
+    Autoencoder (AE) calculator.
+
+    The CV is the bottleneck of a neural network trained to reconstruct the input features.
     """
     def __init__(self, 
         configuration: Optional[Dict] = None,
@@ -2549,8 +2739,8 @@ class AECalculator(NonLinear):
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
 
     def set_up_cv_options(self):
-        """ 
-        Update cv options for the Autoencoder.
+        """
+        Builds the common CV options and adds the encoder and decoder options.
         """
         super().set_up_cv_options()
         
@@ -2563,8 +2753,11 @@ class AECalculator(NonLinear):
         self.cv_options.update(cv_options)
         
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the training data and wraps the data to fit on in an mlcolvar DictDataset.
+        """
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
-        
+
         from mlcolvar.data import DictDataset
 
         # Create DictDataset - fitted on the fold subset when training an ensemble member
@@ -2572,6 +2765,9 @@ class AECalculator(NonLinear):
         self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
 
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the validation data and wraps it in an mlcolvar DictDataset.
+        """
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
 
         from mlcolvar.data import DictDataset
@@ -2583,29 +2779,15 @@ class AECalculator(NonLinear):
 
     def set_encoder_layers(self) -> List:
         """
-        Set the layers for the encoder of the Autoencoder
-        
-        Return
-        ------
-        
-        nn_layers : List
-            List with the layers for the encoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
+        Returns the encoder layer sizes: [num_features, hidden layers..., cv_dimension].
         """
-        
+
         return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
-    
+
     def set_decoder_layers(self) -> Optional[List]:
-        """ 
-        Set the layers for the decoder of the Autoencoder
-        
-        Return
-        ------
-        
-        nn_layers : Optional[List]
-            List with the layers for the decoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
-            If None, no decoder is used (e.g. DeepTICA).
+        """
+        Returns the decoder layer sizes: [cv_dimension, hidden layers..., num_features],
+        or None if the decoder configuration is None.
         """
         
         if self.architecture_config['decoder'] is None:
@@ -2614,13 +2796,14 @@ class AECalculator(NonLinear):
             return [self.cv_dimension] + self.decoder_hidden_layers + [self.num_features]
 
     def create_model(self):
-        """ 
-        Create the Autoencoder model.
-        
+        """
+        Creates the Autoencoder model.
+
         Returns
         -------
-        
+
         model : AutoEncoderCV
+            Untrained mlcolvar Autoencoder.
         """
         
         from mlcolvar.cvs import AutoEncoderCV
@@ -2637,13 +2820,13 @@ class AECalculator(NonLinear):
         return model
 
     def plot_training_metrics(self): 
-        """ 
-        Plots and saves training metrics specific to Deep TICA.
-        """      
+        """
+        Saves and plots the common training metrics, then zips the saved metric files.
+        """
         super().plot_training_metrics()
-        
+
         from deep_cartograph.modules.common import zip_files, remove_files
-    
+
         metrics_zip_file = os.path.join(self.training_output_folder, 'training_metrics.zip')
         zip_files(metrics_zip_file, *self.training_metrics_paths)
         remove_files(*self.training_metrics_paths)
@@ -2652,6 +2835,9 @@ class AECalculator(NonLinear):
 class DeepTICACalculator(NonLinear):
     """
     DeepTICA calculator.
+
+    A neural network maps the features to a new space where TICA is applied, so the CV
+    components are the slowest (non-linear) modes for the given lag time. There is no decoder.
     """
     def __init__(self, 
         configuration: Optional[Dict] = None,
@@ -2669,8 +2855,8 @@ class DeepTICACalculator(NonLinear):
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
 
     def set_up_cv_options(self):
-        """ 
-        Update cv options for DeepTICA.
+        """
+        Builds the common CV options and adds the network ('nn') options.
         """
         super().set_up_cv_options()
         
@@ -2681,8 +2867,11 @@ class DeepTICACalculator(NonLinear):
         self.cv_options.update(cv_options)
         
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the training data and builds the time-lagged dataset from the data to fit on.
+        """
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
-        
+
         # Create time-lagged dataset (composed by pairs of samples at time t, t+lag)
         # Fitted on the fold subset when training an ensemble member
         self.training_input_dtset = build_timelagged_dataset(
@@ -2692,6 +2881,9 @@ class DeepTICACalculator(NonLinear):
         )
 
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the validation data and builds its time-lagged dataset.
+        """
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
 
         # Create validation time-lagged dataset
@@ -2703,23 +2895,16 @@ class DeepTICACalculator(NonLinear):
             )
 
     def set_encoder_layers(self) -> List:
-        """ 
-        Set the layers for the encoder of DeepTICA
-        
-        Return
-        ------
-        
-        nn_layers : List
-            List with the layers for the encoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
+        """
+        Returns the network layer sizes: [num_features, hidden layers..., cv_dimension].
         """
         
         return [self.num_features] + self.encoder_hidden_layers + [self.cv_dimension]
 
     def create_model(self):
         """
-        Create the DeepTICA model.
-        
+        Creates the DeepTICA model.
+
         Returns
         -------
         
@@ -2740,13 +2925,14 @@ class DeepTICACalculator(NonLinear):
         return model
     
     def plot_training_metrics(self): 
-        """ 
-        Plots and saves training metrics specific to Deep TICA.
-        """      
+        """
+        Saves and plots the common training metrics, plus the TICA eigenvalues of the best
+        model (eigenvalues.txt and eigenvalues.png). Then zips the saved metric files.
+        """
         super().plot_training_metrics()
-    
+
         from deep_cartograph.modules.common import zip_files, remove_files
-        from mlcolvar.utils.plot import plot_metrics   
+        from mlcolvar.utils.plot import plot_metrics
 
         # Find the epoch where the best model was found
         best_index = self.metrics.metrics['valid_loss'].index(self.cv_score)
@@ -2778,7 +2964,10 @@ class DeepTICACalculator(NonLinear):
 
 class VAECalculator(NonLinear):
     """
-    Variational Autoencoder calculator.
+    Variational Autoencoder (VAE) calculator.
+
+    Like the AE, but the latent space is probabilistic. The weight of the KL term (beta) is
+    increased during training (KL annealing, see 'kl_annealing' in the training configuration).
     """
     def __init__(self, 
         configuration: Optional[Dict] = None,
@@ -2813,13 +3002,10 @@ class VAECalculator(NonLinear):
         self.cv_name = 'vae'
         
         logger.info(f'Creating {cv_names_map[self.cv_name]} Calculator ...')
-        
-        # If the activation functions / dropout are given as a list, add one for the last layer 
-        # Needed due to the addition of a n_cvs layer before passing it to Feed Forward in VAE model
 
     def set_up_cv_options(self):
-        """ 
-        Update cv options for the VAE.
+        """
+        Builds the common CV options and adds the encoder and decoder options.
         """
         super().set_up_cv_options()
         
@@ -2831,8 +3017,11 @@ class VAECalculator(NonLinear):
         self.cv_options.update(nn_options)
         
     def load_training_data(self, train_colvars_paths, train_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the training data and wraps the data to fit on in an mlcolvar DictDataset.
+        """
         super().load_training_data(train_colvars_paths, train_topology_paths, ref_topology_path, features_list)
- 
+
         from mlcolvar.data import DictDataset
 
         # Create DictDataset - fitted on the fold subset when training an ensemble member
@@ -2840,46 +3029,34 @@ class VAECalculator(NonLinear):
         self.training_input_dtset = DictDataset(train_data_dict, feature_names=self.features_ref_labels)
 
     def load_validation_data(self, val_colvars_paths, val_topology_paths = None, ref_topology_path = None, features_list = None):
+        """
+        Loads the validation data and wraps it in an mlcolvar DictDataset.
+        """
         super().load_validation_data(val_colvars_paths, val_topology_paths, ref_topology_path, features_list)
-        
+
         from mlcolvar.data import DictDataset
-        
+
         # Create validation DictDataset
         val_data_dict = {"data": self.validation_data}
         self.validation_input_dtset = DictDataset(val_data_dict, feature_names=self.features_ref_labels)
             
         
     def set_encoder_layers(self) -> List:
-        """ 
-        Set the layers for the VAE
-        
-        Here the model already includes a mean and variance layer with
-        cv_dimension outputs, so we do not need to add the last layer explicitly.
-        
-        Return
-        ------
-        
-        nn_layers : List
-            List with the layers for the encoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
+        """
+        Returns the encoder layer sizes: [num_features, hidden layers...].
+
+        The last layer (mean and variance with cv_dimension outputs) is added by the mlcolvar
+        model, so it is not included here.
         """
         
         return [self.num_features] + self.encoder_hidden_layers
     
     def set_decoder_layers(self):
-        """ 
-        Set the layers for the decoder of the VAE
-        
-        Here the model already includes a layer with the latent space dimension
-        as input, so we do not need to add it explicitly.
-        
-        Return
-        ------
-        
-        nn_layers : Optional[List]
-            List with the layers for the decoder of the non-linear model.
-            Contains the input dimension, hidden layers and output dimension.
-            If None, no decoder is used (e.g. DeepTICA).
+        """
+        Returns the decoder layer sizes: [hidden layers..., num_features], or None if the
+        decoder configuration is None.
+
+        The input layer (cv_dimension) is added by the mlcolvar model, so it is not included here.
         """
         
         if self.decoder_config is None:
@@ -2889,8 +3066,8 @@ class VAECalculator(NonLinear):
    
     def create_model(self):
         """
-        Create the Variational Autoencoder model.
-        
+        Creates the Variational Autoencoder model, starting with beta = start_beta.
+
         Returns
         -------
         
@@ -2915,14 +3092,20 @@ class VAECalculator(NonLinear):
         
     def get_callbacks(self, try_num: int = 1) -> List:
         """
-        Get the callbacks for the VAE training.
+        Returns the common callbacks plus the VAE ones: KL annealing, an optional
+        ReduceLROnPlateau manager and a checkpoint that saves the best model after annealing.
 
-        Uses the parent class method to get the callbacks and adds the VAE-specific callbacks.
+        Parameters
+        ----------
+
+        try_num : int, optional
+            Number of the current training try, used to name the checkpoints folder.
+            Default is 1.
 
         Returns
         -------
 
-        callbacks: List
+        callbacks : List
             List of callbacks for the VAE training.
         """
         import deep_cartograph.modules.ml as ml
@@ -2971,12 +3154,13 @@ class VAECalculator(NonLinear):
                      yscale: str = 'log',
                      filepath: Optional[str] = None
                      ):
-        """ 
-        Plot a specific metric
-        
+        """
+        Plots one or more training metrics and saves the figure. Nothing is plotted if a
+        key is missing from the data.
+
         Parameters
         ----------
-        
+
         metric_data : Dict
             Dictionary with the training metrics data.
         metric_keys : List
@@ -2985,11 +3169,11 @@ class VAECalculator(NonLinear):
             List of labels for the metric keys.
         colors : List
             List of colors for the metric keys in fessa color scheme.
-        yscale : str
+        yscale : str, optional
             Y-axis scale. Default is 'log'.
-        filepath : Optional[str]
-            File path to save the plot.
-        
+        filepath : str, optional
+            File path to save the plot. If None, the plot is saved in the training folder,
+            named after the metric keys.
         """
         from mlcolvar.utils.plot import plot_metrics  
         
@@ -3018,8 +3202,9 @@ class VAECalculator(NonLinear):
         
             
     def plot_training_metrics(self): 
-        """ 
-        Plots and saves training metrics specific to VAE.
+        """
+        Saves and plots the common training metrics plus the VAE ones (KL loss,
+        reconstruction loss and beta). Then zips the saved metric files.
         """      
         super().plot_training_metrics()
         
@@ -3099,6 +3284,7 @@ class VAECalculator(NonLinear):
         logger.info(f'Training metrics saved to {metrics_zip_file}')
 
 # Mappings
+# CV name (as used in the configuration) -> calculator class
 cv_calculators_map = {
     'pca': PCACalculator,
     'ae': AECalculator,

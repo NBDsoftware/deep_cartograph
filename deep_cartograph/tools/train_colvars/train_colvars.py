@@ -1,3 +1,7 @@
+"""
+Train colvars tool: trains collective variables (CVs) from colvars files,
+mainly with the mlcolvar library.
+"""
 # Import modules
 import os
 import time
@@ -36,18 +40,21 @@ def train_colvars(
     output_folder: str = 'train_colvars'
 ) -> Dict[str, List[str]]:
     """
-    Trains collective variables (CVs), computes a Free Energy Surface (FES) 
-    along the CVs from the training data, computes a sensitivity analysis of
-    each CV with respect to the input features and projects supplementary data
-    (e.g. experimental structures) onto the FES.
+    Train collective variables (CVs) from colvars files.
+
+    For each CV, the model is trained, the Free Energy Surface (FES) along the CV is
+    computed from the training data, a sensitivity analysis shows which input features
+    matter most, the training trajectories are projected onto the CV and PLUMED input
+    files are written (also for the supplementary topologies, if given).
 
     Supported collective variables (CVs):
         - pca (Principal Component Analysis)
         - ae (Autoencoder)
         - vae (Variational Autoencoder)
-        - tica (Time Independent Component Analysis)
-        - htica (Hierarchical Time Independent Component Analysis)
-        - deep_tica (Deep Time Independent Component Analysis)
+        - tica (Time-lagged Independent Component Analysis)
+        - htica (Hierarchical Time-lagged Independent Component Analysis)
+        - deep_tica (Deep Time-lagged Independent Component Analysis)
+        - umap (Uniform Manifold Approximation and Projection)
 
     Parameters
     ----------
@@ -55,68 +62,68 @@ def train_colvars(
         Configuration dictionary (see `default_config.yml` for more information).
 
     train_colvars_paths : str or List[str]
-        Path or list of paths to colvars files containing the input data (samples of features).
+        Path or list of paths to colvars files with the training data (features for each frame).
 
     train_topologies : Optional[List[str]], default=None
-        Path to the topology files corresponding to the trajectory files (same order as trajectories).
-
-    val_colvars_paths : Optional[Union[str, List[str]]], default=None
-        Path or list of paths to colvars files containing the validation data (samples of features).
-    
-    val_topologies : Optional[List[str]], default=None
-        Path to the topology files corresponding to the validation trajectory files
-        (same order as validation trajectories).
-        
-    sup_topologies :  Optional[List[str]], default=None
-        Path to the topologies of the supplementary systems.
-        
-    sup_traj_names: Optional[List[str]], default=None
-        List of names for the supplementary systems
-        
-    waypoint_structures : Optional[List[str]], default=None
-        List of paths to structure files (e.g. PDB) corresponding to waypoints of the transition. 
-        If given, the waypoints will be used to create a restraint guiding the CVs through them. 
-        See rmsd_restraint_guide parameter in the configuration.
+        Topology files of the training trajectories (same order as `train_colvars_paths`).
 
     trajectory_names : Optional[List[str]], default=None
-        List of names of the trajectories corresponding to the colvars files.  
-        If `None`, the colvars files are identified by their file names.
-        
+        Names of the trajectories behind the colvars files, used to name the output folders.
+        If `None`, the colvars file names are used.
+
+    val_colvars_paths : Optional[Union[str, List[str]]], default=None
+        Path or list of paths to colvars files with the validation data.
+
+    val_topologies : Optional[List[str]], default=None
+        Topology files of the validation trajectories (same order as `val_colvars_paths`).
+
+    sup_topologies : Optional[List[str]], default=None
+        Topologies of supplementary systems. PLUMED input files are written for each of them.
+
+    sup_traj_names : Optional[List[str]], default=None
+        Names of the supplementary systems, used to name their output folders.
+        If `None`, the topology file names are used.
+
+    waypoint_structures : Optional[List[str]], default=None
+        Structure files (e.g. PDB) of intermediate states of the transition. Used to add an
+        experimental RMSD restraint to the PLUMED inputs (see `add_rmsd_restraint` in the
+        `bias` section of the configuration).
+
     reference_topology : Optional[str], default=None
-        Path to the reference topology file. If `None`, the first topology file is used as reference.
+        Reference topology used to match feature names across topologies.
+        If `None`, the first training topology is used.
 
     features_list : Optional[List[str]], default=None
-        List of features to use for training.  
+        Features to use for training.
         If `None`, all features except `*labels`, `time`, `*bias`, and `*walker` are used.
 
     dimension : Optional[int], default=None
-        Dimension of the CVs to train or compute. If `None`, the value in the configuration is used.
+        Dimension of the CVs. If `None`, the value in the configuration is used.
 
-    cvs : Optional[List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica']]], default=None
-        List of collective variables to train or compute. If `None`, the ones in the configuration are used.
+    cvs : Optional[List[str]], default=None
+        CVs to train or compute (see the list above). If `None`, the ones in the configuration are used.
 
     n_models : Optional[int], default=None
         Number of models to train as an ensemble, for the neural network CVs ('ae', 'vae', 'deep_tica').
-        The training trajectories are split into `n_models` disjoint folds and member i is trained on
-        every fold except fold i. Each model is saved in its own '{cv_name}_{i}' folder.
+        The training trajectories are split into `n_models` groups (folds) and model i is trained on
+        all folds except fold i. Each model is saved in its own '{cv_name}_{i}' folder.
         If `None`, the value in the configuration is used (`training.general.num_models`, default 1).
 
     frames_per_sample : Optional[int], default=1
-        Frames in the trajectory for each sample in the colvars file.
+        Number of trajectory frames between two consecutive rows of the colvars files
+        (the stride used when computing the features). Used to label the frames of the projected data.
 
     output_folder : str, default='train_colvars'
-        Path to the output folder where the output files will be saved.
-        If not provided, a folder named 'train_colvars' is created.
+        Path to the output folder.
 
     Returns
     -------
-
-    Dict[str, List[str]]
-        A dictionary keyed by collective variable name. 'output_folder', 'model_path' and
-        'traj_paths' refer to the first ensemble member, and 'ensemble_output_folders' /
-        'ensemble_model_paths' list every member.
+    Dict[str, Dict]
+        A dictionary keyed by CV name. For each CV: 'output_folder', 'model_path' and
+        'traj_paths' (projected training trajectories, CSV files) refer to the first ensemble
+        member, and 'ensemble_output_folders' / 'ensemble_model_paths' list every member.
     """
-    
+
     logger = logging.getLogger("deep_cartograph")
 
     # Title
@@ -165,18 +172,20 @@ def train_colvars(
 
 def set_logger(verbose: bool, log_path: str):
     """
-    Configures logging for Deep Cartograph. 
-    
-    If `verbose` is `True`, sets the logging level to DEBUG.
-    Otherwise, sets it to INFO.
+    Set up logging for Deep Cartograph.
 
-    Inputs
+    Parameters
+    ----------
+    verbose : bool
+        If True, log at DEBUG level. Otherwise, log at INFO level.
+
+    log_path : str
+        Path to the log file.
+
+    Raises
     ------
-
-    Args:
-        verbose (bool): If `True`, logging level is set to DEBUG. 
-                        If `False`, logging level is set to INFO.
-        log_path (str): Path to the log file where logs will be saved.
+    FileNotFoundError
+        If the logging configuration files in `log_config/` are missing.
     """
     # Issue warning if logging is already configured
     if logging.getLogger().hasHandlers():
@@ -211,7 +220,7 @@ def set_logger(verbose: bool, log_path: str):
     logger.info("Deep Cartograph: package for analyzing MD simulations using collective variables.")
     
 def parse_arguments():
-    """Parses command-line arguments."""
+    """Parse the command-line arguments of the train colvars command."""
     parser = argparse.ArgumentParser(
         prog="Deep Cartograph:  Train Collective Variables",
         description=("Train collective variables using the mlcolvar library."
@@ -231,7 +240,7 @@ def parse_arguments():
     # Optional arguments
     parser.add_argument(
         '-trajectory', dest='trajectory_name', type=str, required=False,
-        help=("Name of the trajectory corresponding to the colvars file." 
+        help=("Name of the trajectory corresponding to the colvars file. " 
               "Used to identify the origin of the samples in the colvars file."
         )
     )
@@ -245,7 +254,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-frames_per_sample', dest='frames_per_sample', type=int, required=False,
-        help="Frames in the trajectory for each sample in the colvars file."
+        help="Number of trajectory frames between two consecutive samples in the colvars file (default: 1)."
     )
     parser.add_argument(
         '-features_path', type=str, required=False,
@@ -257,7 +266,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-cvs', nargs='+', required=False,
-        help="Collective variables to train or compute (pca, ae, tica, htica, deep_tica)"
+        help="Collective variables to train or compute (pca, ae, vae, tica, htica, deep_tica, umap)"
     )
     parser.add_argument(
         '-n_models', dest='n_models', type=int, required=False,
@@ -281,6 +290,7 @@ def parse_arguments():
 ########
 
 def main():
+    """Entry point of the train colvars command: read the arguments and configuration, then run the tool."""
 
     args = parse_arguments()
 

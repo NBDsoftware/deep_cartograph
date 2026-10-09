@@ -1,0 +1,86 @@
+name: Release (2/2) publish
+
+# Step 2 of 2. Fires on every push to master but only acts when the push contains a
+# `release: X.Y.Z` commit (i.e. a merged release-prepare PR), then tags that commit and
+# publishes the GitHub release. Tags are not covered by the branch protection that blocks
+# direct pushes to master, so the default GITHUB_TOKEN is enough.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      BEFORE: ${{ github.event.before }}
+      AFTER: ${{ github.sha }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Look for a release commit in this push
+        id: detect
+        run: |
+          # Merge commit: the `release:` commit is a parent, so scan the whole pushed range.
+          # Squash/rebase merge: the tip itself carries the PR title. Both are covered.
+          if git rev-parse -q --verify "$BEFORE^{commit}" >/dev/null 2>&1; then
+            log=$(git log --format='%H%x09%s' "$BEFORE..$AFTER")
+          else
+            log=$(git log -1 --format='%H%x09%s' "$AFTER")
+          fi
+          line=$(printf '%s\n' "$log" | awk -F'\t' '$2 ~ /^release: [0-9]/ {print; exit}')
+          if [ -z "$line" ]; then
+            echo "no release commit in this push — nothing to publish"
+            exit 0
+          fi
+          sha=${line%%$'\t'*}
+          version=${line##*release: }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "found release $version at $sha"
+
+      - uses: actions/setup-python@v6
+        if: steps.detect.outputs.version != ''
+        with:
+          python-version: "3.12"
+
+      - name: Check the version is consistent and untagged
+        if: steps.detect.outputs.version != ''
+        env:
+          VERSION: ${{ steps.detect.outputs.version }}
+        run: |
+          # Guard against a hand-written "release: ..." commit that never ran the bump script.
+          declared=$(grep -oP "(?<=version=')[^']+" setup.py)
+          if [ "$declared" != "$VERSION" ]; then
+            echo "::error::commit says $VERSION but setup.py says $declared"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::tag $VERSION already exists"
+            exit 1
+          fi
+
+      - name: Tag and publish
+        if: steps.detect.outputs.version != ''
+        env:
+          VERSION: ${{ steps.detect.outputs.version }}
+          SHA: ${{ steps.detect.outputs.sha }}
+        run: |
+          python scripts/bump_version.py "$VERSION" --notes-only \
+            --notes-out "$RUNNER_TEMP/notes.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION" "$SHA"
+          git push origin "refs/tags/$VERSION"
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md"

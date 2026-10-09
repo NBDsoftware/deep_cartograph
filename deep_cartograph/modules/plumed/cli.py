@@ -1,3 +1,6 @@
+"""
+Build and run PLUMED command-line tools (such as ``plumed driver``) from Python.
+"""
 import os
 import sys
 import subprocess
@@ -22,26 +25,28 @@ def get_driver_command(
     num_atoms: Optional[int] = None, 
     output_path: Optional[str] = None
     ) -> str:
-    '''
-    Function that creates a PLUMED DRIVER Shell command. It returns the command as a string
+    """
+    Build the arguments for the PLUMED ``driver`` tool, which runs a PLUMED input file on a trajectory.
 
-    Example:
+    Example: ``"driver --plumed /abs/plumed.dat --mf_xtc /abs/traj.xtc --natoms 1000"``
 
-        "driver --plumed plumed_input --ixyz traj_path --natoms num_atoms"
+    Parameters
+    ----------
+    plumed_input : str
+        Path to the PLUMED input file.
+    traj_path : str, optional
+        Path to the trajectory. If None, ``--noatoms`` is used and PLUMED only reads the
+        colvars files named in the input file.
+    num_atoms : int, optional
+        Number of atoms in the system. Some trajectory formats need it.
+    output_path : str, optional
+        Folder where a cleaned copy of a PDB trajectory is written if its CRYST1 record is a dummy one.
 
-    Inputs
-    ------
-
-        plumed_input     (str):              PLUMED input file path
-        traj_path        (str):              path to trajectory file
-        num_atoms        (int):              number of atoms in the system
-        output_path      (str):              path to output folder
-
-    Outputs
+    Returns
     -------
-
-        driver_command   (str):              PLUMED DRIVER command
-    '''
+    driver_command : str
+        Command without the PLUMED binary (see ``run_plumed``).
+    """
 
     # Initialize
     driver_command = []
@@ -89,19 +94,30 @@ def run_plumed(
     plumed_timeout: Optional[int] = 604800
     ) -> None:
     """
-    Runs PLUMED through command line, setting up the necessary environment variables and modules.
+    Run a PLUMED command-line tool in a shell.
 
-    Inputs
-    ------
+    The PLUMED binary, extra environment commands (e.g. ``module load``) and the PLUMED kernel
+    are taken from ``plumed_settings``. The program exits if PLUMED returns an error.
 
-        plumed_command  (str):               PLUMED command to execute (See Command Line Tools in PLUMED manual)
-        plumed_settings (dict):              (Optional) Settings for PLUMED (binaries, kernel, etc.)
-        plumed_timeout  (int):               (Optional) timeout for PLUMED in seconds
-    
+    Parameters
+    ----------
+    plumed_command : str
+        PLUMED command to run, without the binary (e.g. the output of ``get_driver_command``).
+    working_dir : str, optional
+        Folder where the command is run. The original folder is restored afterwards.
+        Default is None (current folder).
+    plumed_settings : dict, optional
+        Settings for PLUMED. Keys used: ``bin_path`` (default ``'plumed'``), ``env_commands``
+        (list of shell commands run first) and ``kernel_path`` (sets ``PLUMED_KERNEL``).
+    plumed_timeout : int, optional
+        Timeout in seconds. Default is 604800 (one week).
+
     Returns
     -------
-    
-        tuple: (stdout, stderr) from the PLUMED execution
+    stdout : str or None
+        Standard output of PLUMED, or None if it timed out or failed to start.
+    stderr : str
+        Standard error of PLUMED, or a short error message.
     """
 
     all_commands = []

@@ -1,3 +1,6 @@
+"""
+Pydantic schemas that validate the configuration of each tool and fill in default values.
+"""
 # Export Tool and Main schemas
 from .analyze_geometry import AnalyzeGeometrySchema
 from .compute_features import ComputeFeaturesSchema

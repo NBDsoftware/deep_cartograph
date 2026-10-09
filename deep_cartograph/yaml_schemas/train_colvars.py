@@ -1,7 +1,11 @@
+"""
+Schema for the configuration of the train colvars tool.
+"""
 from pydantic import BaseModel
 from typing import List, Union, Literal, Optional
 
 class Optimizer(BaseModel):
+    """Validates the `optimizer` section of the training settings."""
 
     # Name of the optimizer (see torch.optim Algorithms)
     name: str = "Adam"
@@ -9,6 +13,7 @@ class Optimizer(BaseModel):
     kwargs: dict = {'lr': 1.0e-04, 'weight_decay': 0.0}
 
 class RLScheduler(BaseModel):
+    """Validates the `lr_scheduler` section: the learning rate scheduler."""
     
     # Name of the learning rate scheduler (see torch.optim.lr_scheduler)
     name: str = "OneCycleLR"
@@ -16,6 +21,7 @@ class RLScheduler(BaseModel):
     kwargs: dict = {}
     
 class NeuralNetwork(BaseModel):
+    """Validates the settings of one neural network (encoder or decoder); list values have one entry per hidden layer."""
     # Fully connected hidden layers
     layers: List[int] = [64, 32, 16]
     # Activation function
@@ -32,6 +38,7 @@ class NeuralNetwork(BaseModel):
     last_layer_dropout: Optional[float] = None
 
 class Architecture(BaseModel):
+    """Validates the `architecture` section of the neural network CVs."""
 
     # Fully connected hidden layers between the input and latent space
     encoder: NeuralNetwork = NeuralNetwork()
@@ -39,6 +46,7 @@ class Architecture(BaseModel):
     decoder: NeuralNetwork = NeuralNetwork()
 
 class GeneralSettings(BaseModel):
+    """Validates the `general` section of the training settings."""
 
     # Number of independent trainings to run; the one with the lowest score is kept
     num_tries: int = 10
@@ -47,7 +55,7 @@ class GeneralSettings(BaseModel):
     num_models: int = 1
     # Seed for the PyTorch random number generator
     seed: int = 42
-    # Lengths of the training and validation sets, e.g. [0.8, 0.2]
+    # Fractions of the data used for the training and validation sets, e.g. [0.8, 0.2]
     lengths: List[float] = [0.8, 0.2]
     # Batch size for the training
     batch_size: int = 32
@@ -63,6 +71,7 @@ class GeneralSettings(BaseModel):
     save_check_every_n_epoch: int = 10
 
 class InputColvars(BaseModel):
+    """Validates the `input_colvars` section: which rows of the colvars files to read."""
     
     # Start index to read the colvars file
     start: int = 0
@@ -72,6 +81,7 @@ class InputColvars(BaseModel):
     stride: int = 1
 
 class EarlyStopping(BaseModel):
+    """Validates the `early_stopping` section of the training settings."""
 
     # Patience for the early stopping, i.e., the number of validation checks with no improvement after which training will be stopped
     patience: int = 20
@@ -79,7 +89,8 @@ class EarlyStopping(BaseModel):
     min_delta: float = 1.0e-05
 
 class KLAnnealing(BaseModel):
-    # Type of KL annealing ('linear' or 'cyclical')
+    """Validates the `kl_annealing` section: how the weight of the KL divergence term grows during VAE training."""
+    # Type of KL annealing ('linear', 'sigmoid' or 'cyclical')
     type: Literal['linear', 'sigmoid', 'cyclical'] = 'linear'
     # Start value for beta (KL divergence weight)
     start_beta: float = 1e-06
@@ -93,6 +104,7 @@ class KLAnnealing(BaseModel):
     n_epochs_anneal: int = 5000
     
 class Trainings(BaseModel):
+    """Validates the `training` section of the neural network CVs."""
     
     # General settings
     general: GeneralSettings = GeneralSettings()
@@ -106,14 +118,15 @@ class Trainings(BaseModel):
     lr_scheduler_config: Optional[dict] = {'interval': 'epoch', 'monitor': 'valid_loss', 'frequency': 1}
     # KL Annealing settings (used only with VAE)
     kl_annealing: Optional[KLAnnealing] = None
-    # Wether to save the training and validation losses after training
+    # Whether to save the training and validation losses after training
     save_loss: bool = True
-    # Wether to plot the loss after training
+    # Whether to plot the loss after training
     plot_loss: bool = True
-    # Model to save
+    # Model to save: the one with the best validation loss or the one from the last epoch
     model_to_save: Literal['best', 'last'] = 'best'
 
 class BiasArgs(BaseModel):
+    """Validates the `args` of the bias section: parameters of the enhanced sampling method."""
     
     # Common args for all bias methods
     
@@ -147,6 +160,7 @@ class BiasArgs(BaseModel):
     compression_threshold: float = 0.1
     
 class Bias(BaseModel):
+    """Validates the `bias` section: enhanced sampling method written to the PLUMED input files."""
     
     # Name of the method
     method: Literal['wt_metadynamics', 'opes_metad', 'opes_metad_explore', 'opes_expanded'] = 'opes_metad'
@@ -155,14 +169,15 @@ class Bias(BaseModel):
     # NOTE: this feature is still experimental and not ready for production use 
     # Additional rmsd restraint to pass through waypoint structures - see waypoint structures 
     add_rmsd_restraint: bool = False
-    # Wether to align the waypoint structures before computing the distance between atoms or not
+    # Whether to align the waypoint structures before computing the distance between atoms or not
     align_waypoint_structures: bool = True
-    # Force constant for the keep the rigid regions among the waypoints fixed (units: kJ mol^-1 nm^-2)
+    # Force constant to keep the rigid regions among the waypoints fixed (units: kJ mol^-1 nm^-2)
     rmsd_restraint_k: float = 5000.0
     # Equilibrium rmsd above which the restraint is applied (units: nm)
     rmsd_restraint_eq: float = 0.4
     
 class CommonCollectiveVariable(BaseModel):
+    """Validates the `common` section: settings shared by all CVs (a CV-specific section can override them)."""
 
     # Number of dimensions
     dimension: int = 2
@@ -198,6 +213,7 @@ class CommonCollectiveVariable(BaseModel):
     bias: Bias = Bias()
 
 class FesFigure(BaseModel):
+    """Validates the `fes` figure settings: computing and plotting the Free Energy Surface."""
       
     # Calculate the Free Energy Surface
     compute: bool = True
@@ -215,21 +231,23 @@ class FesFigure(BaseModel):
     max_fes: float = 30
 
 class TrajProjection(BaseModel):
+    """Validates the `traj_projection` figure settings: plots of trajectories in the CV space."""
     
-    # Plot the Projected Clustered Trajectory
+    # Plot the Projected Trajectory
     plot: bool = True
-    # Number of bins for the Kernel Density Estimation of the Projected Clustered Trajectory
+    # Number of bins for the Kernel Density Estimation of the Projected Trajectory
     num_bins: int = 100
-    # Bandwidth for the Kernel Density Estimation of the Projected Clustered Trajectory
+    # Bandwidth for the Kernel Density Estimation of the Projected Trajectory
     bandwidth: float = 0.25
-    # Transparency of the points in the Projected Clustered Trajectory
+    # Transparency of the points in the Projected Trajectory
     alpha: float = 0.8
-    # Colormap for the Projected Clustered Trajectory
+    # Colormap for the Projected Trajectory
     cmap: str = "turbo"
-    # Size of the markers in the Projected Clustered Trajectory
+    # Size of the markers in the Projected Trajectory
     marker_size: int = 5
 
 class Figures(BaseModel):
+    """Validates the `figures` section."""
       
     # Settings for the Free Energy Surface calculation
     fes: FesFigure = FesFigure()
@@ -237,6 +255,7 @@ class Figures(BaseModel):
     traj_projection: TrajProjection = TrajProjection()
 
 class TrainColvarsSchema(BaseModel):
+    """Validates the `train_colvars` section of the configuration."""
     
     # List of Collective Variables to train/calculate
     cvs: List[Literal['pca', 'ae', 'tica', 'htica', 'deep_tica', 'vae', 'umap']] = ['pca', 'ae', 'tica', 'htica', 'deep_tica', 'vae', 'umap']
@@ -248,5 +267,6 @@ class TrainColvarsSchema(BaseModel):
     # Add Configuration class for this model
     class Config:
         # Allow extra fields - this is used to allow for model specific configurations that override common settings
+        # (e.g. an `ae:` section with the same keys as `common`)
         extra = "allow"
 
